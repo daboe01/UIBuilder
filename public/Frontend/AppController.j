@@ -9,12 +9,6 @@
 @import "UICanvasView.j"
 @import "UIElementView.j";
 
-var UIWindowDragType = @"UIWindowDragType";
-var UIButtonDragType = @"UIButtonDragType";
-var UISliderDragType = @"UISliderDragType";
-var UITextFieldDragType = @"UITextFieldDragType";
-
-
 @implementation CPColor (StandardColors)
 
 // A standard light gray for control backgrounds, like buttons.

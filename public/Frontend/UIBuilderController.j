@@ -93,18 +93,19 @@
 
     if (containerData && elementType !== "window")
     {
+        // Convert point to be relative to the container
+        var relativeX = aPoint.x - [containerData valueForKey:@"originX"];
+        var relativeY = aPoint.y - [containerData valueForKey:@"originY"];
+        [newElementData setValue:relativeX forKey:@"originX"];
+        [newElementData setValue:relativeY forKey:@"originY"];
+
         // Add as a child to the container
         [newElementData setValue:[containerData valueForKey:@"id"] forKey:@"parentID"];
-        var children = [containerData valueForKey:@"children"];
-        [children addObject:newElementData];
-        // We need to trigger KVO for the container's children array
-        [containerData didChangeValueForKey:@"children"];
+        [[containerData mutableArrayValueForKey:@"children"] addObject:newElementData];
     }
-    else
-    {
-        // Add as a top-level element
-        [_elementsController addObject:newElementData];
-    }
+
+    // Add to the main controller regardless, so selection works.
+    [_elementsController addObject:newElementData];
 
     document.title = [[_elementsController arrangedObjects] count];
     [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];

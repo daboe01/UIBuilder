@@ -1,5 +1,6 @@
 //
 //  UIElementView.j by Daniel Böhringer in 2025
+
 //  This file is a drawing engine for a UI builder, with features such as:
 //      - Skeleton drawing for common UI elements (Window, Button, Slider, TextField).
 //      - Selection highlights.
@@ -9,6 +10,11 @@
 //
 //
 
+// --- Drag Types --- (have to be global, no var)
+UIWindowDragType = "UIWindowDragType";
+UIButtonDragType = "UIButtonDragType";
+UISliderDragType = "UISliderDragType";
+UITextFieldDragType = "UITextFieldDragType";
 
 // --- Constants for Resizing ---
 var kUIElementHandleSize = 8.0;
@@ -170,12 +176,23 @@ var kUIElementBottomRightHandle = 8;
     }
 }
 
+- (UICanvasView)canvasView
+{
+    var aView = self;
+    while (aView && ![aView isKindOfClass:[UICanvasView class]])
+    {
+        aView = [aView superview];
+    }
+    return aView;
+}
+
 - (BOOL)isSelected
 {
     // This assumes the superview (the canvas) responds to `selectedSubViews`
-    if ([[self superview] respondsToSelector:@selector(selectedSubViews)])
+    var canvas = [self canvasView];
+    if (canvas && [canvas respondsToSelector:@selector(selectedSubViews)])
     {
-        return [[[self superview] selectedSubViews] containsObject:self];
+        return [[canvas selectedSubViews] containsObject:self];
     }
     return NO;
 }
@@ -279,7 +296,7 @@ var kUIElementBottomRightHandle = 8;
 
 - (void)mouseDown:(CPEvent)theEvent
 {
-    var sView = [self superview];
+    var canvas = [self canvasView];
     var localPoint = [self convertPoint:[theEvent locationInWindow] fromView:nil];
     
     // First, check if we clicked a resize handle
@@ -287,7 +304,7 @@ var kUIElementBottomRightHandle = 8;
     if (_activeHandle != kUIElementNoHandle)
     {
         // A handle was clicked, begin a resize session
-        _lastMouseLoc = [sView convertPoint:[theEvent locationInWindow] fromView:nil];
+        _lastMouseLoc = [[self superview] convertPoint:[theEvent locationInWindow] fromView:nil];
         [CPApp setTarget:self selector:@selector(_resizeWithEvent:) forNextEventMatchingMask:CPLeftMouseDraggedMask | CPLeftMouseUpMask untilDate:nil inMode:nil dequeue:YES];
         return;
     }
@@ -295,27 +312,27 @@ var kUIElementBottomRightHandle = 8;
     // No handle was clicked, proceed with selection and movement logic
     if ([theEvent modifierFlags] & CPShiftKeyMask)
     {
-        [sView selectView:self state:YES];
+        [canvas selectView:self state:YES];
     }
     else if ([theEvent modifierFlags] & CPCommandKeyMask)
     {
-        [sView selectView:self state:![self isSelected]];
+        [canvas selectView:self state:![self isSelected]];
     }
     else if (![self isSelected])
     {
-        [sView deselectViews];
-        [sView selectView:self state:YES];
+        [canvas deselectViews];
+        [canvas selectView:self state:YES];
     }
 
     // Begin a move session
-    _lastMouseLoc = [sView convertPoint:[theEvent locationInWindow] fromView:nil];
+    _lastMouseLoc = [[self canvasView] convertPoint:[theEvent locationInWindow] fromView:nil];
     [CPApp setTarget:self selector:@selector(_dragWithEvent:) forNextEventMatchingMask:CPLeftMouseDraggedMask | CPLeftMouseUpMask untilDate:nil inMode:nil dequeue:YES];
 }
 
 - (void)_dragWithEvent:(CPEvent)theEvent
 {
     // This is the move logic, largely from the original EFView.
-    var sView = [self superview];
+    var canvas = [self canvasView];
     var mouseLoc;
 
     switch ([theEvent type])
@@ -323,19 +340,17 @@ var kUIElementBottomRightHandle = 8;
         case CPLeftMouseDragged:
         {
             [[CPCursor closedHandCursor] set];
-            mouseLoc = [sView convertPoint:[theEvent locationInWindow] fromView:nil];
+            mouseLoc = [canvas convertPoint:[theEvent locationInWindow] fromView:nil];
             var deltaX = mouseLoc.x - _lastMouseLoc.x;
             var deltaY = mouseLoc.y - _lastMouseLoc.y;
 
-            var parentID = [[self dataObject] valueForKey:@"parentID"];
-            var parentView = parentID ? [self superview] : nil;
-
-            for (var i = 0;  i < [[sView selectedSubViews] count]; i++)
+            for (var i = 0;  i < [[canvas selectedSubViews] count]; i++)
             {
-                var view = [sView selectedSubViews][i];
+                var view = [canvas selectedSubViews][i];
                 var newOrigin = CGPointMake([view frame].origin.x + deltaX, [view frame].origin.y + deltaY);
 
-                if (parentView)
+                var parentView = [view superview];
+                if ([parentView isKindOfClass:[UIWindowView class]])
                 {
                     var parentBounds = [parentView bounds];
                     var viewFrame = [view frame];
@@ -347,15 +362,15 @@ var kUIElementBottomRightHandle = 8;
             }
 
             _lastMouseLoc = mouseLoc;
-            [sView setNeedsDisplay:YES];
+            [canvas setNeedsDisplay:YES];
             [CPApp setTarget:self selector:@selector(_dragWithEvent:) forNextEventMatchingMask:CPLeftMouseDraggedMask | CPLeftMouseUpMask untilDate:nil inMode:nil dequeue:YES];
             break;
         }
         case CPLeftMouseUp:
             [[CPCursor openHandCursor] set];
             _lastMouseLoc = null;
-            [sView setNeedsDisplay:YES];
-            [[self superview] elementDidMove:self];
+            [canvas setNeedsDisplay:YES];
+            [canvas elementDidMove:self];
             break;
     }
 }
@@ -363,6 +378,7 @@ var kUIElementBottomRightHandle = 8;
 - (void)_resizeWithEvent:(CPEvent)theEvent
 {
     var sView = [self superview];
+    var canvas = [self canvasView];
     var mouseLoc;
 
     switch ([theEvent type])
@@ -407,7 +423,7 @@ var kUIElementBottomRightHandle = 8;
             [self setFrame:frame];
             
             _lastMouseLoc = mouseLoc;
-            [sView setNeedsDisplay:YES];
+            [canvas setNeedsDisplay:YES];
             [CPApp setTarget:self selector:@selector(_resizeWithEvent:) forNextEventMatchingMask:CPLeftMouseDraggedMask | CPLeftMouseUpMask untilDate:nil inMode:nil dequeue:YES];
             break;
         }
@@ -415,8 +431,8 @@ var kUIElementBottomRightHandle = 8;
             [[CPCursor arrowCursor] set];
             _activeHandle = kUIElementNoHandle;
             _lastMouseLoc = null;
-            [sView setNeedsDisplay:YES];
-            [[self superview] elementDidResize:self];
+            [canvas setNeedsDisplay:YES];
+            [canvas elementDidResize:self];
             break;
     }
 }
@@ -455,12 +471,100 @@ var kUIElementBottomRightHandle = 8;
 // UIWindowView
 // A skeleton that looks like a window, and can act as a drop target.
 // =================================================================================================
+
+var _windowChildrenObservationContext = 1094;
+
 @implementation UIWindowView : UIElementView
 {
     // No new ivars needed for drawing
 }
 
+- (void)dealloc
+{
+    [self setDataObject:nil];
+    [super dealloc];
+}
+
+- (void)setDataObject:(id)newDataObject
+{
+    var oldDataObject = [self dataObject];
+
+    if (newDataObject != oldDataObject)
+    {
+        if (oldDataObject)
+            [oldDataObject removeObserver:self forKeyPath:@"children" context:_windowChildrenObservationContext];
+
+        [super setDataObject:newDataObject];
+
+        if (newDataObject)
+        {
+            [newDataObject addObserver:self forKeyPath:@"children" options:CPKeyValueObservingOptionNew | CPKeyValueObservingOptionOld context:_windowChildrenObservationContext];
+            [self _addChildrenViews:[newDataObject valueForKey:@"children"]];
+        }
+    }
+}
+
+- (void)_addChildrenViews:(CPArray)childDataObjects
+{
+    if (!childDataObjects) return;
+
+    var canvas = [self superview];
+
+    for (var i = 0; i < [childDataObjects count]; i++)
+    {
+        var childData = childDataObjects[i];
+        // This is a bit of a hack. We are reaching into the canvas's private method.
+        // A better solution would be a dedicated ViewFactory or similar.
         if ([canvas respondsToSelector:@selector(_createViewForDataObject:superview:)])
+            [canvas _createViewForDataObject:childData superview:self];
+    }
+}
+
+- (void)_removeChildrenViews:(CPArray)childDataObjects
+{
+    if (!childDataObjects) return;
+
+    var canvas = [self superview];
+    var viewsToRemove = [];
+    var subviews = [self subviews];
+
+    for (var i = 0; i < [subviews count]; i++)
+    {
+        var subview = subviews[i];
+        if ([childDataObjects containsObject:[subview dataObject]])
+            [viewsToRemove addObject:subview];
+    }
+
+    for (i = 0; i < [viewsToRemove count]; i++)
+    {
+        if ([canvas respondsToSelector:@selector(_removeViewAndChildren:)])
+            [canvas _removeViewAndChildren:viewsToRemove[i]];
+    }
+}
+
+
+- (void)observeValueForKeyPath:(CPString)keyPath ofObject:(id)object change:(CPDictionary)change context:(id)context
+{
+    if (context == _windowChildrenObservationContext)
+    {
+        var oldChildren = [change objectForKey:CPKeyValueChangeOldKey];
+        var newChildren = [change objectForKey:CPKeyValueChangeNewKey];
+
+        var added = [newChildren mutableCopy];
+        [added removeObjectsInArray:oldChildren];
+        [self _addChildrenViews:added];
+
+        var removed = [oldChildren mutableCopy];
+        [removed removeObjectsInArray:newChildren];
+        [self _removeChildrenViews:removed];
+    }
+    else
+    {
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+    }
+}
+
+
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];
@@ -472,9 +576,11 @@ var kUIElementBottomRightHandle = 8;
         _isContainer = YES;
         
         // This view can accept drops of other elements.
-        // You'll need to define drag types for your elements, e.g., "UIButtonDragType"
-        // For this example, we'll just accept a generic "UIElementDragType"
-        [self registerForDraggedTypes:["UIElementDragType"]];
+        [self registerForDraggedTypes:[
+            UIButtonDragType,
+            UISliderDragType,
+            UITextFieldDragType
+        ]];
     }
     return self;
 }
@@ -523,15 +629,20 @@ var kUIElementBottomRightHandle = 8;
 - (CPDragOperation)draggingEntered:(CPDraggingInfo)sender
 {
     var pasteboard = [sender draggingPasteboard];
-    var types = [pasteboard types];
-    var draggedType = types[0];
+    var acceptedTypes = [self registeredDraggedTypes];
 
-    if (draggedType === UIWindowDragType)
-        return CPDragOperationNone;
+    for (var i = 0; i < [[pasteboard types] count]; i++)
+    {
+        var draggedType = [[pasteboard types] objectAtIndex:i];
+        if ([acceptedTypes containsObject:draggedType])
+        {
+            _isDragTarget = YES;
+            [self setNeedsDisplay:YES];
+            return CPDragOperationGeneric;
+        }
+    }
 
-    _isDragTarget = YES;
-    [self setNeedsDisplay:YES];
-    return CPDragOperationGeneric;
+    return CPDragOperationNone;
 }
 
 - (void)draggingExited:(CPDraggingInfo)sender

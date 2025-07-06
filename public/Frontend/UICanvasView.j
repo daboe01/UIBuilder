@@ -9,13 +9,6 @@
 
 @import "UIElementView.j";
 
-// These are the types we can drag from the palette.
-// They must match the types used in the palette's draggable symbols.
-var UIWindowDragType = "UIWindowDragType";
-var UIButtonDragType = "UIButtonDragType";
-var UISliderDragType = "UISliderDragType";
-var UITextFieldDragType = "UITextFieldDragType";
-
 @implementation UICanvasView : CPView
 {
     // Data binding ivars
@@ -46,7 +39,9 @@ var _selectionIndexesObservationContext = 1093;
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];
-    if (self) {
+
+    if (self)
+    {
         // Register to accept drops from the palette
         [self registerForDraggedTypes:[
             UIWindowDragType,
@@ -118,7 +113,9 @@ var _selectionIndexesObservationContext = 1093;
     for (var i = 0;  i < [dataObjects count]; i++)
     {
         var newDataObject =  dataObjects[i];
-        [self _createViewForDataObject:newDataObject superview:self];
+        // Only create views for top-level objects. Children are handled by their parents.
+        if (![newDataObject valueForKey:@"parentID"])
+            [self _createViewForDataObject:newDataObject superview:self];
     }
 }
 
@@ -304,11 +301,7 @@ var _selectionIndexesObservationContext = 1093;
     var draggedType = types[0]; // Assuming only one type is being dragged
     var elementType;
     
-    // Convert Drag Type to Element Type
     if (draggedType === UIWindowDragType) elementType = "window";
-    else if (draggedType === UIButtonDragType) elementType = "button";
-    else if (draggedType === UISliderDragType) elementType = "slider";
-    else if (draggedType === UITextFieldDragType) elementType = "textfield";
 
     if (elementType && _delegate && [_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:)])
     {
@@ -349,15 +342,27 @@ var _selectionIndexesObservationContext = 1093;
 - (CPArray)selectedSubViews
 {
     var selectedDataObjects = [[self dataObjects] objectsAtIndexes:[self selectionIndexes]];
-    var selectedViews = [];
+    var selectedViews = [CPMutableArray array];
 
-    for (var i = 0; i < [[self subviews] count]; i++) {
-        var aView = [self subviews][i];
-        if ([selectedDataObjects containsObject:[aView dataObject]]) {
-            [selectedViews addObject:aView];
-        }
-    }
+    [self _findViewsForDataObjects:selectedDataObjects inView:self foundViews:selectedViews];
+
     return selectedViews;
+}
+
+- (void)_findViewsForDataObjects:(CPArray)dataObjects inView:(CPView)aView foundViews:(CPMutableArray)foundViews
+{
+    var subviews = [aView subviews];
+    for (var i = 0; i < [subviews count]; i++)
+    {
+        var subview = subviews[i];
+        if ([dataObjects containsObject:[subview dataObject]])
+        {
+            [foundViews addObject:subview];
+        }
+
+        // Recurse into subviews
+        [self _findViewsForDataObjects:dataObjects inView:subview foundViews:foundViews];
+    }
 }
 
 // These methods are called by the UIElementView children to notify the controller

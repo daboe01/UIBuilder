@@ -1,0 +1,106 @@
+<?xml version="1.0"?>
+<!DOCTYPE gsmarkup>
+<gsmarkup>
+
+    <objects>
+        <sortDescriptor id="by_name" key="name"/>
+        <sortDescriptor id="by_id" key="id" numeric="YES"/>
+        <sortDescriptor id="by_insertiontime" key="insertion_time" ascending="NO"/>
+
+        <arrayController id="projects_controller" entity="projects" autoFetchSync="YES" sortDescriptor="by_name"/>
+        <arrayController id="input_controller" entity="input_data" autoFetchSync="YES" sortDescriptor="by_id"/>
+        <arrayController id="output_controller" entity="output_data" valueBinding="input_controller.selection.output" sortDescriptor="by_insertiontime"/>
+        <arrayController id="blocks_controller" entity="blocks" valueBinding="projects_controller.selection.blocks" sortDescriptor="by_id"/>
+        <arrayController id="settings_controller" entity="settings" valueBinding="blocks_controller.selection.settings"/>
+        <arrayController id="blocks_catalogue_controller" entity="blocks_catalogue" autoFetchSync="YES" sortDescriptor="by_name"/>
+        <arrayController id="embedding_models_controller" entity="embedding_models" autoFetchSync="YES" sortDescriptor="by_name"/>
+        <arrayController id="embedded_datasets_controller" entity="embedded_datasets" autoFetchSync="YES" sortDescriptor="by_name"/>
+        <arrayController id="embedded_data_controller" entity="embedded_data" valueBinding="embedded_datasets_controller.selection.data"/>
+    </objects>
+
+<entities>
+    <entity id="projects" store="#CPOwner.store">
+        <column name="id" primaryKey="YES"/>
+        <column name="name"/>
+        <relationship type="toMany" name="blocks" bindingColumn="id" target="blocks" targetColumn="idproject"/>
+    </entity>
+    <entity id="blocks_catalogue" store="#CPOwner.store">
+        <column name="id" primaryKey="YES"/>
+        <column name="type"/>
+        <column name="name"/>
+        <column name="inputs"/>
+        <column name="outputs"/>
+        <column name="default_value"/>
+        <column name="gui_xml"/>
+        <column name="gui_fields"/>
+    </entity>
+    <entity id="blocks" store="#CPOwner.store">
+        <column name="id" primaryKey="YES"/>
+        <column name="idblock"/>
+        <column name="idproject"/>
+        <column name="name"/>
+        <column name="connections"/>
+        <column name="output_value"/>
+        <column name="originX"/>
+        <column name="originY"/>
+        <relationship type="toOne" name="block_type" bindingColumn="idblock" target="blocks_catalogue"/>
+        <relationship type="toOne" name="settings" bindingColumn="id" target="settings"/>
+    </entity>
+    <entity id="settings" store="#CPOwner.store">
+        <column name="id" primaryKey="YES"/>
+    </entity>
+    <entity id="input_data" store="#CPOwner.store">
+        <column name="id" primaryKey="YES"/>
+        <column name="title"/>
+        <column name="content"/>
+        <column name="insertion_time"/>
+        <column name="idprompt"/>
+        <relationship type="toMany" name="output" bindingColumn="id" target="output_data" targetColumn="idinput"/>
+    </entity>
+    <entity id="output_data" store="#CPOwner.store">
+        <column name="id" primaryKey="YES"/>
+        <column name="idinput"/>
+        <column name="content"/>
+        <column name="idprompt"/>
+        <column name="insertion_time"/>
+        <relationship type="toOne" name="prompt" bindingColumn="idprompt" target="projects"/>
+    </entity>
+    <entity id="embedding_models" store="#CPOwner.store">
+        <column name="id" primaryKey="YES"/>
+        <column name="name"/>
+        <column name="storage_entity"/>
+        <column name="embedding_endpoint"/>
+        <column name="rest_headers"/>
+    </entity>
+    <entity id="embedded_datasets" store="#CPOwner.store">
+        <column name="id" primaryKey="YES"/>
+        <column name="name"/>
+        <column name="idembedding_model"/>
+        <column name="template"/>
+        <relationship type="toOne" name="embedding_model" bindingColumn="idembedding_model" target="embedding_models"/>
+        <relationship type="toMany" name="data" bindingColumn="id" target="embedded_data" targetColumn="idembedded_datasets"/>
+    </entity>
+    <entity id="embedded_data" store="#CPOwner.store">
+        <column name="id" primaryKey="YES"/>
+        <column name="label"/>
+        <column name="payload"/>
+        <column name="idembedded_datasets"/>
+        <relationship type="toOne" name="embedded_datasets" bindingColumn="idembedded_datasets" target="embedded_datasets"/>
+    </entity>
+</entities>
+
+<connectors>
+    <outlet source="#CPOwner" target="blocks_controller" label="blocksController"/>
+    <outlet source="#CPOwner" target="settings_controller" label="settingsController"/>
+    <outlet source="#CPOwner" target="blocks_catalogue_controller" label="blocksCatalogueController"/>
+    <outlet source="#CPOwner" target="input_controller" label="inputController"/>
+    <outlet source="#CPOwner" target="output_controller" label="outputController"/>
+    <outlet source="#CPOwner" target="projects_controller" label="projectsController"/>
+
+    <outlet source="#CPOwner" target="embedding_models_controller" label="embeddingModelsController"/>
+    <outlet source="#CPOwner" target="embedded_datasets_controller" label="embeddedDatasetsController"/>
+    <outlet source="#CPOwner" target="embedded_data_controller" label="embeddedDataController"/>
+</connectors>
+
+
+</gsmarkup>

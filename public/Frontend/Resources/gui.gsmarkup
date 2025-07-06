@@ -1,0 +1,163 @@
+<?xml version="1.0"?>
+<!DOCTYPE gsmarkup>
+<gsmarkup>
+
+<objects>
+
+    <window title="Dummy" x="260" y="300" width="300" height="90" visible="NO"  resizable="NO">
+        <popUpButton id="promptspop" itemsBinding="#CPOwner.projectsController.arrangedObjects.name"/>
+        <popUpButton id="embeddingspop" itemsBinding="#CPOwner.embeddingModelsController.arrangedObjects.name"/>
+    </window>
+
+    <window title="Edit" x="260" y="100" width="300" height="600" visible="NO"  resizable="YES" id="edit_window">
+        <vbox>
+            <scrollView hasHorizontalScroller="NO" width="100" height="200" backgroundColor="white">
+                <textView editable="YES" valueBinding="#CPOwner.blocksController.selection.output_value" backgroundColor="white"/>
+            </scrollView>
+        </vbox>
+    </window>
+
+    <window title="Import" x="60" y="200" width="300" height="600" visible="NO"  resizable="YES" id="input_window">
+        <vbox>
+            <scrollView hasHorizontalScroller="NO" width="100" height="200" backgroundColor="white">
+                <textView id="import_csv_text" editable="YES"  backgroundColor="white"/>
+            </scrollView>
+            <hbox>
+                <button title="Replace" target="#CPOwner" action="performImportCSV:"/>
+                <button title="Append" target="#CPOwner" action="performImportCSVAppend:"/>
+                <button title="Remove" target="#CPOwner" action="performImportCSVRemove:"/>
+            </hbox>
+        </vbox>
+    </window>
+
+
+    <window id="add_blocks_window" visible="NO" width="400" height="600">
+        <vbox>
+            <scrollView hasHorizontalScroller="NO">
+                <tableView zebra="yes" valueBinding="#CPOwner.blocksCatalogueController" allowsMultipleSelection="YES" target="#CPOwner" doubleAction="performAddBlocks:">
+                    <tableColumn identifier="name" title="name" width="300" editable="NO"/>
+                </tableView>
+            </scrollView>
+            <hbox>
+                <button title="Hinzufügen" target="#CPOwner" action="performAddBlocks:"/>
+                <hspace/>
+                <button title="Abbrechen" target="#CPOwner" action="cancelAddBlocks:"/>
+            </hbox>
+        </vbox>
+    </window>
+
+    <window bridge="YES" id="mainwindow" delegate="#CPOwner">
+        <vbox>
+            <tabView type="topBezel" delegate="#CPOwner">
+                <tabViewItem title="Prompts">
+                    <vbox>
+                        <splitView vertical="YES" autosaveName="vsplitter_main_llm_0a">
+                            <vbox width="100">
+                                <scrollView hasHorizontalScroller="YES">
+                                    <tableView zebra="yes" id="projects_tv" autosaveName="projects_tv" valueBinding="#CPOwner.projectsController" target="#CPOwner" allowsEmptySelection="NO">
+                                        <tableColumn identifier="id" title="id" editable="NO"/>
+                                        <tableColumn identifier="name" title="name" editable="YES"/>
+                                    </tableView>
+                                </scrollView>
+                                <ButtonBar target="#CPOwner.projectsController" actionsButton="NO" minusButtonAction="remove:" plusButtonAction="insert:"/>
+                            </vbox>
+                            <vbox>
+                                <hbox>
+                                    <button title="New..." target="#CPOwner" action="addBlocks:"/>
+                                    <button title="Delete" target="#CPOwner" action="removeBlocks:"/>
+                                    <hspace/>
+                                </hbox>
+                                <scrollView>
+                                    <patchbayView id="lace_view" width="1000" height="1000" halign="min" valign="min"/>
+                                </scrollView>
+                            </vbox>
+                        </splitView>
+                    </vbox>
+                </tabViewItem>
+                <tabViewItem title="Playground">
+                    <vbox>
+                        <splitView vertical="YES" autosaveName="vsplitter_main_llm_1">
+                            <vbox width="100">
+                                <scrollView hasHorizontalScroller="YES">
+                                    <tableView zebra="yes"  id="playground_tv" autosaveName="inputs_tv" valueBinding="#CPOwner.inputController" target="#CPOwner" allowsEmptySelection="NO">
+                                        <tableColumn identifier="title" title="name" editable="YES"/>
+                                        <tableColumn identifier="idprompt" title="Prompt" dataView="#promptspop"/>
+                                    </tableView>
+                                </scrollView>
+                                <ButtonBar target="#CPOwner.inputController" minusButtonAction="remove:" plusButtonAction="insert:" actionsButton="YES">
+                                </ButtonBar>
+                            </vbox>
+
+                            <vbox>
+                                <scrollView>
+                                    <textView editable="YES" valueBinding="#CPOwner.inputController.selection.content"/>
+                                </scrollView>
+                                <hbox>
+                                    <button title="Run" target="#CPOwner" action="run:"/>
+                                    <hspace/>
+                                </hbox>
+                            </vbox>
+
+                            <vbox width="100">
+                                <scrollView hasHorizontalScroller="YES">
+                                    <tableView zebra="yes"  autosaveName="output_tv" valueBinding="#CPOwner.outputController" target="#CPOwner" allowsEmptySelection="NO">
+                                        <tableColumn identifier="prompt.name" title="Prompt"/>
+                                        <tableColumn identifier="insertion_time" title="timestamp" editable="YES"/>
+                                    </tableView>
+                                </scrollView>
+                                <ButtonBar target="#CPOwner.outputController" minusButtonAction="remove:" actionsButton="NO"/>
+                            </vbox>
+                            <scrollView>
+                                <textView editable="YES" valueBinding="#CPOwner.outputController.selection.content"/>
+                            </scrollView>
+                        </splitView>
+                    </vbox>
+                </tabViewItem>
+                <tabViewItem title="VectorStore">
+                    <vbox>
+                        <splitView vertical="YES" autosaveName="vsplitter_main_llm_3">
+                            <vbox width="100">
+                                <scrollView hasHorizontalScroller="YES">
+                                    <tableView zebra="yes" autosaveName="retrieval_tv" valueBinding="#CPOwner.embeddedDatasetsController" target="#CPOwner" allowsEmptySelection="NO">
+                                        <tableColumn identifier="id" title="id" editable="NO"/>
+                                        <tableColumn identifier="name" title="name" editable="YES"/>
+                                        <tableColumn identifier="idembedding_model" title="Embedding" dataView="#embeddingspop"/>
+                                        <tableColumn identifier="template" title="template" editable="YES"/>
+                                    </tableView>
+                                </scrollView>
+                                <ButtonBar target="#CPOwner.embeddedDatasetsController" minusButtonAction="remove:" plusButtonAction="insert:" actionsButton="YES">
+                                    <popUpButtonItem title="Import CSV..." target="#input_window" action="makeKeyAndOrderFront:"/>
+                                    <popUpButtonItem title="Download" target="#CPOwner" action="downloadDataset:"/>
+                                </ButtonBar>
+                            </vbox>
+                            <vbox width="100">
+                                <scrollView hasHorizontalScroller="YES">
+                                    <tableView zebra="yes"  autosaveName="retrieval_tv2" valueBinding="#CPOwner.embeddedDataController" target="#CPOwner" allowsEmptySelection="NO">
+                                        <tableColumn identifier="label" title="Label" editable="YES"/>
+                                        <tableColumn identifier="payload" title="Payload"/>
+                                    </tableView>
+                                </scrollView>
+                                <ButtonBar target="#CPOwner.embeddedDataController" minusButtonAction="remove:" actionsButton="NO"/>
+                            </vbox>
+                        </splitView>
+                    </vbox>
+                </tabViewItem>
+            </tabView>
+        </vbox>
+    </window>
+
+</objects>
+
+<connectors>
+    <outlet source="CPOwner" target="mainwindow" label="mainWindow"/>
+    <outlet source="CPOwner" target="lace_view" label="laceView"/>
+    <outlet source="CPOwner" target="add_blocks_window" label="addBlocksWindow"/>
+    <outlet source="CPOwner" target="edit_window" label="editWindow"/>
+    <outlet source="CPOwner" target="input_window" label="inputWindow"/>
+    <outlet source="CPOwner" target="input_text" label="inputText"/>
+    <outlet source="CPOwner" target="import_csv_text" label="importCSVText"/>
+    <outlet source="CPOwner" target="playground_tv" label="playgroundTV"/>
+</connectors>
+
+
+</gsmarkup>

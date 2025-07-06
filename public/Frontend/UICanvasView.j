@@ -118,26 +118,40 @@ var _selectionIndexesObservationContext = 1093;
     for (var i = 0;  i < [dataObjects count]; i++)
     {
         var newDataObject =  dataObjects[i];
-        var type = [newDataObject valueForKey:@"type"];
-        var newView;
-        
-        // === THIS IS THE KEY CHANGE ===
-        // Instantiate the correct view based on the data model's 'type'
-        if (type === "window") newView = [[UIWindowView alloc] init];
-        else if (type === "button") newView = [[UIButtonView alloc] init];
-        else if (type === "slider") newView = [[UISliderView alloc] init];
-        else if (type === "textfield") newView = [[UITextFieldView alloc] init];
-        else newView = [[UIElementView alloc] init]; // Fallback
-        
-        [self addSubview:newView];
-        [newView setDataObject:newDataObject];
+        [self _createViewForDataObject:newDataObject superview:self];
+    }
+}
 
-        // Bind view properties to the data model
-        [newView bind:@"title" toObject:newDataObject withKeyPath:@"title" options:nil];
-        [newView bind:@"originX" toObject:newDataObject withKeyPath:@"originX" options:nil];
-        [newView bind:@"originY" toObject:newDataObject withKeyPath:@"originY" options:nil];
-        [newView bind:@"width" toObject:newDataObject withKeyPath:@"width" options:nil];
-        [newView bind:@"height" toObject:newDataObject withKeyPath:@"height" options:nil];
+- (void)_createViewForDataObject:(CPDictionary)dataObject superview:(CPView)superview
+{
+    var type = [dataObject valueForKey:@"type"];
+    var newView;
+
+    // === THIS IS THE KEY CHANGE ===
+    // Instantiate the correct view based on the data model's 'type'
+    if (type === "window") newView = [[UIWindowView alloc] init];
+    else if (type === "button") newView = [[UIButtonView alloc] init];
+    else if (type === "slider") newView = [[UISliderView alloc] init];
+    else if (type === "textfield") newView = [[UITextFieldView alloc] init];
+    else newView = [[UIElementView alloc] init]; // Fallback
+
+    [superview addSubview:newView];
+    [newView setDataObject:dataObject];
+
+    // Bind view properties to the data model
+    [newView bind:@"title" toObject:dataObject withKeyPath:@"title" options:nil];
+    [newView bind:@"originX" toObject:dataObject withKeyPath:@"originX" options:nil];
+    [newView bind:@"originY" toObject:dataObject withKeyPath:@"originY" options:nil];
+    [newView bind:@"width" toObject:dataObject withKeyPath:@"width" options:nil];
+    [newView bind:@"height" toObject:dataObject withKeyPath:@"height" options:nil];
+
+    if (type === "window")
+    {
+        var children = [dataObject valueForKey:@"children"];
+        for (var j = 0; j < [children count]; j++)
+        {
+            [self _createViewForDataObject:children[j] superview:newView];
+        }
     }
 }
 
@@ -155,14 +169,26 @@ var _selectionIndexesObservationContext = 1093;
     
     for (var i = 0; i < [viewsToRemove count]; i++) {
         var viewToRemove = viewsToRemove[i];
-        // Unbind everything before removing
-        [viewToRemove unbind:@"title"];
-        [viewToRemove unbind:@"originX"];
-        [viewToRemove unbind:@"originY"];
-        [viewToRemove unbind:@"width"];
-        [viewToRemove unbind:@"height"];
-        [viewToRemove removeFromSuperview];
+        [self _removeViewAndChildren:viewToRemove];
     }
+}
+
+- (void)_removeViewAndChildren:(UIElementView)viewToRemove
+{
+    // Unbind everything before removing
+    [viewToRemove unbind:@"title"];
+    [viewToRemove unbind:@"originX"];
+    [viewToRemove unbind:@"originY"];
+    [viewToRemove unbind:@"width"];
+    [viewToRemove unbind:@"height"];
+
+    var subviews = [[viewToRemove subviews] copy];
+    for (var i = 0; i < [subviews count]; i++)
+    {
+        [self _removeViewAndChildren:subviews[i]];
+    }
+
+    [viewToRemove removeFromSuperview];
 }
 
 - (void)observeValueForKeyPath:(CPString)keyPath ofObject:(id)object change:(CPDictionary)change context:(id)context
@@ -286,9 +312,12 @@ var _selectionIndexesObservationContext = 1093;
 
     if (elementType && _delegate && [_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:)])
     {
-        [_delegate addNewElementOfType:elementType atPoint:dropPoint];
-        [self setNeedsDisplay:YES];
-        return YES;
+        if (elementType === "window")
+        {
+            [_delegate addNewElementOfType:elementType atPoint:dropPoint];
+            [self setNeedsDisplay:YES];
+            return YES;
+        }
     }
 
     return NO;

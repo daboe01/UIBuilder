@@ -46,10 +46,28 @@
 #pragma mark -
 #pragma mark Data Management
 
+- (CPDictionary)_containerDataAtPoint:(CGPoint)aPoint
+{
+    var allElements = [_elementsController arrangedObjects];
+    for (var i = [allElements count] - 1; i >= 0; i--)
+    {
+        var elementData = allElements[i];
+        var type = [elementData valueForKey:@"type"];
+        if (type === "window")
+        {
+            var frame = CGRectMake([elementData valueForKey:@"originX"], [elementData valueForKey:@"originY"], [elementData valueForKey:@"width"], [elementData valueForKey:@"height"]);
+            if (CGRectContainsPoint(frame, aPoint))
+                return elementData;
+        }
+    }
+    return nil;
+}
+
 - (void)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint
 {
     var newElementData = [CPConservativeDictionary dictionary];
-    
+    var containerData = [self _containerDataAtPoint:aPoint];
+
     // Set default properties based on type
     [newElementData setValue:elementType forKey:@"type"];
     [newElementData setValue:aPoint.x forKey:@"originX"];
@@ -57,11 +75,11 @@
     [newElementData setValue:@"Untitled " + elementType forKey:@"title"];
     [newElementData setValue:@"id_" + _elementCounter++ forKey:@"id"];
 
-document.title = _elementCounter + " - UI Builder";
     // Set default sizes
     if (elementType === "window") {
         [newElementData setValue:250 forKey:@"width"];
         [newElementData setValue:200 forKey:@"height"];
+        [newElementData setValue:[] forKey:@"children"];
     } else if (elementType === "button") {
         [newElementData setValue:100 forKey:@"width"];
         [newElementData setValue:24 forKey:@"height"];
@@ -72,8 +90,22 @@ document.title = _elementCounter + " - UI Builder";
         [newElementData setValue:150 forKey:@"width"];
         [newElementData setValue:22 forKey:@"height"];
     }
-    
-    [_elementsController addObject:newElementData];
+
+    if (containerData && elementType !== "window")
+    {
+        // Add as a child to the container
+        [newElementData setValue:[containerData valueForKey:@"id"] forKey:@"parentID"];
+        var children = [containerData valueForKey:@"children"];
+        [children addObject:newElementData];
+        // We need to trigger KVO for the container's children array
+        [containerData didChangeValueForKey:@"children"];
+    }
+    else
+    {
+        // Add as a top-level element
+        [_elementsController addObject:newElementData];
+    }
+
     document.title = [[_elementsController arrangedObjects] count];
     [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
 }

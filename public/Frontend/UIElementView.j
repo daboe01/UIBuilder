@@ -39,6 +39,7 @@ var kUIElementBottomRightHandle = 8;
     int                     _activeHandle;
     BOOL                    _isDragTarget; // Used by subclasses (e.g. UIWindowView)
     CPTrackingArea          _trackingArea;
+    BOOL                    _isContainer;
 }
 
 - (id)initWithFrame:(CGRect)frame
@@ -63,6 +64,7 @@ var kUIElementBottomRightHandle = 8;
                                                       owner:self
                                                    userInfo:nil];
         [self addTrackingArea:_trackingArea];
+        _isContainer = NO;
     }
     return self;
 }
@@ -325,10 +327,23 @@ var kUIElementBottomRightHandle = 8;
             var deltaX = mouseLoc.x - _lastMouseLoc.x;
             var deltaY = mouseLoc.y - _lastMouseLoc.y;
 
+            var parentID = [[self dataObject] valueForKey:@"parentID"];
+            var parentView = parentID ? [self superview] : nil;
+
             for (var i = 0;  i < [[sView selectedSubViews] count]; i++)
             {
                 var view = [sView selectedSubViews][i];
-                [view setFrameOrigin:CGPointMake([view frame].origin.x + deltaX, [view frame].origin.y + deltaY)];
+                var newOrigin = CGPointMake([view frame].origin.x + deltaX, [view frame].origin.y + deltaY);
+
+                if (parentView)
+                {
+                    var parentBounds = [parentView bounds];
+                    var viewFrame = [view frame];
+                    newOrigin.x = MAX(0, MIN(newOrigin.x, parentBounds.size.width - viewFrame.size.width));
+                    newOrigin.y = MAX(0, MIN(newOrigin.y, parentBounds.size.height - viewFrame.size.height));
+                }
+
+                [view setFrameOrigin:newOrigin];
             }
 
             _lastMouseLoc = mouseLoc;
@@ -453,6 +468,7 @@ var kUIElementBottomRightHandle = 8;
         if (CGRectIsEmpty(aRect)) {
             [self setFrameSize:CGSizeMake(250, 200)];
         }
+        _isContainer = YES;
         
         // This view can accept drops of other elements.
         // You'll need to define drag types for your elements, e.g., "UIButtonDragType"
@@ -505,6 +521,13 @@ var kUIElementBottomRightHandle = 8;
 
 - (CPDragOperation)draggingEntered:(CPDraggingInfo)sender
 {
+    var pasteboard = [sender draggingPasteboard];
+    var types = [pasteboard types];
+    var draggedType = types[0];
+
+    if (draggedType === UIWindowDragType)
+        return CPDragOperationNone;
+
     _isDragTarget = YES;
     [self setNeedsDisplay:YES];
     return CPDragOperationGeneric;
@@ -518,12 +541,31 @@ var kUIElementBottomRightHandle = 8;
 
 - (BOOL)performDragOperation:(CPDraggingInfo)sender
 {
-    // The actual logic of re-parenting the view and its data model would go here.
-    // For the drawing engine, we just need to turn off the highlight.
+    var dropPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
+    var pasteboard = [sender draggingPasteboard];
+    var types = [pasteboard types];
+    var draggedType = types[0];
+    var elementType;
+
+    if (draggedType === UIButtonDragType) elementType = "button";
+    else if (draggedType === UISliderDragType) elementType = "slider";
+    else if (draggedType === UITextFieldDragType) elementType = "textfield";
+
+    if (elementType)
+    {
+        // We need to find the canvas and then the delegate
+        var canvas = [self superview];
+        var delegate = [canvas delegate];
+        if (delegate && [delegate respondsToSelector:@selector(addNewElementOfType:atPoint:)])
+        {
+            var canvasPoint = [self convertPoint:dropPoint toView:canvas];
+            [delegate addNewElementOfType:elementType atPoint:canvasPoint];
+        }
+    }
+
     _isDragTarget = NO;
     [self setNeedsDisplay:YES];
     
-    // Return YES to indicate a successful drop.
     return YES;
 }
 

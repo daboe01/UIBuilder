@@ -17,7 +17,6 @@ Our vision is to provide a seamless bridge between visual design and clean, main
 EspressoUI is guided by a simple yet powerful philosophy:
 
 *   **Native-Like Experience:** The builder itself should feel like a fluid, responsive desktop application, showcasing the power of the Cappuccino framework.
-*   **Developer-First:** The ultimate output is code. Espresso is committed to generating clean, human-readable, and performance-oriented `.cib` files and Objective-J code that you'll be happy to work with.
 *   **Pure Cappuccino:** No external UI library dependencies. This project is a testament to what can be achieved with Cappuccino alone.
 
 ---

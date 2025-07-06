@@ -460,6 +460,7 @@ var kUIElementBottomRightHandle = 8;
     // No new ivars needed for drawing
 }
 
+        if ([canvas respondsToSelector:@selector(_createViewForDataObject:superview:)])
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];

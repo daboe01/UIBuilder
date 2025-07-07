@@ -75,6 +75,12 @@ var kUIElementBottomRightHandle = 8;
     return self;
 }
 
+- (BOOL)acceptsFirstMouse
+{
+    // This view should accept first mouse events for interaction.
+    return YES;
+}
+
 - (void)removeFromSuperview
 {
     // This is the correct place to clean up view-related resources.
@@ -176,25 +182,16 @@ var kUIElementBottomRightHandle = 8;
     }
 }
 
-- (UICanvasView)canvasView
+// You will need a way to get a reference to the canvas.
+// This is often done by walking up the superview chain.
+- (UICanvasView)canvas
 {
     var aView = self;
-    while (aView && ![aView isKindOfClass:[UICanvasView class]])
-    {
-        aView = [aView superview];
+    while (aView = [aView superview]) {
+        if ([aView isKindOfClass:[UICanvasView class]])
+            return aView;
     }
-    return aView;
-}
-
-- (BOOL)isSelected
-{
-    // This assumes the superview (the canvas) responds to `selectedSubViews`
-    var canvas = [self canvasView];
-    if (canvas && [canvas respondsToSelector:@selector(selectedSubViews)])
-    {
-        return [[canvas selectedSubViews] containsObject:self];
-    }
-    return NO;
+    return nil;
 }
 
 #pragma mark -

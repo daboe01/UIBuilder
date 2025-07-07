@@ -75,7 +75,7 @@ var _selectionIndexesObservationContext = 1093;
     {
         _selectionIndexesContainer = observableObject;
         _selectionIndexesKeyPath = observableKeyPath;
-        [_selectionIndexesContainer addObserver:self forKeyPath:_selectionIndexesKeyPath options:0 context:_selectionIndexesObservationContext];
+        [_selectionIndexesContainer addObserver:self forKeyPath:_selectionIndexesKeyPath options:CPKeyValueObservingOptionNew | CPKeyValueObservingOptionOld context:_selectionIndexesObservationContext];
     }
     else { [super bind:bindingName toObject:observableObject withKeyPath:observableKeyPath options:options]; }
 
@@ -208,10 +208,35 @@ var _selectionIndexesObservationContext = 1093;
     }
     else if (context == _selectionIndexesObservationContext)
     {
-        [[self subviews] makeObjectsPerformSelector:@selector(setNeedsDisplay:) withObject:YES];
+        // 1. Get the master array of all data objects.
+        var allDataObjects = [self dataObjects];
+
+        // 2. Get the NEW and OLD index sets from the 'change' dictionary.
+        var newIndexes = [change objectForKey:CPKeyValueChangeNewKey];
+        var oldIndexes = [change objectForKey:CPKeyValueChangeOldKey];
+
+        // 3. Make the code robust by handling the case where everything is deselected (value is null).
+        if (!newIndexes || newIndexes == [CPNull null]) newIndexes = [CPIndexSet indexSet];
+        if (!oldIndexes || oldIndexes == [CPNull null]) oldIndexes = [CPIndexSet indexSet];
+
+        // 4. CRITICAL STEP: Use the index sets to look up the corresponding *data objects*.
+        // This converts the CPIndexSet into the CPArray that the next method needs.
+        var newSelectedDataObjects = [allDataObjects objectsAtIndexes:newIndexes];
+        var oldSelectedDataObjects = [allDataObjects objectsAtIndexes:oldIndexes];
+
+        // 5. Now, the rest of your logic will work because it receives the correct object type (CPArray).
+
+        // Get views for newly selected objects and tell them to redraw.
+        var newlySelectedViews = [CPMutableArray array];
+        [self _findViewsForDataObjects:newSelectedDataObjects inView:self foundViews:newlySelectedViews];
+        [newlySelectedViews makeObjectsPerformSelector:@selector(setNeedsDisplay:) withObject:YES];
+
+        // Get views for previously selected objects that are now deselected and tell them to redraw.
+        var previouslySelectedViews = [CPMutableArray array];
+        [self _findViewsForDataObjects:oldSelectedDataObjects inView:self foundViews:previouslySelectedViews];
+        [previouslySelectedViews makeObjectsPerformSelector:@selector(setNeedsDisplay:) withObject:YES];
     }
 }
-
 
 #pragma mark - Drawing & Mouse
 
@@ -330,9 +355,15 @@ var _selectionIndexesObservationContext = 1093;
 {
     var selection = [[self selectionIndexes] mutableCopy] || [CPMutableIndexSet indexSet];
     var dataObjectIndex = [[self dataObjects] indexOfObject:[aView dataObject]];
+debugger
 
-    if (dataObjectIndex != CPNotFound) {
-        if (select) [selection addIndex:dataObjectIndex];
+    console.log("selectView:state: dataObjectIndex", dataObjectIndex);
+
+    if (dataObjectIndex != CPNotFound)
+    {
+        if (select)
+            [selection addIndex:dataObjectIndex];
+
         else [selection removeIndex:dataObjectIndex];
     }
     
@@ -352,10 +383,13 @@ var _selectionIndexesObservationContext = 1093;
 - (void)_findViewsForDataObjects:(CPArray)dataObjects inView:(CPView)aView foundViews:(CPMutableArray)foundViews
 {
     var subviews = [aView subviews];
+
     for (var i = 0; i < [subviews count]; i++)
     {
         var subview = subviews[i];
-        if ([dataObjects containsObject:[subview dataObject]])
+        var contains = [dataObjects containsObject:[subview dataObject]];
+
+        if (contains)
         {
             [foundViews addObject:subview];
         }

@@ -276,6 +276,11 @@ var kUIElementBottomRightHandle = 8;
     }
 }
 
+- (BOOL)isSelected
+{
+    return [[self canvas] isViewSelected:self];
+}
+
 #pragma mark -
 #pragma mark *** Mouse Handling & Resizing ***
 
@@ -293,9 +298,9 @@ var kUIElementBottomRightHandle = 8;
 
 - (void)mouseDown:(CPEvent)theEvent
 {
-    var canvas = [self canvasView];
+    var canvas = [self canvas];
     var localPoint = [self convertPoint:[theEvent locationInWindow] fromView:nil];
-    
+
     // First, check if we clicked a resize handle
     _activeHandle = [self handleAtPoint:localPoint];
     if (_activeHandle != kUIElementNoHandle)
@@ -322,14 +327,14 @@ var kUIElementBottomRightHandle = 8;
     }
 
     // Begin a move session
-    _lastMouseLoc = [[self canvasView] convertPoint:[theEvent locationInWindow] fromView:nil];
+    _lastMouseLoc = [[self canvas] convertPoint:[theEvent locationInWindow] fromView:nil];
     [CPApp setTarget:self selector:@selector(_dragWithEvent:) forNextEventMatchingMask:CPLeftMouseDraggedMask | CPLeftMouseUpMask untilDate:nil inMode:nil dequeue:YES];
 }
 
 - (void)_dragWithEvent:(CPEvent)theEvent
 {
     // This is the move logic, largely from the original EFView.
-    var canvas = [self canvasView];
+    var canvas = [self canvas];
     var mouseLoc;
 
     switch ([theEvent type])
@@ -375,7 +380,7 @@ var kUIElementBottomRightHandle = 8;
 - (void)_resizeWithEvent:(CPEvent)theEvent
 {
     var sView = [self superview];
-    var canvas = [self canvasView];
+    var canvas = [self canvas];
     var mouseLoc;
 
     switch ([theEvent type])

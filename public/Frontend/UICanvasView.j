@@ -108,7 +108,8 @@ var _selectionIndexesObservationContext = 1093;
 
 - (void)startObservingDataObjects:(CPArray)dataObjects
 {
-    if (!dataObjects || dataObjects == [CPNull null]) return;
+    if (!dataObjects || dataObjects == [CPNull null])
+        return;
 
     for (var i = 0;  i < [dataObjects count]; i++)
     {
@@ -124,15 +125,18 @@ var _selectionIndexesObservationContext = 1093;
     var type = [dataObject valueForKey:@"type"];
     var newView;
 
-    // === THIS IS THE KEY CHANGE ===
     // Instantiate the correct view based on the data model's 'type'
-    if (type === "window") newView = [[UIWindowView alloc] init];
-    else if (type === "button") newView = [[UIButtonView alloc] init];
-    else if (type === "slider") newView = [[UISliderView alloc] init];
-    else if (type === "textfield") newView = [[UITextFieldView alloc] init];
-    else newView = [[UIElementView alloc] init]; // Fallback
+    if (type === "window")
+        newView = [[UIWindowView alloc] init];
+    else if (type === "button")
+        newView = [[UIButtonView alloc] init];
+    else if (type === "slider")
+        newView = [[UISliderView alloc] init];
+    else if (type === "textfield")
+        newView = [[UITextFieldView alloc] init];
+    else
+        newView = [[UIElementView alloc] init]; // Fallback
 
-    [superview addSubview:newView];
     [newView setDataObject:dataObject];
 
     // Bind view properties to the data model
@@ -150,6 +154,10 @@ var _selectionIndexesObservationContext = 1093;
             [self _createViewForDataObject:children[j] superview:newView];
         }
     }
+
+    [superview addSubview:newView];
+    // i have no idea why this is needed, but it is to make the initial click work
+    [CPApp._delegate._window makeKeyAndOrderFront:self];
 }
 
 - (void)stopObservingDataObjects:(CPArray)dataObjects
@@ -208,23 +216,24 @@ var _selectionIndexesObservationContext = 1093;
     }
     else if (context == _selectionIndexesObservationContext)
     {
-        // 1. Get the master array of all data objects.
+        // Get the master array of all data objects.
         var allDataObjects = [self dataObjects];
 
-        // 2. Get the NEW and OLD index sets from the 'change' dictionary.
+        // Get the NEW and OLD index sets from the 'change' dictionary.
         var newIndexes = [change objectForKey:CPKeyValueChangeNewKey];
         var oldIndexes = [change objectForKey:CPKeyValueChangeOldKey];
 
-        // 3. Make the code robust by handling the case where everything is deselected (value is null).
-        if (!newIndexes || newIndexes == [CPNull null]) newIndexes = [CPIndexSet indexSet];
-        if (!oldIndexes || oldIndexes == [CPNull null]) oldIndexes = [CPIndexSet indexSet];
+        // Make the code robust by handling the case where everything is deselected (value is null).
+        if (!newIndexes || newIndexes == [CPNull null])
+            newIndexes = [CPIndexSet indexSet];
 
-        // 4. CRITICAL STEP: Use the index sets to look up the corresponding *data objects*.
+        if (!oldIndexes || oldIndexes == [CPNull null])
+            oldIndexes = [CPIndexSet indexSet];
+
         // This converts the CPIndexSet into the CPArray that the next method needs.
         var newSelectedDataObjects = [allDataObjects objectsAtIndexes:newIndexes];
         var oldSelectedDataObjects = [allDataObjects objectsAtIndexes:oldIndexes];
 
-        // 5. Now, the rest of your logic will work because it receives the correct object type (CPArray).
 
         // Get views for newly selected objects and tell them to redraw.
         var newlySelectedViews = [CPMutableArray array];
@@ -256,7 +265,7 @@ var _selectionIndexesObservationContext = 1093;
 
 - (void)mouseDown:(CPEvent)theEvent
 {
-    // A click on the canvas background starts a rubber-band selection.
+x    // A click on the canvas background starts a rubber-band selection.
     [self deselectViews];
     _isRubbing = YES;
     _rubberStart = [self convertPoint:[theEvent locationInWindow] fromView:nil];
@@ -355,7 +364,6 @@ var _selectionIndexesObservationContext = 1093;
 {
     var selection = [[self selectionIndexes] mutableCopy] || [CPMutableIndexSet indexSet];
     var dataObjectIndex = [[self dataObjects] indexOfObject:[aView dataObject]];
-debugger
 
     console.log("selectView:state: dataObjectIndex", dataObjectIndex);
 
@@ -378,6 +386,13 @@ debugger
     [self _findViewsForDataObjects:selectedDataObjects inView:self foundViews:selectedViews];
 
     return selectedViews;
+}
+
+- (BOOL)isViewSelected:(CPView)aView
+{
+    var selected = [self selectedSubViews];
+
+    return [selected containsObject:aView];
 }
 
 - (void)_findViewsForDataObjects:(CPArray)dataObjects inView:(CPView)aView foundViews:(CPMutableArray)foundViews

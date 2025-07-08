@@ -345,34 +345,23 @@ x    // A click on the canvas background starts a rubber-band selection.
 
 - (void)keyDown:(CPEvent)theEvent
 {
-    var handled = NO;
+    var characters = [theEvent characters];
+    var flags = [theEvent modifierFlags];
+    var selectors = [CPKeyBinding selectorsForKey:characters modifierFlags:flags];
     var delegate = [self delegate];
+    var handled = NO;
 
-    if (!delegate) return;
-
-    if ([[theEvent characters] length] > 0)
+    if (selectors && delegate)
     {
-        var character = [[theEvent characters] characterAtIndex:0];
-        
-        if (character === CPLeftArrowFunctionKey && [delegate respondsToSelector:@selector(moveLeft:)])
+        for (var i = 0; i < [selectors count]; i++)
         {
-            [delegate moveLeft:self];
-            handled = YES;
-        }
-        else if (character === CPRightArrowFunctionKey && [delegate respondsToSelector:@selector(moveRight:)])
-        {
-            [delegate moveRight:self];
-            handled = YES;
-        }
-        else if (character === CPUpArrowFunctionKey && [delegate respondsToSelector:@selector(moveUp:)])
-        {
-            [delegate moveUp:self];
-            handled = YES;
-        }
-        else if (character === CPDownArrowFunctionKey && [delegate respondsToSelector:@selector(moveDown:)])
-        {
-            [delegate moveDown:self];
-            handled = YES;
+            var selectorName = selectors[i];
+            if ([delegate respondsToSelector:selectorName])
+            {
+                [delegate performSelector:selectorName withObject:self];
+                handled = YES;
+                break;
+            }
         }
     }
 

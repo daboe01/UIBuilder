@@ -116,6 +116,44 @@
     [_elementsController removeObjects:[_elementsController selectedObjects]];
 }
 
+#pragma mark - 
+#pragma mark Keyboard Movement
+
+- (void)moveSelectedElementsByDeltaX:(int)deltaX deltaY:(int)deltaY
+{
+    var selectedDataObjects = [_elementsController selectedObjects];
+
+    for (var i = 0; i < [selectedDataObjects count]; i++)
+    {
+        var data = selectedDataObjects[i];
+        var currentX = [data valueForKey:@"originX"];
+        var currentY = [data valueForKey:@"originY"];
+
+        [data setValue:currentX + deltaX forKey:@"originX"];
+        [data setValue:currentY + deltaY forKey:@"originY"];
+    }
+}
+
+- (void)moveLeft:(id)sender
+{
+    [self moveSelectedElementsByDeltaX:-1 deltaY:0];
+}
+
+- (void)moveRight:(id)sender
+{
+    [self moveSelectedElementsByDeltaX:1 deltaY:0];
+}
+
+- (void)moveUp:(id)sender
+{
+    [self moveSelectedElementsByDeltaX:0 deltaY:-1];
+}
+
+- (void)moveDown:(id)sender
+{
+    [self moveSelectedElementsByDeltaX:0 deltaY:1];
+}
+
 #pragma mark -
 #pragma mark UICanvasView Delegate Methods
 

@@ -314,9 +314,56 @@ x    // A click on the canvas background starts a rubber-band selection.
     }
 }
 
+- (void)viewDidMoveToWindow
+{
+    [super viewDidMoveToWindow];
+
+    if ([self window])
+    {
+        [[self window] makeFirstResponder:self];
+    }
+}
+
 - (BOOL)acceptsFirstResponder
 {
     return YES;
+}
+
+- (void)keyDown:(CPEvent)theEvent
+{
+    var handled = NO;
+    var delegate = [self delegate];
+
+    if (!delegate) return;
+
+    if ([[theEvent characters] length] > 0)
+    {
+        var character = [[theEvent characters] characterAtIndex:0];
+        
+        if (character === CPLeftArrowFunctionKey && [delegate respondsToSelector:@selector(moveLeft:)])
+        {
+            [delegate moveLeft:self];
+            handled = YES;
+        }
+        else if (character === CPRightArrowFunctionKey && [delegate respondsToSelector:@selector(moveRight:)])
+        {
+            [delegate moveRight:self];
+            handled = YES;
+        }
+        else if (character === CPUpArrowFunctionKey && [delegate respondsToSelector:@selector(moveUp:)])
+        {
+            [delegate moveUp:self];
+            handled = YES;
+        }
+        else if (character === CPDownArrowFunctionKey && [delegate respondsToSelector:@selector(moveDown:)])
+        {
+            [delegate moveDown:self];
+            handled = YES;
+        }
+    }
+
+    if (!handled)
+        [super keyDown:theEvent];
 }
 
 #pragma mark - Drag and Drop Destination

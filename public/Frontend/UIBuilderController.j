@@ -154,6 +154,50 @@
     [self moveSelectedElementsByDeltaX:0 deltaY:1];
 }
 
+#pragma mark - 
+#pragma mark Copy & Paste
+
+- (void)copy:(id)sender
+{
+    var selectedData = [_elementsController selectedObjects];
+
+    if ([selectedData count] > 0)
+    {
+        var pboard = [CPPasteboard generalPasteboard];
+        var data = [CPKeyedArchiver archivedDataWithRootObject:selectedData];
+        [pboard declareTypes:[UIBuilderElementPboardType] owner:nil];
+        [pboard setData:data forType:UIBuilderElementPboardType];
+    }
+}
+
+- (void)paste:(id)sender
+{
+    var pboard = [CPPasteboard generalPasteboard];
+    var types = [pboard types];
+
+    if ([types containsObject:UIBuilderElementPboardType])
+    {
+        var data = [pboard dataForType:UIBuilderElementPboardType];
+        var pastedElements = [CPKeyedUnarchiver unarchiveObjectWithData:data];
+
+        [_elementsController setSelectedObjects:@[]];
+
+        for (var i = 0; i < [pastedElements count]; i++)
+        {
+            var elementData = pastedElements[i];
+            var newElement = [elementData deepMutableCopy];
+
+            // Offset the new element and give it a new ID
+            [newElement setValue:[newElement valueForKey:@"originX"] + 10 forKey:@"originX"];
+            [newElement setValue:[newElement valueForKey:@"originY"] + 10 forKey:@"originY"];
+            [newElement setValue:@"id_" + _elementCounter++ forKey:@"id"];
+
+            [_elementsController addObject:newElement];
+            [_elementsController addSelectedObjects:[CPArray arrayWithObject:newElement]];
+        }
+    }
+}
+
 #pragma mark -
 #pragma mark UICanvasView Delegate Methods
 

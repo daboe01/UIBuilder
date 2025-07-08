@@ -314,6 +314,20 @@ x    // A click on the canvas background starts a rubber-band selection.
     }
 }
 
+- (void)copy:(id)sender
+{
+    if (_delegate && [_delegate respondsToSelector:@selector(copy:)]) {
+        [_delegate copy:sender];
+    }
+}
+
+- (void)paste:(id)sender
+{
+    if (_delegate && [_delegate respondsToSelector:@selector(paste:)]) {
+        [_delegate paste:sender];
+    }
+}
+
 - (void)viewDidMoveToWindow
 {
     [super viewDidMoveToWindow];

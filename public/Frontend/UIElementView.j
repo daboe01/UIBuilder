@@ -11,6 +11,7 @@
 //
 
 // --- Drag Types --- (have to be global, no var)
+UIBuilderElementPboardType = "UIBuilderElementPboardType";
 UIWindowDragType = "UIWindowDragType";
 UIButtonDragType = "UIButtonDragType";
 UISliderDragType = "UISliderDragType";

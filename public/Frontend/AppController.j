@@ -197,6 +197,21 @@
     [self createPalette];
 
     [_window makeKeyAndOrderFront:self];
+
+    var appMenu = [[CPMenu alloc] initWithTitle:@"UIBuilder"];
+    var editMenu = [[CPMenu alloc] initWithTitle:@"Edit"];
+    [CPApp setMainMenu:[[CPMenu alloc] initWithTitle:@""]];
+    var fileMenuItem = [[CPMenuItem alloc] initWithTitle:@"File" action:nil keyEquivalent:@""];
+    var editMenuItem = [[CPMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
+
+    [[CPApp mainMenu] addItem:fileMenuItem];
+    [[CPApp mainMenu] addItem:editMenuItem];
+
+    [editMenu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
+    [editMenu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
+    [editMenu addItemWithTitle:@"Delete" action:@selector(delete:) keyEquivalent:@""];
+
+    [editMenuItem setSubmenu:editMenu];
 }
 
 - (void)createPalette

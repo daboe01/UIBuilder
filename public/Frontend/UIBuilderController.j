@@ -179,13 +179,13 @@
     {
         var data = [pboard dataForType:UIBuilderElementPboardType];
         var pastedElements = [CPKeyedUnarchiver unarchiveObjectWithData:data];
-
-        [_elementsController setSelectedObjects:@[]];
+        var newSelection = [CPMutableArray array];
 
         for (var i = 0; i < [pastedElements count]; i++)
         {
             var elementData = pastedElements[i];
-            var newElement = [elementData deepMutableCopy];
+            var archivedData = [CPKeyedArchiver archivedDataWithRootObject:elementData];
+            var newElement = [CPKeyedUnarchiver unarchiveObjectWithData:archivedData];
 
             // Offset the new element and give it a new ID
             [newElement setValue:[newElement valueForKey:@"originX"] + 10 forKey:@"originX"];
@@ -193,8 +193,10 @@
             [newElement setValue:@"id_" + _elementCounter++ forKey:@"id"];
 
             [_elementsController addObject:newElement];
-            [_elementsController addSelectedObjects:[CPArray arrayWithObject:newElement]];
+            [newSelection addObject:newElement];
         }
+        
+        [_elementsController setSelectedObjects:newSelection];
     }
 }
 

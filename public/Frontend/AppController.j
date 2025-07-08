@@ -196,22 +196,29 @@
     // 4. Create and show the floating palette
     [self createPalette];
 
-    [_window makeKeyAndOrderFront:self];
-
-    var appMenu = [[CPMenu alloc] initWithTitle:@"UIBuilder"];
-    var editMenu = [[CPMenu alloc] initWithTitle:@"Edit"];
-    [CPApp setMainMenu:[[CPMenu alloc] initWithTitle:@""]];
-    var fileMenuItem = [[CPMenuItem alloc] initWithTitle:@"File" action:nil keyEquivalent:@""];
+    // 5. Create the main menu
+    var mainMenuBar = [[CPMenu alloc] initWithTitle:@"MainMenu"];
+    var appMenuItem = [[CPMenuItem alloc] initWithTitle:@"UIBuilder" action:nil keyEquivalent:@""];
     var editMenuItem = [[CPMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
 
-    [[CPApp mainMenu] addItem:fileMenuItem];
-    [[CPApp mainMenu] addItem:editMenuItem];
+    var appMenu = [[CPMenu alloc] initWithTitle:@"UIBuilder"];
+    [appMenu addItemWithTitle:@"Quit" action:@selector(terminate:) keyEquivalent:@"q"];
 
+    var editMenu = [[CPMenu alloc] initWithTitle:@"Edit"];
     [editMenu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
     [editMenu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
     [editMenu addItemWithTitle:@"Delete" action:@selector(delete:) keyEquivalent:@""];
 
+    [appMenuItem setSubmenu:appMenu];
     [editMenuItem setSubmenu:editMenu];
+
+    [mainMenuBar addItem:appMenuItem];
+    [mainMenuBar addItem:editMenuItem];
+
+    [CPApp setMainMenu:mainMenuBar];
+    [CPMenu setMenuBarVisible:YES];
+
+    [_window makeKeyAndOrderFront:self];
 }
 
 - (void)createPalette

@@ -164,13 +164,8 @@ var _selectionIndexesObservationContext = 1093;
 {
     if (!dataObjects || dataObjects == [CPNull null]) return;
 
-    var viewsToRemove = [];
-    for (var i = 0; i < [[self subviews] count]; i++) {
-        var aView = [self subviews][i];
-        if ([dataObjects containsObject:[aView dataObject]]) {
-            [viewsToRemove addObject:aView];
-        }
-    }
+    var viewsToRemove = [CPMutableArray array];
+    [self _findViewsForDataObjects:dataObjects inView:self foundViews:viewsToRemove];
     
     for (var i = 0; i < [viewsToRemove count]; i++) {
         var viewToRemove = viewsToRemove[i];

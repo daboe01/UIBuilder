@@ -234,34 +234,35 @@
     [undoManager beginUndoGrouping];
     [undoManager setActionName:actionName];
 
-    // Apply changes and prepare the inverse data for the undo operation
     for (var i = 0; i < [changes count]; i++)
     {
         var change = changes[i];
         var data = change.data;
         var newFrame = change.frame;
-
-        var oldValues = { data: data, frame: { origin: {}, size: {} } };
+        var oldValues = { data: data, frame: {} };
 
         if (newFrame.origin)
         {
-            oldValues.frame.origin.x = [data valueForKey:@"originX"];
-            oldValues.frame.origin.y = [data valueForKey:@"originY"];
+            oldValues.frame.origin = {
+                x: [data valueForKey:@"originX"],
+                y: [data valueForKey:@"originY"]
+            };
             [data setValue:newFrame.origin.x forKey:@"originX"];
             [data setValue:newFrame.origin.y forKey:@"originY"];
         }
 
         if (newFrame.size)
         {
-            oldValues.frame.size.width = [data valueForKey:@"width"];
-            oldValues.frame.size.height = [data valueForKey:@"height"];
+            oldValues.frame.size = {
+                width: [data valueForKey:@"width"],
+                height: [data valueForKey:@"height"]
+            };
             [data setValue:newFrame.size.width forKey:@"width"];
             [data setValue:newFrame.size.height forKey:@"height"];
         }
         [undoChanges addObject:oldValues];
     }
 
-    // Register a single undo operation that will re-apply the old values.
     [[undoManager prepareWithInvocationTarget:self] applyFrameChanges:undoChanges withActionName:actionName];
     [undoManager endUndoGrouping];
 }

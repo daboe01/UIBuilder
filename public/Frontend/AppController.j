@@ -8,6 +8,7 @@
 @import "UIBuilderController.j"
 @import "UICanvasView.j"
 @import "UIElementView.j";
+@import "InspectorController.j";
 
 @implementation CPColor (StandardColors)
 
@@ -170,6 +171,7 @@
     CPPanel _palette;
     UIBuilderController _builderController;
     UICanvasView _canvasView;
+    InspectorController _inspectorController;
 }
 
 - (void)applicationDidFinishLaunching:(CPNotification)aNotification
@@ -193,8 +195,8 @@
     [_canvasView bind:"dataObjects" toObject:_builderController withKeyPath:@"elementsController.arrangedObjects" options:nil];
     [_canvasView bind:"selectionIndexes" toObject:_builderController withKeyPath:@"elementsController.selectionIndexes" options:nil];
     
-    // 4. Create and show the floating palette
     [self createPalette];
+    [self createInspector];
 
     // 5. Create the main menu
     var mainMenuBar = [[CPMenu alloc] initWithTitle:@"MainMenu"];
@@ -247,6 +249,34 @@
     }
 
     [_palette orderFront:self];
+}
+
+- (void)createInspector
+{
+    var inspectorPanel = [[CPPanel alloc] initWithContentRect:CGRectMake(20, 200, 200, 150)
+                                                  styleMask:CPHUDBackgroundWindowMask | CPTitledWindowMask | CPClosableWindowMask];
+    [inspectorPanel setTitle:@"Inspector"];
+    [inspectorPanel setFloatingPanel:YES];
+
+    var contentView = [inspectorPanel contentView];
+
+    var valueField = [[CPTextField alloc] initWithFrame:CGRectMake(0, 0, 200, 100)];
+    [valueField setBezeled:YES];
+    [valueField setEditable:YES];
+    [contentView addSubview:valueField];
+
+    _inspectorController = [[InspectorController alloc] init];
+    [_inspectorController setBuilderController:_builderController];
+    [_inspectorController setPanel:inspectorPanel];
+    [_inspectorController setView:contentView];
+    [_inspectorController setValueField:valueField];
+
+    [valueField setTarget:_inspectorController];
+    [valueField setAction:@selector(takeValueFromTextField:)];
+
+    [_inspectorController awakeFromMarkup]; // Manually call this
+
+    [inspectorPanel orderFront:self];
 }
 
 @end

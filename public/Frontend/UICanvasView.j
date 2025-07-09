@@ -145,7 +145,7 @@ var _selectionIndexesObservationContext = 1093;
     [newView setDataObject:dataObject];
 
     // Bind view properties to the data model
-    [newView bind:@"title" toObject:dataObject withKeyPath:@"title" options:nil];
+    [newView bind:@"value" toObject:dataObject withKeyPath:@"value" options:nil];
     [newView bind:@"originX" toObject:dataObject withKeyPath:@"originX" options:nil];
     [newView bind:@"originY" toObject:dataObject withKeyPath:@"originY" options:nil];
     [newView bind:@"width" toObject:dataObject withKeyPath:@"width" options:nil];
@@ -181,7 +181,7 @@ var _selectionIndexesObservationContext = 1093;
 - (void)_removeViewAndChildren:(UIElementView)viewToRemove
 {
     // Unbind everything before removing
-    [viewToRemove unbind:@"title"];
+    [viewToRemove unbind:@"value"];
     [viewToRemove unbind:@"originX"];
     [viewToRemove unbind:@"originY"];
     [viewToRemove unbind:@"width"];

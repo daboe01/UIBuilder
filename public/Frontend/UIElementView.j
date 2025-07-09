@@ -37,7 +37,7 @@ var kUIElementBottomRightHandle = 8;
 
 @implementation UIElementView : CPView
 {
-    CPString                _title;
+    id                      _value;
     CPMutableDictionary     _stringAttributes;
     id                      _dataObject @accessors(property=dataObject);
 
@@ -58,7 +58,7 @@ var kUIElementBottomRightHandle = 8;
         [_stringAttributes setObject:[CPFont boldSystemFontOfSize:12] forKey:CPFontAttributeName];
         [_stringAttributes setObject:[CPColor blackColor] forKey:CPForegroundColorAttributeName];
 
-        _title = @"Element";
+        _value = @"Element";
         _activeHandle = kUIElementNoHandle;
 
         if ([self frame].size.width < 50 || [self frame].size.height < 20)
@@ -169,16 +169,16 @@ var kUIElementBottomRightHandle = 8;
 #pragma mark -
 #pragma mark *** Accessors ***
 
-- (CPString)title
+- (id)value
 {
-    return (_title == nil) ? @"" : _title;
+    return (_value == nil) ? @"" : _value;
 }
 
-- (void)setTitle:(CPString)aTitle
+- (void)setValue:(id)aValue
 {
-    if (aTitle != _title)
+    if (aValue != _value)
     {
-        _title = aTitle;
+        _value = aValue;
         [self setNeedsDisplay:YES];
     }
 }
@@ -236,8 +236,8 @@ var kUIElementBottomRightHandle = 8;
     [[CPColor darkGrayColor] setStroke];
     [CPBezierPath strokeRect:bounds];
 
-    var titleSize = [[self title] sizeWithAttributes:_stringAttributes];
-    [[self title] drawAtPoint:CGPointMake((bounds.size.width - titleSize.width) / 2.0, (bounds.size.height - titleSize.height) / 2.0) withAttributes:_stringAttributes];
+    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
+    [[self value] drawAtPoint:CGPointMake((bounds.size.width - valueSize.width) / 2.0, (bounds.size.height - valueSize.height) / 2.0) withAttributes:_stringAttributes];
 }
 
 - (CGRect)rectForHandle:(int)handle
@@ -652,7 +652,7 @@ var _windowChildrenObservationContext = 1094;
 {
     self = [super initWithFrame:aRect];
     if (self) {
-        _title = @"Window";
+        _value = @"Window";
         if (CGRectIsEmpty(aRect)) {
             [self setFrameSize:CGSizeMake(250, 200)];
         }
@@ -689,10 +689,10 @@ var _windowChildrenObservationContext = 1094;
     [bgPath setLineWidth:1.0];
     [bgPath stroke];
     
-    // Title text
+    // Value text
     [_stringAttributes setObject:[CPColor whiteColor] forKey:CPForegroundColorAttributeName];
-    var titleSize = [[self title] sizeWithAttributes:_stringAttributes];
-    [[self title] drawAtPoint:CGPointMake((bounds.size.width - titleSize.width) / 2.0, (titleBarHeight - titleSize.height) / 2.0 - 4) withAttributes:_stringAttributes];
+    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
+    [[self value] drawAtPoint:CGPointMake((bounds.size.width - valueSize.width) / 2.0, (titleBarHeight - valueSize.height) / 2.0 - 4) withAttributes:_stringAttributes];
     [_stringAttributes setObject:[CPColor blackColor] forKey:CPForegroundColorAttributeName]; // reset color
     
     // Traffic light buttons
@@ -776,7 +776,7 @@ var _windowChildrenObservationContext = 1094;
 {
     self = [super initWithFrame:aRect];
     if (self) {
-        _title = @"Button";
+        _value = @"Button";
         if (CGRectIsEmpty(aRect)) {
             [self setFrameSize:CGSizeMake(100, 24)];
         }
@@ -799,9 +799,9 @@ var _windowChildrenObservationContext = 1094;
     [buttonPath setLineWidth:1.0];
     [buttonPath stroke];
     
-    // Draw title
-    var titleSize = [[self title] sizeWithAttributes:_stringAttributes];
-    [[self title] drawAtPoint:CGPointMake((bounds.size.width - titleSize.width) / 2.0 + 1, (bounds.size.height - titleSize.height) / 2.0 - 2) withAttributes:_stringAttributes];
+    // Draw value
+    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
+    [[self value] drawAtPoint:CGPointMake((bounds.size.width - valueSize.width) / 2.0 + 1, (bounds.size.height - valueSize.height) / 2.0 - 2) withAttributes:_stringAttributes];
 }
 @end
 
@@ -814,7 +814,7 @@ var _windowChildrenObservationContext = 1094;
 {
     self = [super initWithFrame:aRect];
     if (self) {
-        _title = @"Slider";
+        _value = 0.5;
         if (CGRectIsEmpty(aRect)) {
             [self setFrameSize:CGSizeMake(150, 20)];
         }
@@ -836,7 +836,7 @@ var _windowChildrenObservationContext = 1094;
     [trackPath stroke];
     
     // Draw knob
-    var knobX = bounds.origin.x + bounds.size.width / 2.0;
+    var knobX = bounds.origin.x + bounds.size.width * [self value];
     var knobRect = CGRectMake(knobX - 8, midY - 8, 16, 16);
     var knobPath = [CPBezierPath bezierPathWithOvalInRect:knobRect];
     [[CPColor whiteColor] setFill];
@@ -857,7 +857,7 @@ var _windowChildrenObservationContext = 1094;
     self = [super initWithFrame:aRect];
     if (self)
     {
-        _title = @"Text Field Content";
+        _value = @"Text Field Content";
         if (CGRectIsEmpty(aRect))
         {
             [self setFrameSize:CGSizeMake(150, 22)];
@@ -880,8 +880,8 @@ var _windowChildrenObservationContext = 1094;
     [[CPColor grayColor] setStroke];
     [CPBezierPath strokeRect:bounds];
     
-    // Draw placeholder title
-    var titleSize = [[self title] sizeWithAttributes:_stringAttributes];
-    [[self title] drawAtPoint:CGPointMake(5, (bounds.size.height - titleSize.height) / 2.0 - 2) withAttributes:_stringAttributes];
+    // Draw placeholder value
+    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
+    [[self value] drawAtPoint:CGPointMake(5, (bounds.size.height - valueSize.height) / 2.0 - 2) withAttributes:_stringAttributes];
 }
 @end

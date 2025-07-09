@@ -72,23 +72,26 @@
     [newElementData setValue:elementType forKey:@"type"];
     [newElementData setValue:aPoint.x forKey:@"originX"];
     [newElementData setValue:aPoint.y forKey:@"originY"];
-    [newElementData setValue:@"Untitled " + elementType forKey:@"title"];
     [newElementData setValue:@"id_" + _elementCounter++ forKey:@"id"];
 
-    // Set default sizes
+    // Set default sizes and value
     if (elementType === "window") {
         [newElementData setValue:250 forKey:@"width"];
         [newElementData setValue:200 forKey:@"height"];
         [newElementData setValue:[] forKey:@"children"];
+        [newElementData setValue:@"Untitled window" forKey:@"value"];
     } else if (elementType === "button") {
         [newElementData setValue:100 forKey:@"width"];
         [newElementData setValue:24 forKey:@"height"];
+        [newElementData setValue:@"Button" forKey:@"value"];
     } else if (elementType === "slider") {
         [newElementData setValue:150 forKey:@"width"];
         [newElementData setValue:20 forKey:@"height"];
+        [newElementData setValue:0.5 forKey:@"value"];
     } else { // textfield
         [newElementData setValue:150 forKey:@"width"];
         [newElementData setValue:22 forKey:@"height"];
+        [newElementData setValue:@"Text Field" forKey:@"value"];
     }
 
     if (containerData && elementType !== "window")
@@ -285,6 +288,27 @@
     var frame = [anElement frame];
     [changes addObject:{ data: [anElement dataObject], frame: { origin: frame.origin, size: frame.size } }];
     [self applyFrameChanges:changes withActionName:@"Resize"];
+}
+
+- (void)changeValue:(id)newValue forObject:(id)dataObject
+{
+    var oldValue = [dataObject valueForKey:@"value"];
+    if (oldValue != newValue)
+    {
+        var undoManager = [[CPApp keyWindow] undoManager];
+        [[undoManager prepareWithInvocationTarget:self] changeValue:oldValue forObject:dataObject];
+        [undoManager setActionName:@"Change Value"];
+        [dataObject setValue:newValue forKey:@"value"];
+    }
+}
+
+- (void)changeValueForSelectedObject:(id)newValue
+{
+    var selectedObjects = [[self elementsController] selectedObjects];
+    if ([selectedObjects count] === 1)
+    {
+        [self changeValue:newValue forObject:selectedObjects[0]];
+    }
 }
 
 @end

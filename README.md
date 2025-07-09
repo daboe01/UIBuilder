@@ -44,7 +44,7 @@ This is just the beginning. Our roadmap is ambitious, aiming to make Espresso an
 - [x] Data model managed by `CPArrayController`.
 - [x] Canvas with selection, multi-selection, and rubber-banding.
 - [x] Basic drag-and-drop from a component palette.
-- [ ] Move, resize, and container-drop functionality.
+- [x] Move, resize, and container-drop functionality.
 
 ### 🔬 Phase 2: The Inspector & Properties
 - [ ] **Property Inspector Panel:** A context-aware panel to view and edit the properties of selected elements.

@@ -106,6 +106,11 @@ var _selectionIndexesObservationContext = 1093;
     return [_selectionIndexesContainer valueForKeyPath:_selectionIndexesKeyPath];
 }
 
+- (void)setSelectionIndexes:(CPIndexSet)indexes
+{
+    [_selectionIndexesContainer setValue:indexes forKeyPath:_selectionIndexesKeyPath];
+}
+
 - (void)startObservingDataObjects:(CPArray)dataObjects
 {
     if (!dataObjects || dataObjects == [CPNull null])

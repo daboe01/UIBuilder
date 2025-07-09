@@ -479,7 +479,87 @@ var _windowChildrenObservationContext = 1094;
 
 @implementation UIWindowView : UIElementView
 {
-    // No new ivars needed for drawing
+    CGPoint          _rubberStart;
+    CGPoint          _rubberEnd;
+    BOOL             _isRubbing;
+}
+
+- (void)drawRect:(CGRect)rect
+{
+    [super drawRect:rect];
+
+    if (_isRubbing)
+    {
+        var rubber = CGRectUnion(CGRectMake(_rubberStart.x, _rubberStart.y, 0.1, 0.1), CGRectMake(_rubberEnd.x, _rubberEnd.y, 0.1, 0.1));
+        [[[[CPColor alternateSelectedControlColor] colorWithAlphaComponent:0.2] setFill]];
+        [CPBezierPath fillRect:rubber];
+        [[CPColor alternateSelectedControlColor] setStroke];
+        [CPBezierPath setDefaultLineWidth:1.0];
+        [CPBezierPath strokeRect:rubber];
+    }
+}
+
+- (void)mouseDown:(CPEvent)theEvent
+{
+    var localPoint = [self convertPoint:[theEvent locationInWindow] fromView:nil];
+    var titleBarHeight = 30.0;
+
+    // 1. Check for resize handle click first.
+    if ([self handleAtPoint:localPoint] != kUIElementNoHandle) {
+        [super mouseDown:theEvent];
+        return;
+    }
+
+    // 2. Check if the click is within the title bar area.
+    if (localPoint.y <= titleBarHeight) {
+        // Click is in the title bar. Allow the superclass to handle moving the window.
+        [super mouseDown:theEvent];
+        return;
+    }
+
+    // 3. If not a resize handle and not in the title bar, it's the background. Start rubber-banding.
+    var canvas = [self canvas];
+    [canvas deselectViews];
+
+    _isRubbing = YES;
+    _rubberStart = localPoint;
+    _rubberEnd = _rubberStart;
+
+    [CPApp setTarget:self selector:@selector(_dragOpenSpaceWithEvent:) forNextEventMatchingMask:CPLeftMouseDraggedMask | CPLeftMouseUpMask untilDate:nil inMode:nil dequeue:YES];
+}
+
+- (void)_dragOpenSpaceWithEvent:(CPEvent)theEvent
+{
+    var canvas = [self canvas];
+    var mouseLoc = [self convertPoint:[theEvent locationInWindow] fromView:nil];
+    _rubberEnd = mouseLoc;
+    var rubberRect = CGRectUnion(CGRectMake(_rubberStart.x, _rubberStart.y, 1, 1), CGRectMake(_rubberEnd.x, _rubberEnd.y, 1, 1));
+
+    switch ([theEvent type])
+    {
+        case CPLeftMouseDragged:
+            var indexesToSelect = [CPMutableIndexSet indexSet];
+            var allDataObjects = [canvas dataObjects];
+
+            for (var i = 0; i < [[self subviews] count]; i++) {
+                var aView = [self subviews][i];
+                if (CGRectIntersectsRect([aView frame], rubberRect)) {
+                    var dataIndex = [allDataObjects indexOfObject:[aView dataObject]];
+                    if (dataIndex != CPNotFound) {
+                        [indexesToSelect addIndex:dataIndex];
+                    }
+                }
+            }
+            [canvas setSelectionIndexes:indexesToSelect];
+            [self setNeedsDisplay:YES];
+            [CPApp setTarget:self selector:@selector(_dragOpenSpaceWithEvent:) forNextEventMatchingMask:CPLeftMouseDraggedMask | CPLeftMouseUpMask untilDate:nil inMode:nil dequeue:YES];
+            break;
+
+        case CPLeftMouseUp:
+            _isRubbing = NO;
+            [self setNeedsDisplay:YES];
+            break;
+    }
 }
 
 - (void)dealloc

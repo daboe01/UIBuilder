@@ -113,12 +113,25 @@
     [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
 }
 
-- (void)removeSelectedElements
+- (void)removeSelectedElementsWithActionName:(CPString)actionName
 {
     var selectedObjects = [[_elementsController selectedObjects] copy];
+    if ([selectedObjects count] === 0) return;
+
     [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] addObjects:selectedObjects];
-    [[[CPApp keyWindow] undoManager] setActionName:@"Delete"];
+    [[[CPApp keyWindow] undoManager] setActionName:actionName];
     [_elementsController removeObjects:selectedObjects];
+}
+
+- (void)removeSelectedElements
+{
+    [self removeSelectedElementsWithActionName:@"Delete"];
+}
+
+- (void)cut:(id)sender
+{
+    [self copy:sender];
+    [self removeSelectedElementsWithActionName:@"Cut"];
 }
 
 #pragma mark - 
@@ -127,24 +140,19 @@
 - (void)moveSelectedElementsByDeltaX:(int)deltaX deltaY:(int)deltaY
 {
     var selectedDataObjects = [_elementsController selectedObjects];
-    var undoManager = [[CPApp keyWindow] undoManager];
-
-    [undoManager beginUndoGrouping];
-    [undoManager setActionName:@"Move"];
-
+    var changes = [CPMutableArray array];
     for (var i = 0; i < [selectedDataObjects count]; i++)
     {
         var data = selectedDataObjects[i];
-        var currentX = [data valueForKey:@"originX"];
-        var currentY = [data valueForKey:@"originY"];
-
-        [[undoManager prepareWithInvocationTarget:data] setValue:currentX forKey:@"originX"];
-        [[undoManager prepareWithInvocationTarget:data] setValue:currentY forKey:@"originY"];
-
-        [data setValue:currentX + deltaX forKey:@"originX"];
-        [data setValue:currentY + deltaY forKey:@"originY"];
+        var newFrame = {
+            origin: {
+                x: [data valueForKey:@"originX"] + deltaX,
+                y: [data valueForKey:@"originY"] + deltaY
+            }
+        };
+        [changes addObject:{ data: data, frame: newFrame }];
     }
-    [undoManager endUndoGrouping];
+    [self applyFrameChanges:changes withActionName:@"Move"];
 }
 
 - (void)moveLeft:(id)sender
@@ -218,54 +226,64 @@
 #pragma mark -
 #pragma mark UICanvasView Delegate Methods
 
-- (void)canvasView:(UICanvasView)aCanvas didMoveElement:(UIElementView)anElement
+- (void)applyFrameChanges:(CPArray)changes withActionName:(CPString)actionName
 {
-    var selectedDataObjects = [_elementsController selectedObjects];
-    var selectedViews = [aCanvas selectedSubViews];
     var undoManager = [[CPApp keyWindow] undoManager];
+    var undoChanges = [CPMutableArray array];
 
     [undoManager beginUndoGrouping];
-    [undoManager setActionName:@"Move"];
+    [undoManager setActionName:actionName];
 
+    // Apply changes and prepare the inverse data for the undo operation
+    for (var i = 0; i < [changes count]; i++)
+    {
+        var change = changes[i];
+        var data = change.data;
+        var newFrame = change.frame;
+
+        var oldValues = { data: data, frame: { origin: {}, size: {} } };
+
+        if (newFrame.origin)
+        {
+            oldValues.frame.origin.x = [data valueForKey:@"originX"];
+            oldValues.frame.origin.y = [data valueForKey:@"originY"];
+            [data setValue:newFrame.origin.x forKey:@"originX"];
+            [data setValue:newFrame.origin.y forKey:@"originY"];
+        }
+
+        if (newFrame.size)
+        {
+            oldValues.frame.size.width = [data valueForKey:@"width"];
+            oldValues.frame.size.height = [data valueForKey:@"height"];
+            [data setValue:newFrame.size.width forKey:@"width"];
+            [data setValue:newFrame.size.height forKey:@"height"];
+        }
+        [undoChanges addObject:oldValues];
+    }
+
+    // Register a single undo operation that will re-apply the old values.
+    [[undoManager prepareWithInvocationTarget:self] applyFrameChanges:undoChanges withActionName:actionName];
+    [undoManager endUndoGrouping];
+}
+
+- (void)canvasView:(UICanvasView)aCanvas didMoveElement:(UIElementView)anElement
+{
+    var selectedViews = [aCanvas selectedSubViews];
+    var changes = [CPMutableArray array];
     for (var i = 0; i < [selectedViews count]; i++)
     {
         var view = selectedViews[i];
-        var data = [view dataObject];
-        var frame = [view frame];
-        
-        var oldOriginX = [data valueForKey:@"originX"];
-        var oldOriginY = [data valueForKey:@"originY"];
-
-        [[undoManager prepareWithInvocationTarget:data] setValue:oldOriginX forKey:@"originX"];
-        [[undoManager prepareWithInvocationTarget:data] setValue:oldOriginY forKey:@"originY"];
-
-        [data setValue:frame.origin.x forKey:@"originX"];
-        [data setValue:frame.origin.y forKey:@"originY"];
+        [changes addObject:{ data: [view dataObject], frame: { origin: [view frame].origin } }];
     }
-    [undoManager endUndoGrouping];
+    [self applyFrameChanges:changes withActionName:@"Move"];
 }
 
 - (void)canvasView:(UICanvasView)aCanvas didResizeElement:(UIElementView)anElement
 {
-    var data = [anElement dataObject];
+    var changes = [CPMutableArray array];
     var frame = [anElement frame];
-    var undoManager = [[CPApp keyWindow] undoManager];
-
-    var oldOriginX = [data valueForKey:@"originX"];
-    var oldOriginY = [data valueForKey:@"originY"];
-    var oldWidth = [data valueForKey:@"width"];
-    var oldHeight = [data valueForKey:@"height"];
-
-    [undoManager setActionName:@"Resize"];
-    [[undoManager prepareWithInvocationTarget:data] setValue:oldOriginX forKey:@"originX"];
-    [[undoManager prepareWithInvocationTarget:data] setValue:oldOriginY forKey:@"originY"];
-    [[undoManager prepareWithInvocationTarget:data] setValue:oldWidth forKey:@"width"];
-    [[undoManager prepareWithInvocationTarget:data] setValue:oldHeight forKey:@"height"];
-    
-    [data setValue:frame.origin.x forKey:@"originX"];
-    [data setValue:frame.origin.y forKey:@"originY"];
-    [data setValue:frame.size.width forKey:@"width"];
-    [data setValue:frame.size.height forKey:@"height"];
+    [changes addObject:{ data: [anElement dataObject], frame: { origin: frame.origin, size: frame.size } }];
+    [self applyFrameChanges:changes withActionName:@"Resize"];
 }
 
 @end

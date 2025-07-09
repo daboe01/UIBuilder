@@ -216,32 +216,35 @@ var _selectionIndexesObservationContext = 1093;
     }
     else if (context == _selectionIndexesObservationContext)
     {
-        // Get the master array of all data objects.
         var allDataObjects = [self dataObjects];
+        var newIndexes = [change objectForKey:CPKeyValueChangeNewKey] || [CPIndexSet indexSet];
+        var oldIndexes = [change objectForKey:CPKeyValueChangeOldKey] || [CPIndexSet indexSet];
 
-        // Get the NEW and OLD index sets from the 'change' dictionary.
-        var newIndexes = [change objectForKey:CPKeyValueChangeNewKey];
-        var oldIndexes = [change objectForKey:CPKeyValueChangeOldKey];
-
-        // Make the code robust by handling the case where everything is deselected (value is null).
-        if (!newIndexes || newIndexes == [CPNull null])
-            newIndexes = [CPIndexSet indexSet];
-
-        if (!oldIndexes || oldIndexes == [CPNull null])
-            oldIndexes = [CPIndexSet indexSet];
-
-        // This converts the CPIndexSet into the CPArray that the next method needs.
+        // Find views for newly selected objects and redraw them
         var newSelectedDataObjects = [allDataObjects objectsAtIndexes:newIndexes];
-        var oldSelectedDataObjects = [allDataObjects objectsAtIndexes:oldIndexes];
-
-
-        // Get views for newly selected objects and tell them to redraw.
         var newlySelectedViews = [CPMutableArray array];
         [self _findViewsForDataObjects:newSelectedDataObjects inView:self foundViews:newlySelectedViews];
         [newlySelectedViews makeObjectsPerformSelector:@selector(setNeedsDisplay:) withObject:YES];
 
-        // Get views for previously selected objects that are now deselected and tell them to redraw.
+        // Find views for deselected objects and redraw them, but only if those objects still exist.
         var previouslySelectedViews = [CPMutableArray array];
+        var oldSelectedDataObjects = [CPMutableArray array];
+        var lastIndex = [oldIndexes lastIndex];
+
+        if (lastIndex != CPNotFound && lastIndex < [allDataObjects count])
+        {
+             oldSelectedDataObjects = [allDataObjects objectsAtIndexes:oldIndexes];
+        }
+        else
+        {
+            // If the indexes are out of bounds, it likely means the objects were deleted.
+            // We need to find the views that were associated with the old indexes another way.
+            // This is a tricky state to recover from. For now, we will just redraw all views.
+            // A more sophisticated solution might involve caching view-data relationships.
+            [[self subviews] makeObjectsPerformSelector:@selector(setNeedsDisplay:) withObject:YES];
+            return;
+        }
+
         [self _findViewsForDataObjects:oldSelectedDataObjects inView:self foundViews:previouslySelectedViews];
         [previouslySelectedViews makeObjectsPerformSelector:@selector(setNeedsDisplay:) withObject:YES];
     }
@@ -265,7 +268,7 @@ var _selectionIndexesObservationContext = 1093;
 
 - (void)mouseDown:(CPEvent)theEvent
 {
-x    // A click on the canvas background starts a rubber-band selection.
+    // A click on the canvas background starts a rubber-band selection.
     [self deselectViews];
     _isRubbing = YES;
     _rubberStart = [self convertPoint:[theEvent locationInWindow] fromView:nil];
@@ -314,6 +317,13 @@ x    // A click on the canvas background starts a rubber-band selection.
     }
 }
 
+- (void)cut:(id)sender
+{
+    if (_delegate && [_delegate respondsToSelector:@selector(cut:)]) {
+        [_delegate cut:sender];
+    }
+}
+
 - (void)copy:(id)sender
 {
     if (_delegate && [_delegate respondsToSelector:@selector(copy:)]) {
@@ -341,6 +351,35 @@ x    // A click on the canvas background starts a rubber-band selection.
 - (BOOL)acceptsFirstResponder
 {
     return YES;
+}
+
+- (BOOL)validateMenuItem:(CPMenuItem)aMenuItem
+{
+    var action = [aMenuItem action];
+
+    if (action == @selector(copy:) || action == @selector(cut:) || action == @selector(delete:))
+    {
+        return [[self selectionIndexes] count] > 0;
+    }
+
+    if (action == @selector(paste:))
+    {
+        return [[[CPPasteboard generalPasteboard] types] containsObject:UIBuilderElementPboardType];
+    }
+
+    var undoManager = [[self window] undoManager];
+
+    if (action == @selector(undo:))
+    {
+        return [undoManager canUndo];
+    }
+
+    if (action == @selector(redo:))
+    {
+        return [undoManager canRedo];
+    }
+
+    return [super validateMenuItem:aMenuItem];
 }
 
 - (void)keyDown:(CPEvent)theEvent

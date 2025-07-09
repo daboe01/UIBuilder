@@ -105,6 +105,8 @@
     }
 
     // Add to the main controller regardless, so selection works.
+    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] removeObject:newElementData];
+    [[[CPApp keyWindow] undoManager] setActionName:@"Add Element"];
     [_elementsController addObject:newElementData];
 
     document.title = [[_elementsController arrangedObjects] count];
@@ -113,7 +115,10 @@
 
 - (void)removeSelectedElements
 {
-    [_elementsController removeObjects:[_elementsController selectedObjects]];
+    var selectedObjects = [[_elementsController selectedObjects] copy];
+    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] addObjects:selectedObjects];
+    [[[CPApp keyWindow] undoManager] setActionName:@"Delete"];
+    [_elementsController removeObjects:selectedObjects];
 }
 
 #pragma mark - 
@@ -122,6 +127,10 @@
 - (void)moveSelectedElementsByDeltaX:(int)deltaX deltaY:(int)deltaY
 {
     var selectedDataObjects = [_elementsController selectedObjects];
+    var undoManager = [[CPApp keyWindow] undoManager];
+
+    [undoManager beginUndoGrouping];
+    [undoManager setActionName:@"Move"];
 
     for (var i = 0; i < [selectedDataObjects count]; i++)
     {
@@ -129,9 +138,13 @@
         var currentX = [data valueForKey:@"originX"];
         var currentY = [data valueForKey:@"originY"];
 
+        [[undoManager prepareWithInvocationTarget:data] setValue:currentX forKey:@"originX"];
+        [[undoManager prepareWithInvocationTarget:data] setValue:currentY forKey:@"originY"];
+
         [data setValue:currentX + deltaX forKey:@"originX"];
         [data setValue:currentY + deltaY forKey:@"originY"];
     }
+    [undoManager endUndoGrouping];
 }
 
 - (void)moveLeft:(id)sender
@@ -196,6 +209,8 @@
             [newSelection addObject:newElement];
         }
         
+        [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] removeObjects:newSelection];
+        [[[CPApp keyWindow] undoManager] setActionName:@"Paste"];
         [_elementsController setSelectedObjects:newSelection];
     }
 }
@@ -205,10 +220,12 @@
 
 - (void)canvasView:(UICanvasView)aCanvas didMoveElement:(UIElementView)anElement
 {
-    // This method is called after a drag operation completes for one or more elements.
-    // We update the data model for all selected objects to reflect their new positions.
     var selectedDataObjects = [_elementsController selectedObjects];
     var selectedViews = [aCanvas selectedSubViews];
+    var undoManager = [[CPApp keyWindow] undoManager];
+
+    [undoManager beginUndoGrouping];
+    [undoManager setActionName:@"Move"];
 
     for (var i = 0; i < [selectedViews count]; i++)
     {
@@ -216,20 +233,35 @@
         var data = [view dataObject];
         var frame = [view frame];
         
-        // Find the corresponding data object and update its position.
-        // Using KVC ensures that if the view is bound, it gets the final, snapped value.
+        var oldOriginX = [data valueForKey:@"originX"];
+        var oldOriginY = [data valueForKey:@"originY"];
+
+        [[undoManager prepareWithInvocationTarget:data] setValue:oldOriginX forKey:@"originX"];
+        [[undoManager prepareWithInvocationTarget:data] setValue:oldOriginY forKey:@"originY"];
+
         [data setValue:frame.origin.x forKey:@"originX"];
         [data setValue:frame.origin.y forKey:@"originY"];
     }
+    [undoManager endUndoGrouping];
 }
 
 - (void)canvasView:(UICanvasView)aCanvas didResizeElement:(UIElementView)anElement
 {
-    // This method is called after a resize operation completes.
     var data = [anElement dataObject];
     var frame = [anElement frame];
+    var undoManager = [[CPApp keyWindow] undoManager];
+
+    var oldOriginX = [data valueForKey:@"originX"];
+    var oldOriginY = [data valueForKey:@"originY"];
+    var oldWidth = [data valueForKey:@"width"];
+    var oldHeight = [data valueForKey:@"height"];
+
+    [undoManager setActionName:@"Resize"];
+    [[undoManager prepareWithInvocationTarget:data] setValue:oldOriginX forKey:@"originX"];
+    [[undoManager prepareWithInvocationTarget:data] setValue:oldOriginY forKey:@"originY"];
+    [[undoManager prepareWithInvocationTarget:data] setValue:oldWidth forKey:@"width"];
+    [[undoManager prepareWithInvocationTarget:data] setValue:oldHeight forKey:@"height"];
     
-    // Update size and position in the data model.
     [data setValue:frame.origin.x forKey:@"originX"];
     [data setValue:frame.origin.y forKey:@"originY"];
     [data setValue:frame.size.width forKey:@"width"];

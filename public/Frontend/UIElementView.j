@@ -855,9 +855,11 @@ var _windowChildrenObservationContext = 1094;
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];
-    if (self) {
+    if (self)
+    {
         _title = @"Text Field Content";
-        if (CGRectIsEmpty(aRect)) {
+        if (CGRectIsEmpty(aRect))
+        {
             [self setFrameSize:CGSizeMake(150, 22)];
         }
         [_stringAttributes setObject:[CPFont systemFontOfSize:12] forKey:CPFontAttributeName];

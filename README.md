@@ -47,7 +47,7 @@ This is just the beginning. Our roadmap is ambitious, aiming to make Espresso an
 - [x] Move, resize, and container-drop functionality.
 
 ### 🔬 Phase 2: The Inspector & Properties
-- [ ] **Property Inspector Panel:** A context-aware panel to view and edit the properties of selected elements.
+- [x] **Property Inspector Panel:** A context-aware panel to view and edit the properties of selected elements.
 - [ ] **Live Property Editing:** Change an element's title, color, or state and see it update instantly on the canvas.
 - [ ] **Geometry & Sizing:** Precise numeric input for an element's position (x, y) and size (width, height).
 - [ ] **Binding Support:** Visually bind element properties (like a slider's value) to controller keys.

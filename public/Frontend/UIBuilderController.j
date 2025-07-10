@@ -226,6 +226,71 @@
     }
 }
 
+- (void)addNewElementOfType:(CPString)elementType inNewWindowAtPoint:(CGPoint)aPoint
+{
+    // 1. Create the new element to be placed in the window
+    var newElementData = [CPConservativeDictionary dictionary];
+    [newElementData setValue:elementType forKey:@"type"];
+    [newElementData setValue:@"id_" + _elementCounter++ forKey:@"id"];
+
+    var elementWidth, elementHeight;
+
+    if (elementType === "button") {
+        elementWidth = 100;
+        elementHeight = 24;
+        [newElementData setValue:@"Button" forKey:@"value"];
+    } else if (elementType === "slider") {
+        elementWidth = 150;
+        elementHeight = 20;
+        [newElementData setValue:0.5 forKey:@"value"];
+    } else { // textfield
+        elementWidth = 150;
+        elementHeight = 22;
+        [newElementData setValue:@"Text Field" forKey:@"value"];
+    }
+    [newElementData setValue:elementWidth forKey:@"width"];
+    [newElementData setValue:elementHeight forKey:@"height"];
+
+    // 2. Create the window that will contain the new element
+    var windowData = [CPConservativeDictionary dictionary];
+    var windowWidth = 250, windowHeight = 200;
+    [windowData setValue:@"window" forKey:@"type"];
+    [windowData setValue:@"id_" + _elementCounter++ forKey:@"id"];
+    [windowData setValue:windowWidth forKey:@"width"];
+    [windowData setValue:windowHeight forKey:@"height"];
+    [windowData setValue:[] forKey:@"children"];
+    [windowData setValue:@"Untitled window" forKey:@"value"];
+
+    // 3. Position the new element in the center of the window
+    var elementX = (windowWidth - elementWidth) / 2;
+    var elementY = (windowHeight - elementHeight) / 2;
+    [newElementData setValue:elementX forKey:@"originX"];
+    [newElementData setValue:elementY forKey:@"originY"];
+
+    // 4. Position the window so the element is at the drop point
+    var windowX = aPoint.x - elementX;
+    var windowY = aPoint.y - elementY;
+    [windowData setValue:windowX forKey:@"originX"];
+    [windowData setValue:windowY forKey:@"originY"];
+
+    // 5. Add the element to the window's children
+    [newElementData setValue:[windowData valueForKey:@"id"] forKey:@"parentID"];
+    [[windowData mutableArrayValueForKey:@"children"] addObject:newElementData];
+
+    // 6. Add both to the elements controller
+    var undoManager = [[CPApp keyWindow] undoManager];
+    [undoManager beginUndoGrouping];
+    [[undoManager prepareWithInvocationTarget:_elementsController] removeObject:newElementData];
+    [[undoManager prepareWithInvocationTarget:_elementsController] removeObject:windowData];
+    [undoManager setActionName:@"Add Element in New Window"];
+    [_elementsController addObject:windowData];
+    [_elementsController addObject:newElementData];
+    [undoManager endUndoGrouping];
+
+    // 7. Select the new element
+    [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
+}
+
 #pragma mark -
 #pragma mark UICanvasView Delegate Methods
 

@@ -423,16 +423,28 @@ var _selectionIndexesObservationContext = 1093;
     var types = [pasteboard types];
     var draggedType = types[0]; // Assuming only one type is being dragged
     var elementType;
-    
-    if (draggedType === UIWindowDragType) elementType = "window";
 
-    if (elementType && _delegate && [_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:)])
+    if (draggedType === UIWindowDragType) elementType = "window";
+    else if (draggedType === UIButtonDragType) elementType = "button";
+    else if (draggedType === UISliderDragType) elementType = "slider";
+    else if (draggedType === UITextFieldDragType) elementType = "textfield";
+
+    if (elementType && _delegate)
     {
-        if (elementType === "window")
-        {
-            [_delegate addNewElementOfType:elementType atPoint:dropPoint];
-            [self setNeedsDisplay:YES];
-            return YES;
+        if (elementType === "window") {
+            if ([_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:)])
+            {
+                [_delegate addNewElementOfType:elementType atPoint:dropPoint];
+                [self setNeedsDisplay:YES];
+                return YES;
+            }
+        } else {
+            if ([_delegate respondsToSelector:@selector(addNewElementOfType:inNewWindowAtPoint:)])
+            {
+                [_delegate addNewElementOfType:elementType inNewWindowAtPoint:dropPoint];
+                [self setNeedsDisplay:YES];
+                return YES;
+            }
         }
     }
 

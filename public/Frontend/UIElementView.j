@@ -520,6 +520,7 @@ var _windowChildrenObservationContext = 1094;
     // 3. If not a resize handle and not in the title bar, it's the background. Start rubber-banding.
     var canvas = [self canvas];
     [canvas deselectViews];
+    [canvas selectView:self state:YES];
 
     _isRubbing = YES;
     _rubberStart = localPoint;

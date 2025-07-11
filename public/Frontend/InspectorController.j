@@ -63,7 +63,7 @@
                 [checkbox bind:@"value" toObject:selectedObject withKeyPath:propertyName options:nil];
                 [[_panel contentView] addSubview:checkbox];
             } else if (propertyType === UIBString || propertyType === UIBNumber) {
-                var textField = [[CPTextField alloc] initWithFrame:CGRectMake(120, yPos, 150, 25)];
+                var textField = [[CPTextField alloc] initWithFrame:CGRectMake(120, yPos, 100, 25)];
                 [textField bind:@"value" toObject:selectedObject withKeyPath:propertyName options:nil];
                 [textField setBezeled:YES];
                 [textField setEditable:YES];

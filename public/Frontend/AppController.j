@@ -253,7 +253,7 @@
 
 - (void)createInspector
 {
-    var inspectorPanel = [[CPPanel alloc] initWithContentRect:CGRectMake(20, 200, 200, 150)
+    var inspectorPanel = [[CPPanel alloc] initWithContentRect:CGRectMake(20, 200, 300, 150)
                                                   styleMask:CPHUDBackgroundWindowMask | CPTitledWindowMask | CPClosableWindowMask];
     [inspectorPanel setTitle:@"Inspector"];
     [inspectorPanel setFloatingPanel:YES];

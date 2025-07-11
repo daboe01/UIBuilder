@@ -260,19 +260,10 @@
 
     var contentView = [inspectorPanel contentView];
 
-    var valueField = [[CPTextField alloc] initWithFrame:CGRectMake(0, 0, 200, 100)];
-    [valueField setBezeled:YES];
-    [valueField setEditable:YES];
-    [contentView addSubview:valueField];
-
     _inspectorController = [[InspectorController alloc] init];
     [_inspectorController setBuilderController:_builderController];
     [_inspectorController setPanel:inspectorPanel];
     [_inspectorController setView:contentView];
-    [_inspectorController setValueField:valueField];
-
-    [valueField setTarget:_inspectorController];
-    [valueField setAction:@selector(takeValueFromTextField:)];
 
     [_inspectorController awakeFromMarkup]; // Manually call this
 

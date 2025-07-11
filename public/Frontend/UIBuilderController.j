@@ -11,19 +11,47 @@
 @import "UIElementView.j"
 @import "UICanvasView.j"
 
+function classForElementType(elementType)
+{
+    if (elementType === "window") return UIWindowView;
+    if (elementType === "button") return UIButtonView;
+    if (elementType === "slider") return UISliderView;
+    if (elementType === "textfield") return UITextFieldView;
+    return UIElementView;
+}
+
 // This is a simple data model. In a real app, it might have more properties.
-// We use CPConservativeDictionary to avoid unnecessary KVO notifications.
+// We use a custom dictionary to ensure KVO compatibility and proper value setting.
 @implementation CPConservativeDictionary : CPDictionary
+{ }
+
+- (id)init
+{
+    self = [super init];
+    if (self) {
+        // Rely on superclass to initialize _buckets
+    }
+    return self;
+}
+
++ (id)dictionary
+{
+    return [[self alloc] init];
+}
+
 - (void)setValue:(id)aVal forKey:(CPString)aKey
 {
-    if ([self objectForKey:aKey] != aVal)
+    // Only set the value if it's different from the current value
+    if ([super valueForKey:aKey] != aVal) {
         [super setValue:aVal forKey:aKey];
+    }
 }
+
 - (BOOL)isEqual:(id)otherObject
 {
-    // A simple way to identify objects for the array controller
     return [self valueForKey:'id'] == [otherObject valueForKey:'id'];
 }
+
 @end
 
 
@@ -67,6 +95,7 @@
 {
     var newElementData = [CPConservativeDictionary dictionary];
     var containerData = [self _containerDataAtPoint:aPoint];
+    var viewClass = classForElementType(elementType);
 
     // Set default properties based on type
     [newElementData setValue:elementType forKey:@"type"];
@@ -74,24 +103,25 @@
     [newElementData setValue:aPoint.y forKey:@"originY"];
     [newElementData setValue:@"id_" + _elementCounter++ forKey:@"id"];
 
-    // Set default sizes and value
+    // Set default values from the view class
+    var defaultValues = [viewClass defaultValues];
+    for (var key in defaultValues)
+        [newElementData setValue:defaultValues[key] forKey:key];
+
+    // Set default sizes
     if (elementType === "window") {
         [newElementData setValue:250 forKey:@"width"];
         [newElementData setValue:200 forKey:@"height"];
         [newElementData setValue:[] forKey:@"children"];
-        [newElementData setValue:@"Untitled window" forKey:@"value"];
     } else if (elementType === "button") {
         [newElementData setValue:100 forKey:@"width"];
         [newElementData setValue:24 forKey:@"height"];
-        [newElementData setValue:@"Button" forKey:@"value"];
     } else if (elementType === "slider") {
         [newElementData setValue:150 forKey:@"width"];
         [newElementData setValue:20 forKey:@"height"];
-        [newElementData setValue:0.5 forKey:@"value"];
     } else { // textfield
         [newElementData setValue:150 forKey:@"width"];
         [newElementData setValue:22 forKey:@"height"];
-        [newElementData setValue:@"Text Field" forKey:@"value"];
     }
 
     if (containerData && elementType !== "window")
@@ -230,36 +260,42 @@
 {
     // 1. Create the new element to be placed in the window
     var newElementData = [CPConservativeDictionary dictionary];
+    var viewClass = classForElementType(elementType);
     [newElementData setValue:elementType forKey:@"type"];
     [newElementData setValue:@"id_" + _elementCounter++ forKey:@"id"];
+
+    var defaultValues = [viewClass defaultValues];
+    for (var key in defaultValues)
+        [newElementData setValue:defaultValues[key] forKey:key];
 
     var elementWidth, elementHeight;
 
     if (elementType === "button") {
         elementWidth = 100;
         elementHeight = 24;
-        [newElementData setValue:@"Button" forKey:@"value"];
     } else if (elementType === "slider") {
         elementWidth = 150;
         elementHeight = 20;
-        [newElementData setValue:0.5 forKey:@"value"];
     } else { // textfield
         elementWidth = 150;
         elementHeight = 22;
-        [newElementData setValue:@"Text Field" forKey:@"value"];
     }
     [newElementData setValue:elementWidth forKey:@"width"];
     [newElementData setValue:elementHeight forKey:@"height"];
 
     // 2. Create the window that will contain the new element
     var windowData = [CPConservativeDictionary dictionary];
+    var windowClass = classForElementType("window");
     var windowWidth = 250, windowHeight = 200;
     [windowData setValue:@"window" forKey:@"type"];
     [windowData setValue:@"id_" + _elementCounter++ forKey:@"id"];
     [windowData setValue:windowWidth forKey:@"width"];
     [windowData setValue:windowHeight forKey:@"height"];
     [windowData setValue:[] forKey:@"children"];
-    [windowData setValue:@"Untitled window" forKey:@"value"];
+
+    defaultValues = [windowClass defaultValues];
+    for (var key in defaultValues)
+        [windowData setValue:defaultValues[key] forKey:key];
 
     // 3. Position the new element in the center of the window
     var elementX = (windowWidth - elementWidth) / 2;

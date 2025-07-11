@@ -5,7 +5,6 @@
 @implementation InspectorController : CPViewController
 {
     UIBuilderController _builderController @accessors(property=builderController);
-    CPTextField         _valueField @accessors(property=valueField);
     CPPanel             _panel @accessors(property=panel);
 }
 
@@ -26,54 +25,58 @@
 - (void)updateInspector
 {
     var selectedObjects = [[_builderController elementsController] selectedObjects];
+
+    // Clear existing views
+    var subviews = [[_panel contentView] subviews];
+    for (var i = [subviews count] - 1; i >= 0; i--) {
+        [subviews[i] removeFromSuperview];
+    }
+
     if ([selectedObjects count] === 1)
     {
         var selectedObject = selectedObjects[0];
-        var value = [selectedObject valueForKey:@"value"];
+        var elementType = [selectedObject valueForKey:@"type"];
+        var viewClass = classForElementType(elementType);
+        var properties = [viewClass persistentProperties];
+
+        var yPos = 10;
+
+        for (var i = 0; i < [properties count]; i++)
+        {
+            var propertyName = properties[i];
+            var value = [selectedObject._buckets valueForKey:propertyName];
+
+            // Create Label
+            var label = [[CPTextField alloc] initWithFrame:CGRectMake(10, yPos, 100, 20)];
+            [label setStringValue:propertyName];
+            [label setBezeled:NO];
+            [label setDrawsBackground:NO];
+            [label setEditable:NO];
+            [[_panel contentView] addSubview:label];
+            [label setTextColor:[CPColor grayColor]];
+
+            // Create Control based on value type
+            if (typeof value === 'boolean') {
+                var checkbox = [[CPCheckBox alloc] initWithFrame:CGRectMake(120, yPos, 100, 20)];
+                [checkbox setTitle:@""];
+                [checkbox bind:@"value" toObject:selectedObject withKeyPath:propertyName options:nil];
+                [[_panel contentView] addSubview:checkbox];
+            } else {
+                var textField = [[CPTextField alloc] initWithFrame:CGRectMake(120, yPos, 150, 25)];
+                [textField bind:@"value" toObject:selectedObject withKeyPath:propertyName options:nil];
+                [textField setBezeled:YES];
+                [textField setEditable:YES];
+                [[_panel contentView] addSubview:textField];
+            }
+
+            yPos += 30;
+        }
 
         [[self panel] orderFront:self];
-        [[self valueField] setHidden:NO];
-
-        var value = [selectedObject valueForKey:@"value"];
-        console.log("Selected object:", selectedObject);
-        console.log("Value:", value);
-
-        if (value == null || value == undefined) {
-            [[self valueField] setObjectValue:@""];
-        } else if (typeof value === 'number') {
-            [[self valueField] setObjectValue:[CPString stringWithFormat:@"%@", value]];
-        } else {
-            [[self valueField] setObjectValue:[CPString stringWithFormat:@"%@", value]];
-        }
     }
     else
     {
         [[self panel] orderOut:self];
-    }
-}
-
-- (IBAction)takeValueFromTextField:(id)sender
-{
-    var selectedObjects = [[_builderController elementsController] selectedObjects];
-    if ([selectedObjects count] !== 1)
-        return;
-
-    var selectedObject = selectedObjects[0];
-    var type = [selectedObject valueForKey:@"type"];
-    var newValue = [sender objectValue];
-
-    if (type === @"slider")
-    {
-        var numericValue = parseFloat(newValue);
-        if (!isNaN(numericValue))
-        {
-            numericValue = Math.max(0.0, Math.min(1.0, numericValue));
-            [_builderController changeValueForSelectedObject:numericValue];
-        }
-    }
-    else
-    {
-        [_builderController changeValueForSelectedObject:newValue];
     }
 }
 

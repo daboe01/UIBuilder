@@ -37,7 +37,6 @@ var kUIElementBottomRightHandle = 8;
 
 @implementation UIElementView : CPView
 {
-    id                      _value;
     CPMutableDictionary     _stringAttributes;
     id                      _dataObject @accessors(property=dataObject);
 
@@ -49,6 +48,19 @@ var kUIElementBottomRightHandle = 8;
     BOOL                    _isContainer;
 }
 
+#pragma mark -
+#pragma mark *** Class Methods ***
+
++ (CPArray)persistentProperties
+{
+    return ["value"];
+}
+
++ (CPDictionary)defaultValues
+{
+    return [CPConservativeDictionary dictionaryWithObject:@"Element" forKey:@"value"];
+}
+
 - (id)initWithFrame:(CGRect)frame
 {
     self = [super initWithFrame:frame];
@@ -58,7 +70,7 @@ var kUIElementBottomRightHandle = 8;
         [_stringAttributes setObject:[CPFont boldSystemFontOfSize:12] forKey:CPFontAttributeName];
         [_stringAttributes setObject:[CPColor blackColor] forKey:CPForegroundColorAttributeName];
 
-        _value = @"Element";
+        
         _activeHandle = kUIElementNoHandle;
 
         if ([self frame].size.width < 50 || [self frame].size.height < 20)
@@ -74,6 +86,48 @@ var kUIElementBottomRightHandle = 8;
         _isContainer = NO;
     }
     return self;
+}
+
+- (void)dealloc
+{
+    [self setDataObject:nil];
+    [super dealloc];
+}
+
+- (void)setDataObject:(id)newDataObject
+{
+    var oldDataObject = [self dataObject];
+    if (newDataObject != oldDataObject)
+    {
+        var properties = [[self class] persistentProperties];
+        if (oldDataObject)
+            for (var i = 0; i < [properties count]; i++)
+                [oldDataObject removeObserver:self forKeyPath:properties[i]];
+
+        _dataObject = newDataObject;
+
+        if (newDataObject)
+        {
+            for (var i = 0; i < [properties count]; i++)
+            {
+                var propertyName = properties[i];
+                [newDataObject addObserver:self forKeyPath:propertyName options:CPKeyValueObservingOptionNew context:self];
+            }
+        }
+    }
+}
+
+- (void)observeValueForKeyPath:(CPString)keyPath ofObject:(id)object change:(CPDictionary)change context:(id)context
+{
+    if (context == self)
+    {
+        // When a property on the dataObject changes, simply tell the view to redraw itself.
+        [self setNeedsDisplay:YES];
+    }
+    else
+    {
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+    }
 }
 
 - (BOOL)acceptsFirstMouse
@@ -171,16 +225,7 @@ var kUIElementBottomRightHandle = 8;
 
 - (id)value
 {
-    return (_value == nil) ? @"" : _value;
-}
-
-- (void)setValue:(id)aValue
-{
-    if (aValue != _value)
-    {
-        _value = aValue;
-        [self setNeedsDisplay:YES];
-    }
+    return ([self dataObject] == nil) ? @"" : [[self dataObject] valueForKey:@"value"];
 }
 
 // You will need a way to get a reference to the canvas.
@@ -484,6 +529,22 @@ var _windowChildrenObservationContext = 1094;
     BOOL             _isRubbing;
 }
 
++ (CPArray)persistentProperties
+{
+    return [super persistentProperties].concat(["CPHUDBackgroundWindowMask", "CPTitledWindowMask", "CPClosableWindowMask"]);
+}
+
++ (CPDictionary)defaultValues
+{
+    var defaults = [super defaultValues];
+    [defaults setObject:YES forKey:@"CPHUDBackgroundWindowMask"];
+    [defaults setObject:YES forKey:@"CPTitledWindowMask"];
+    [defaults setObject:YES forKey:@"CPClosableWindowMask"];
+    [defaults setObject:@"Untitled Window" forKey:@"value"];
+    console.log("UIWindowView: defaultValues - defaults:", defaults);
+    return defaults;
+}
+
 - (void)drawRect:(CGRect)rect
 {
     [super drawRect:rect];
@@ -653,7 +714,7 @@ var _windowChildrenObservationContext = 1094;
 {
     self = [super initWithFrame:aRect];
     if (self) {
-        _value = @"Window";
+        
         if (CGRectIsEmpty(aRect)) {
             [self setFrameSize:CGSizeMake(250, 200)];
         }
@@ -773,11 +834,15 @@ var _windowChildrenObservationContext = 1094;
 // A skeleton that looks like a push button.
 // =================================================================================================
 @implementation UIButtonView : UIElementView
+
++ (CPDictionary)defaultValues
+{
+    return [CPConservativeDictionary dictionaryWithObject:@"Button" forKey:@"value"];
+}
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];
     if (self) {
-        _value = @"Button";
         if (CGRectIsEmpty(aRect)) {
             [self setFrameSize:CGSizeMake(100, 24)];
         }
@@ -811,11 +876,15 @@ var _windowChildrenObservationContext = 1094;
 // A skeleton that looks like a slider.
 // =================================================================================================
 @implementation UISliderView : UIElementView
+
++ (CPDictionary)defaultValues
+{
+    return [CPConservativeDictionary dictionaryWithObject:0.5 forKey:@"value"];
+}
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];
     if (self) {
-        _value = 0.5;
         if (CGRectIsEmpty(aRect)) {
             [self setFrameSize:CGSizeMake(150, 20)];
         }
@@ -853,12 +922,16 @@ var _windowChildrenObservationContext = 1094;
 // A skeleton that looks like a text field.
 // =================================================================================================
 @implementation UITextFieldView : UIElementView
+
++ (CPDictionary)defaultValues
+{
+    return [CPConservativeDictionary dictionaryWithObject:@"Text Field" forKey:@"value"];
+}
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];
     if (self)
     {
-        _value = @"Text Field Content";
         if (CGRectIsEmpty(aRect))
         {
             [self setFrameSize:CGSizeMake(150, 22)];

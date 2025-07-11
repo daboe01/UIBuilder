@@ -42,7 +42,11 @@ function classForElementType(elementType)
 - (void)setValue:(id)aVal forKey:(CPString)aKey
 {
     // Only set the value if it's different from the current value
-    if ([super valueForKey:aKey] != aVal) {
+    var currentValue = [super valueForKey:aKey];
+    console.log("CPConservativeDictionary: setValue - key:", aKey, "newVal:", aVal, "currentVal:", currentValue);
+
+    // Always set the value if the current value is null or undefined
+    if (currentValue == null || currentValue == undefined || currentValue != aVal) {
         [super setValue:aVal forKey:aKey];
     }
 }
@@ -105,8 +109,9 @@ function classForElementType(elementType)
 
     // Set default values from the view class
     var defaultValues = [viewClass defaultValues];
-    for (var key in defaultValues)
+    for (var key in defaultValues) {
         [newElementData setValue:defaultValues[key] forKey:key];
+    }
 
     // Set default sizes
     if (elementType === "window") {
@@ -294,8 +299,9 @@ function classForElementType(elementType)
     [windowData setValue:[] forKey:@"children"];
 
     defaultValues = [windowClass defaultValues];
-    for (var key in defaultValues)
+    for (var key in defaultValues) {
         [windowData setValue:defaultValues[key] forKey:key];
+    }
 
     // 3. Position the new element in the center of the window
     var elementX = (windowWidth - elementWidth) / 2;

@@ -17,6 +17,11 @@ UIButtonDragType = "UIButtonDragType";
 UISliderDragType = "UISliderDragType";
 UITextFieldDragType = "UITextFieldDragType";
 
+// --- Property Types ---
+UIBString = "UIBString";
+UIBNumber = "UIBNumber";
+UIBBoolean = "UIBBoolean";
+
 // --- Constants for Resizing ---
 var kUIElementHandleSize = 8.0;
 var kUIElementNoHandle = 0;
@@ -58,7 +63,12 @@ var kUIElementBottomRightHandle = 8;
 
 + (CPDictionary)defaultValues
 {
-    return [CPConservativeDictionary dictionaryWithObject:@"Element" forKey:@"value"];
+    return {value: "Element"};
+}
+
++ (CPDictionary)propertyTypes
+{
+    return [CPDictionary dictionaryWithObject:UIBString forKey:@"value"];
 }
 
 - (id)initWithFrame:(CGRect)frame
@@ -529,6 +539,15 @@ var _windowChildrenObservationContext = 1094;
     BOOL             _isRubbing;
 }
 
++ (CPDictionary)propertyTypes
+{
+    var types = [super propertyTypes];
+    [types setObject:UIBBoolean forKey:@"CPHUDBackgroundWindowMask"];
+    [types setObject:UIBBoolean forKey:@"CPTitledWindowMask"];
+    [types setObject:UIBBoolean forKey:@"CPClosableWindowMask"];
+    return types;
+}
+
 + (CPArray)persistentProperties
 {
     return [super persistentProperties].concat(["CPHUDBackgroundWindowMask", "CPTitledWindowMask", "CPClosableWindowMask"]);
@@ -536,13 +555,12 @@ var _windowChildrenObservationContext = 1094;
 
 + (CPDictionary)defaultValues
 {
-    var defaults = [super defaultValues];
-    [defaults setObject:YES forKey:@"CPHUDBackgroundWindowMask"];
-    [defaults setObject:YES forKey:@"CPTitledWindowMask"];
-    [defaults setObject:YES forKey:@"CPClosableWindowMask"];
-    [defaults setObject:@"Untitled Window" forKey:@"value"];
-    console.log("UIWindowView: defaultValues - defaults:", defaults);
-    return defaults;
+    return {
+        value: "Untitled Window",
+        CPHUDBackgroundWindowMask: true,
+        CPTitledWindowMask: true,
+        CPClosableWindowMask: true
+    };
 }
 
 - (void)drawRect:(CGRect)rect
@@ -837,7 +855,12 @@ var _windowChildrenObservationContext = 1094;
 
 + (CPDictionary)defaultValues
 {
-    return [CPConservativeDictionary dictionaryWithObject:@"Button" forKey:@"value"];
+    return {value: "Button"};
+}
+
++ (CPDictionary)propertyTypes
+{
+    return [super propertyTypes].copy({value: UIBString});
 }
 - (id)initWithFrame:(CGRect)aRect
 {
@@ -879,7 +902,12 @@ var _windowChildrenObservationContext = 1094;
 
 + (CPDictionary)defaultValues
 {
-    return [CPConservativeDictionary dictionaryWithObject:0.5 forKey:@"value"];
+    return {value: 0.5};
+}
+
++ (CPDictionary)propertyTypes
+{
+    return [super propertyTypes].copy({value: UIBNumber});
 }
 - (id)initWithFrame:(CGRect)aRect
 {
@@ -925,7 +953,12 @@ var _windowChildrenObservationContext = 1094;
 
 + (CPDictionary)defaultValues
 {
-    return [CPConservativeDictionary dictionaryWithObject:@"Text Field" forKey:@"value"];
+    return {value: "Text Field"};
+}
+
++ (CPDictionary)propertyTypes
+{
+    return [super propertyTypes].copy({value: UIBString});
 }
 - (id)initWithFrame:(CGRect)aRect
 {

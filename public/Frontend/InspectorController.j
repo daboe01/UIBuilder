@@ -36,7 +36,7 @@
     {
         var selectedObject = selectedObjects[0];
         var elementType = [selectedObject valueForKey:@"type"];
-        var viewClass = classForElementType(elementType);
+        var viewClass = [UIBuilderController classForElementType:elementType];
         var properties = [viewClass persistentProperties];
 
         var yPos = 10;

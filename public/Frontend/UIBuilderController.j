@@ -10,15 +10,7 @@
 @import <Foundation/CPObject.j>
 @import "UIElementView.j"
 @import "UICanvasView.j"
-
-function classForElementType(elementType)
-{
-    if (elementType === "window") return UIWindowView;
-    if (elementType === "button") return UIButtonView;
-    if (elementType === "slider") return UISliderView;
-    if (elementType === "textfield") return UITextFieldView;
-    return UIElementView;
-}
+@import "UIBuilderConstants.j";
 
 // This is a simple data model. In a real app, it might have more properties.
 // We use a custom dictionary to ensure KVO compatibility and proper value setting.
@@ -43,7 +35,7 @@ function classForElementType(elementType)
 {
     // Only set the value if it's different from the current value
     var currentValue = [super valueForKey:aKey];
-    console.log("CPConservativeDictionary: setValue - key:", aKey, "newVal:", aVal, "currentVal:", currentValue);
+    
 
     // Always set the value if the current value is null or undefined
     if (currentValue == null || currentValue == undefined || currentValue != aVal) {
@@ -62,7 +54,17 @@ function classForElementType(elementType)
 @implementation UIBuilderController : CPViewController
 {
     CPArrayController _elementsController @accessors(property=elementsController);
+    CPMutableArray _connections;
     int _elementCounter; // To generate unique IDs
+}
+
++ (Class)classForElementType:(CPString)elementType
+{
+    if (elementType === "window") return UIWindowView;
+    if (elementType === "button") return UIButtonView;
+    if (elementType === "slider") return UISliderView;
+    if (elementType === "textfield") return UITextFieldView;
+    return UIElementView;
 }
 
 - (id)init
@@ -70,6 +72,7 @@ function classForElementType(elementType)
     self = [super init];
     if (self) {
         _elementsController = [[CPArrayController alloc] init];
+        _connections = [CPMutableArray array];
         _elementCounter = 0;
     }
     return self;
@@ -99,7 +102,7 @@ function classForElementType(elementType)
 {
     var newElementData = [CPConservativeDictionary dictionary];
     var containerData = [self _containerDataAtPoint:aPoint];
-    var viewClass = classForElementType(elementType);
+    var viewClass = [UIBuilderController classForElementType:elementType];
 
     // Set default properties based on type
     [newElementData setValue:elementType forKey:@"type"];
@@ -265,7 +268,7 @@ function classForElementType(elementType)
 {
     // 1. Create the new element to be placed in the window
     var newElementData = [CPConservativeDictionary dictionary];
-    var viewClass = classForElementType(elementType);
+    var viewClass = [UIBuilderController classForElementType:elementType];
     [newElementData setValue:elementType forKey:@"type"];
     [newElementData setValue:@"id_" + _elementCounter++ forKey:@"id"];
 
@@ -290,7 +293,7 @@ function classForElementType(elementType)
 
     // 2. Create the window that will contain the new element
     var windowData = [CPConservativeDictionary dictionary];
-    var windowClass = classForElementType("window");
+    var windowClass = [UIBuilderController classForElementType:"window"];
     var windowWidth = 250, windowHeight = 200;
     [windowData setValue:@"window" forKey:@"type"];
     [windowData setValue:@"id_" + _elementCounter++ forKey:@"id"];
@@ -319,6 +322,8 @@ function classForElementType(elementType)
     [newElementData setValue:[windowData valueForKey:@"id"] forKey:@"parentID"];
     [[windowData mutableArrayValueForKey:@"children"] addObject:newElementData];
 
+    console.log("UIBuilderController: addNewElementOfType:inNewWindowAtPoint: - Adding new element to window's children:", newElementData);
+
     // 6. Add both to the elements controller
     var undoManager = [[CPApp keyWindow] undoManager];
     [undoManager beginUndoGrouping];
@@ -331,6 +336,67 @@ function classForElementType(elementType)
 
     // 7. Select the new element
     [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
+}
+
+- (void)addNewElementOfType:(CPString)elementType inWindow:(CPDictionary)windowData atPoint:(CGPoint)aPoint
+{
+    console.log("UIBuilderController: addNewElementOfType:inWindow:atPoint: - Adding element ", elementType, " to window ", windowData, " at point ", aPoint);
+    var newElementData = [CPConservativeDictionary dictionary];
+    var viewClass = [UIBuilderController classForElementType:elementType];
+
+    [newElementData setValue:elementType forKey:@"type"];
+    [newElementData setValue:@"id_" + _elementCounter++ forKey:@"id"];
+
+    var defaultValues = [viewClass defaultValues];
+    for (var key in defaultValues)
+        [newElementData setValue:defaultValues[key] forKey:key];
+
+    var elementWidth, elementHeight;
+
+    if (elementType === "button") {
+        elementWidth = 100;
+        elementHeight = 24;
+    } else if (elementType === "slider") {
+        elementWidth = 150;
+        elementHeight = 20;
+    } else { // textfield
+        elementWidth = 150;
+        elementHeight = 22;
+    }
+    [newElementData setValue:elementWidth forKey:@"width"];
+    [newElementData setValue:elementHeight forKey:@"height"];
+
+    // Position the new element relative to the window's origin
+    [newElementData setValue:aPoint.x forKey:@"originX"];
+    [newElementData setValue:aPoint.y forKey:@"originY"];
+
+    // Add as a child to the container window
+    [newElementData setValue:[windowData valueForKey:@"id"] forKey:@"parentID"];
+    [[windowData mutableArrayValueForKey:@"children"] addObject:newElementData];
+
+    // Add to the main controller
+    var undoManager = [[CPApp keyWindow] undoManager];
+    [undoManager beginUndoGrouping];
+    [[undoManager prepareWithInvocationTarget:_elementsController] removeObject:newElementData];
+    [undoManager setActionName:@"Add Element to Window"];
+    [_elementsController addObject:newElementData];
+    [undoManager endUndoGrouping];
+
+    [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
+}
+
+- (void)addConnectionFrom:(CPDictionary)sourceData to:(CPDictionary)targetData atPoint:(CGPoint)atPoint
+{
+    var newConnection = [CPConservativeDictionary dictionary];
+    [newConnection setValue:[sourceData valueForKey:@"id"] forKey:@"sourceID"];
+    [newConnection setValue:[targetData valueForKey:@"id"] forKey:@"targetID"];
+    [newConnection setValue:@"connection_" + _elementCounter++ forKey:@"id"];
+    [newConnection setValue:[NSValue valueWithPoint:atPoint] forKey:@"atPoint"];
+
+    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_connections] removeObject:newConnection];
+    [[[CPApp keyWindow] undoManager] setActionName:@"Add Connection"];
+    [_connections addObject:newConnection];
+    console.log("UIBuilderController: addConnectionFrom:to: - Added connection: ", newConnection);
 }
 
 #pragma mark -
@@ -395,6 +461,11 @@ function classForElementType(elementType)
     var frame = [anElement frame];
     [changes addObject:{ data: [anElement dataObject], frame: { origin: frame.origin, size: frame.size } }];
     [self applyFrameChanges:changes withActionName:@"Resize"];
+}
+
+- (void)canvasView:(UICanvasView)aCanvas didConnectElement:(UIElementView)sourceElement toElement:(UIElementView)targetElement atPoint:(CGPoint)aPoint
+{
+    [self addConnectionFrom:[sourceElement dataObject] to:[targetElement dataObject] atPoint:aPoint];
 }
 
 - (void)changeValue:(id)newValue forObject:(id)dataObject

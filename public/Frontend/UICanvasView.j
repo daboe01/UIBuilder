@@ -7,7 +7,15 @@
 //  - It correctly instantiates different UIElementView subclasses based on the data model.
 //
 
+@import "UIBuilderConstants.j";
 @import "UIElementView.j";
+@import "ConnectionView.j";
+@import "UIBuilderConstants.j";
+
+function treshold(value, limit)
+{
+    return value > 0 ? Math.min(value, limit) : Math.max(value, -limit);
+}
 
 @implementation UICanvasView : CPView
 {
@@ -18,10 +26,17 @@
     CPString         _selectionIndexesKeyPath;
     CPArray          _oldDataObjects;
 
+    // Connections ivars
+    id               _connectionsContainer;
+    CPString         _connectionsKeyPath;
+    CPArray          _oldConnections;
+
     // Rubber-band selection ivars
     CGPoint          _rubberStart;
     CGPoint          _rubberEnd;
     BOOL             _isRubbing;
+    
+    ConnectionView   _connectionView;
     
     id               _delegate;
 }
@@ -49,6 +64,10 @@ var _selectionIndexesObservationContext = 1093;
             UISliderDragType,
             UITextFieldDragType
         ]];
+
+        _connectionView = [[ConnectionView alloc] initWithFrame:[self bounds]];
+        [_connectionView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+        [self addSubview:_connectionView];
     }
     return self;
 }
@@ -58,7 +77,8 @@ var _selectionIndexesObservationContext = 1093;
 + (void)initialize
 {
     [self exposeBinding:"dataObjects"];
-    [self exposeBinding:"selectionIndexes"];
+    [self exposeBinding:@"selectionIndexes"];
+    [self exposeBinding:@"connections"];
 }
 
 - (void)bind:(CPString)bindingName toObject:(id)observableObject withKeyPath:(CPString)observableKeyPath options:(CPDictionary)options
@@ -77,6 +97,13 @@ var _selectionIndexesObservationContext = 1093;
         _selectionIndexesKeyPath = observableKeyPath;
         [_selectionIndexesContainer addObserver:self forKeyPath:_selectionIndexesKeyPath options:CPKeyValueObservingOptionNew | CPKeyValueObservingOptionOld context:_selectionIndexesObservationContext];
     }
+    else if ([bindingName isEqualToString:@"connections"])
+    {
+        _connectionsContainer = observableObject;
+        _connectionsKeyPath = observableKeyPath;
+        [_connectionsContainer addObserver:self forKeyPath:_connectionsKeyPath options:(CPKeyValueObservingOptionNew | CPKeyValueObservingOptionOld) context:_dataObjectsObservationContext];
+        _oldConnections = [[self connections] copy] || @[];
+    }
     else { [super bind:bindingName toObject:observableObject withKeyPath:observableKeyPath options:options]; }
 
     [self setNeedsDisplay:YES];
@@ -91,6 +118,9 @@ var _selectionIndexesObservationContext = 1093;
     } else if ([bindingName isEqualToString:@"selectionIndexes"]) {
         [_selectionIndexesContainer removeObserver:self forKeyPath:_selectionIndexesKeyPath];
         _selectionIndexesContainer = nil; _selectionIndexesKeyPath = nil;
+    } else if ([bindingName isEqualToString:@"connections"]) {
+        [_connectionsContainer removeObserver:self forKeyPath:_connectionsKeyPath];
+        _connectionsContainer = nil; _connectionsKeyPath = nil;
     } else { [super unbind:bindingName]; }
     [self setNeedsDisplay:YES];
 }
@@ -104,6 +134,12 @@ var _selectionIndexesObservationContext = 1093;
 - (CPIndexSet)selectionIndexes
 {
     return [_selectionIndexesContainer valueForKeyPath:_selectionIndexesKeyPath];
+}
+
+- (CPArray)connections
+{
+    var result = [_connectionsContainer valueForKeyPath:_connectionsKeyPath];
+    return (result == [CPNull null]) ? @[] : result;
 }
 
 - (void)setSelectionIndexes:(CPIndexSet)indexes
@@ -247,6 +283,15 @@ var _selectionIndexesObservationContext = 1093;
         [self _findViewsForDataObjects:oldSelectedDataObjects inView:self foundViews:previouslySelectedViews];
         [previouslySelectedViews makeObjectsPerformSelector:@selector(setNeedsDisplay:) withObject:YES];
     }
+    else if (context == _connectionsObservationContext)
+    {
+        var newConnections = [object valueForKeyPath:_connectionsKeyPath];
+        var oldConnections = _oldConnections;
+
+        // For now, simply redraw all connections. A more optimized approach would be to only redraw changed connections.
+        [self setNeedsDisplay:YES];
+        _oldConnections = [newConnections copy];
+    }
 }
 
 #pragma mark - Drawing & Mouse
@@ -263,6 +308,174 @@ var _selectionIndexesObservationContext = 1093;
         [CPBezierPath setDefaultLineWidth:1.0];
         [CPBezierPath strokeRect:rubber];
     }
+
+    // Draw existing connections
+    var connections = [self connections];
+    for (var i = 0; i < [connections count]; i++)
+    {
+        var connection = [connections objectAtIndex:i];
+        var sourceID = [connection valueForKey:@"sourceID"];
+        var targetID = [connection valueForKey:@"targetID"];
+
+        var sourceView = [self viewForElementWithID:sourceID];
+        var targetView = [self viewForElementWithID:targetID];
+
+        if (sourceView && targetView)
+        {
+            var startPoint = [sourceView convertPoint:CGPointMake(CGRectGetMidX([sourceView bounds]), CGRectGetMidY([sourceView bounds])) toView:self];
+            var endPoint;
+            var connectionPoint = [connection valueForKey:@"atPoint"];
+
+            if (connectionPoint) {
+                endPoint = [connectionPoint pointValue];
+            } else {
+                endPoint = [targetView convertPoint:CGPointMake(CGRectGetMidX([targetView bounds]), CGRectGetMidY([targetView bounds])) toView:self];
+            }
+            [self drawLinkFrom:startPoint to:endPoint color:[CPColor blueColor]];
+        }
+    }
+}
+
+- (void)drawLinkFrom:(CGPoint)startPoint to:(CGPoint)endPoint color:(CPColor)insideColor
+{
+
+    var dist = Math.sqrt(Math.pow(startPoint.x - endPoint.x, 2) + Math.pow(startPoint.y - endPoint.y, 2));
+
+    // a lace is made of an outside gray line of width 5, and a inside insideColor(ed) line of width 3
+    var p0 = CGPointMake(startPoint.x, startPoint.y);
+    var p3 = CGPointMake(endPoint.x, endPoint.y);
+
+    var p1 = CGPointMake(startPoint.x + treshold((endPoint.x - startPoint.x) / 2, 50), startPoint.y);
+    var p2 = CGPointMake(endPoint.x -   treshold((endPoint.x - startPoint.x) / 2, 50), endPoint.y);
+
+    // p0 and p1 are on the same horizontal line
+    // distance between p0 and p1 is set with the treshold fuction
+    // the same holds for p2 and p3
+
+    var path = [CPBezierPath bezierPath];
+    [path setLineWidth:0];
+    [[CPColor grayColor] set];
+    [path appendBezierPathWithOvalInRect:CGRectMake(startPoint.x-2.5,startPoint.y-2.5,5,5)];
+    [path fill];
+
+    path = [CPBezierPath bezierPath];
+    [path setLineWidth:0];
+    [insideColor set];
+    [path appendBezierPathWithOvalInRect:CGRectMake(startPoint.x-1.5,startPoint.y-1.5,3,3)];
+    [path fill];
+
+    path = [CPBezierPath bezierPath];
+    [path setLineWidth:0];
+    [[CPColor grayColor] set];
+    [path appendBezierPathWithOvalInRect:CGRectMake(endPoint.x-2.5,endPoint.y-2.5,5,5)];
+    [path fill];
+
+    path = [CPBezierPath bezierPath];
+    [path setLineWidth:0];
+    [insideColor set];
+    [path appendBezierPathWithOvalInRect:CGRectMake(endPoint.x-1.5,endPoint.y-1.5,3,3)];
+    [path fill];
+
+    // if the line is rather short, draw a straight line. the curve would look rather odd in this case.
+    if (dist < 40)
+    {
+        path = [CPBezierPath bezierPath];
+        [path setLineWidth:5];
+        [path moveToPoint:startPoint];
+        [path lineToPoint:endPoint];
+        [[CPColor grayColor] set];
+        [path stroke];
+
+        path = [CPBezierPath bezierPath];
+        [path setLineWidth:3];
+        [path moveToPoint:startPoint];
+        [path lineToPoint:endPoint];
+        [insideColor set];
+        [path stroke];
+
+        return;
+    }
+
+    path = [CPBezierPath bezierPath];
+    [path setLineWidth:5];
+    [path moveToPoint:p0];
+    [path curveToPoint:p3 controlPoint1:p1 controlPoint2:p2];
+    [[CPColor grayColor] set];
+    [path stroke];
+
+    path = [CPBezierPath bezierPath];
+    [path setLineWidth:3];
+    [path moveToPoint:p0];
+    [path curveToPoint:p3 controlPoint1:p1 controlPoint2:p2];
+    [insideColor set];
+    [path stroke];
+}
+
+- (UIElementView)viewForElementWithID:(CPString)elementID
+{
+    var subviews = [self subviews];
+    for (var i = 0; i < [subviews count]; i++)
+    {
+        var view = [subviews objectAtIndex:i];
+        if ([view isKindOfClass:[UIElementView class]] && [[view dataObject] valueForKey:@"id"] == elementID)
+        {
+            return view;
+        }
+    }
+    return nil;
+}
+
+- (void)drawConnectionFrom:(CGPoint)startPoint to:(CGPoint)endPoint
+{
+    console.log("UICanvasView: drawConnectionFrom:to: - Drawing live connection from ", startPoint, " to ", endPoint);
+    [_connectionView setStartPoint:startPoint];
+    [_connectionView setEndPoint:endPoint];
+    [_connectionView setHidden:NO]; // Ensure it's visible when drawing
+    [self addSubview:_connectionView]; // Bring to front
+    [_connectionView setNeedsDisplay:YES];
+}
+
+- (void)clearConnection
+{
+    [_connectionView setHidden:YES];
+    [_connectionView setNeedsDisplay:YES]; // Request redraw to clear old line
+}
+
+- (UIElementView)viewAtPoint:(CGPoint)aPoint
+{
+    return [self _findDeepestUIElementViewAtPoint:aPoint inView:self];
+}
+
+- (UIElementView)_findDeepestUIElementViewAtPoint:(CGPoint)aPoint inView:(CPView)currentView
+{
+    // Iterate through subviews in reverse order to get the topmost view
+    for (var i = [[currentView subviews] count] - 1; i >= 0; i--)
+    {
+        var subview = [[currentView subviews] objectAtIndex:i];
+        
+        // Convert the point to the subview's coordinate system
+        var localPoint = [subview convertPoint:aPoint fromView:currentView];
+
+        if ([subview isKindOfClass:[UIElementView class]])
+        {
+            if (CGRectContainsPoint([subview bounds], localPoint))
+            {
+                // If this is a container view, recursively search its subviews
+                if (subview._isContainer)
+                {
+                    var deepestView = [self _findDeepestUIElementViewAtPoint:localPoint inView:subview];
+
+                    if (deepestView)
+                        return deepestView;
+                }
+                // If not a container, or no deeper view found, return this view
+                console.log("UICanvasView: _findDeepestUIElementViewAtPoint:inView: - Found view: ", subview, " at point: ", aPoint);
+                return subview;
+            }
+        }
+    }
+    console.log("UICanvasView: _findDeepestUIElementViewAtPoint:inView: - No UIElementView found at point: ", aPoint);
+    return nil;
 }
 
 - (void)mouseDown:(CPEvent)theEvent
@@ -289,7 +502,7 @@ var _selectionIndexesObservationContext = 1093;
             var allDataObjects = [self dataObjects];
             for (var i = 0; i < [[self subviews] count]; i++) {
                 var aView = [self subviews][i];
-                if (CGRectIntersectsRect([aView frame], rubberRect)) {
+                if ([aView isKindOfClass:[UIElementView class]] && CGRectIntersectsRect([aView frame], rubberRect)) {
                     var dataIndex = [allDataObjects indexOfObject:[aView dataObject]];
                     if (dataIndex != CPNotFound) {
                         [indexesToSelect addIndex:dataIndex];
@@ -423,7 +636,7 @@ var _selectionIndexesObservationContext = 1093;
     var draggedType = types[0]; // Assuming only one type is being dragged
     var elementType;
 
-    if (draggedType === UIWindowDragType) elementType = "window";
+    if      (draggedType === UIWindowDragType) elementType = "window";
     else if (draggedType === UIButtonDragType) elementType = "button";
     else if (draggedType === UISliderDragType) elementType = "slider";
     else if (draggedType === UITextFieldDragType) elementType = "textfield";
@@ -465,7 +678,7 @@ var _selectionIndexesObservationContext = 1093;
     var selection = [[self selectionIndexes] mutableCopy] || [CPMutableIndexSet indexSet];
     var dataObjectIndex = [[self dataObjects] indexOfObject:[aView dataObject]];
 
-    console.log("selectView:state: dataObjectIndex", dataObjectIndex);
+    
 
     if (dataObjectIndex != CPNotFound)
     {
@@ -502,6 +715,11 @@ var _selectionIndexesObservationContext = 1093;
     for (var i = 0; i < [subviews count]; i++)
     {
         var subview = subviews[i];
+
+        // Skip the connection view and any other non-UIElementView instances
+        if (![subview isKindOfClass:[UIElementView class]])
+            continue;
+
         var contains = [dataObjects containsObject:[subview dataObject]];
 
         if (contains)
@@ -526,6 +744,13 @@ var _selectionIndexesObservationContext = 1093;
 {
     if (_delegate && [_delegate respondsToSelector:@selector(canvasView:didResizeElement:)]) {
         [_delegate canvasView:self didResizeElement:anElement];
+    }
+}
+
+- (void)elementDidConnect:(UIElementView)sourceElement to:(UIElementView)targetElement atPoint:(CGPoint)aPoint
+{
+    if (_delegate && [_delegate respondsToSelector:@selector(canvasView:didConnectElement:toElement:atPoint:)]) {
+        [_delegate canvasView:self didConnectElement:sourceElement toElement:targetElement atPoint:aPoint];
     }
 }
 

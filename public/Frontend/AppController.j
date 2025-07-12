@@ -218,6 +218,12 @@
     [appMenuItem setSubmenu:appMenu];
     [editMenuItem setSubmenu:editMenu];
 
+    var fileMenuItem = [[CPMenuItem alloc] initWithTitle:@"File" action:nil keyEquivalent:@""];
+    var fileMenu = [[CPMenu alloc] initWithTitle:@"File"];
+    [fileMenu addItemWithTitle:@"Run" action:@selector(run:) keyEquivalent:@"r"];
+    [fileMenuItem setSubmenu:fileMenu];
+    [mainMenuBar addItem:fileMenuItem];
+
     [mainMenuBar addItem:appMenuItem];
     [mainMenuBar addItem:editMenuItem];
 
@@ -268,6 +274,21 @@
     [_inspectorController awakeFromMarkup]; // Manually call this
 
     [inspectorPanel orderFront:self];
+}
+
+- (void)run:(id)sender
+{
+    var canvasSubviews = [_canvasView subviews];
+
+    for (var i = 0; i < [canvasSubviews count]; i++)
+    {
+        var view = [canvasSubviews objectAtIndex:i];
+        if ([view isKindOfClass:[UIWindowView class]])
+        {
+            var nativeElement = [view nativeUIElement];
+            [nativeElement makeKeyAndOrderFront:self];
+        }
+    }
 }
 
 @end

@@ -519,6 +519,14 @@ var kUIElementBottomRightHandle = 8;
     }
 }
 
+- (id)nativeUIElement
+{
+    // Base implementation returns a generic view with a red background to indicate it's not a real UI element.
+    var view = [[CPView alloc] initWithFrame:[self frame]];
+    [view setBackgroundColor:[CPColor redColor]];
+    return view;
+}
+
 @end
 
 
@@ -844,6 +852,30 @@ var _windowChildrenObservationContext = 1094;
     return YES;
 }
 
+- (id)nativeUIElement
+{
+    var newPlatformWindow = [[CPPlatformWindow alloc] initWithContentRect:[self frame]];
+
+    var styleMask = 0;
+    if ([[self dataObject] valueForKey:@"CPHUDBackgroundWindowMask"]) styleMask |= CPHUDBackgroundWindowMask;
+    if ([[self dataObject] valueForKey:@"CPTitledWindowMask"]) styleMask |= CPTitledWindowMask;
+    if ([[self dataObject] valueForKey:@"CPClosableWindowMask"]) styleMask |= CPClosableWindowMask;
+
+    var theNewWindow = [[CPWindow alloc] initWithContentRect:CGRectMake(0, 0, [self frame].size.width, [self frame].size.height) styleMask:styleMask];
+    [theNewWindow setPlatformWindow:newPlatformWindow];
+
+    var contentView = [theNewWindow contentView];
+    var subviews = [self subviews];
+    for (var i = 0; i < [subviews count]; i++)
+    {
+        var subview = subviews[i];
+        var nativeSubview = [subview nativeUIElement];
+        [contentView addSubview:nativeSubview];
+    }
+
+    return theNewWindow;
+}
+
 @end
 
 
@@ -892,6 +924,14 @@ var _windowChildrenObservationContext = 1094;
     var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
     [[self value] drawAtPoint:CGPointMake((bounds.size.width - valueSize.width) / 2.0 + 1, (bounds.size.height - valueSize.height) / 2.0 - 2) withAttributes:_stringAttributes];
 }
+
+- (id)nativeUIElement
+{
+    var button = [[CPButton alloc] initWithFrame:[self frame]];
+    [button setTitle:[self value]];
+    return button;
+}
+
 @end
 
 // =================================================================================================
@@ -943,6 +983,14 @@ var _windowChildrenObservationContext = 1094;
     [knobPath setLineWidth:1.0];
     [knobPath stroke];
 }
+
+- (id)nativeUIElement
+{
+    var slider = [[CPSlider alloc] initWithFrame:[self frame]];
+    [slider setFloatValue:[self value]];
+    return slider;
+}
+
 @end
 
 // =================================================================================================
@@ -991,4 +1039,12 @@ var _windowChildrenObservationContext = 1094;
     var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
     [[self value] drawAtPoint:CGPointMake(5, (bounds.size.height - valueSize.height) / 2.0 - 2) withAttributes:_stringAttributes];
 }
+
+- (id)nativeUIElement
+{
+    var textField = [[CPTextField alloc] initWithFrame:[self frame]];
+    [textField setStringValue:[self value]];
+    return textField;
+}
+
 @end

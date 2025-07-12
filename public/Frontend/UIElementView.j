@@ -53,17 +53,17 @@ var kUIElementBottomRightHandle = 8;
 
 + (CPArray)persistentProperties
 {
-    return ["value"];
+    return ["value", "outlets", "actions"];
 }
 
 + (CPDictionary)defaultValues
 {
-    return {value: "Element"};
+    return {value: "Element", outlets: "", actions: "doSomething:"};
 }
 
 + (CPDictionary)propertyTypes
 {
-    return [CPDictionary dictionaryWithObject:UIBString forKey:@"value"];
+    return [CPDictionary dictionaryWithObjects:[UIBString, UIBString, UIBString] forKeys:["value", "outlets", "actions"]];
 }
 
 - (id)initWithFrame:(CGRect)frame
@@ -351,6 +351,10 @@ var kUIElementBottomRightHandle = 8;
 {
     [self mouseDown:theEvent];
 }
+- (void)rightMouseUp:(CPEvent)theEvent
+{
+    [self mouseUp:theEvent];
+}
 
 - (void)mouseDown:(CPEvent)theEvent
 {
@@ -403,10 +407,18 @@ var kUIElementBottomRightHandle = 8;
 
         if (targetView && targetView != self)
         {
-            var endPointInView = CGPointMake(CGRectGetMidX([targetView bounds]), CGRectGetMidY([targetView bounds]));
-            var endPointInCanvas = [targetView convertPoint:endPointInView toView:canvas];
-            [canvas drawConnectionFrom:startPointInCanvas to:endPointInCanvas];
-            [targetView setAsDropTarget:YES];
+            var localPoint = [targetView convertPoint:mouseLoc fromView:canvas];
+            if ([targetView canAcceptConnectionAtPoint:localPoint])
+            {
+                var endPointInView = CGPointMake(CGRectGetMidX([targetView bounds]), CGRectGetMidY([targetView bounds]));
+                var endPointInCanvas = [targetView convertPoint:endPointInView toView:canvas];
+                [canvas drawConnectionFrom:startPointInCanvas to:endPointInCanvas];
+                [targetView setAsDropTarget:YES];
+            }
+            else
+            {
+                [canvas drawConnectionFrom:startPointInCanvas to:mouseLoc];
+            }
         }
         else
         {
@@ -494,18 +506,26 @@ var kUIElementBottomRightHandle = 8;
     {
         // Handle mouse up for connection
         var targetView = [canvas viewAtPoint:mouseLoc];
+
         if (targetView && targetView != self)
         {
-            [[self canvas] elementDidConnect:self to:targetView];
+            var localPoint = [targetView convertPoint:mouseLoc fromView:canvas];
+            if ([targetView canAcceptConnectionAtPoint:localPoint])
+            {
+                [[self canvas] elementDidConnect:self to:targetView atPoint:mouseLoc];
+            }
         }
+
         [[self canvas] clearConnection];
         var canvasSubviews = [canvas subviews];
+
         for (var k = 0; k < [canvasSubviews count]; k++) {
             var subview = [canvasSubviews objectAtIndex:k];
             if ([subview isKindOfClass:[UIElementView class]]) {
                 [subview setAsDropTarget:NO];
             }
         }
+        [canvas setNeedsDisplay:YES];
     }
     else if (_activeHandle != kUIElementNoHandle)
     {
@@ -703,6 +723,12 @@ var kUIElementBottomRightHandle = 8;
     return view;
 }
 
+- (BOOL)canAcceptConnectionAtPoint:(CGPoint)aPoint
+{
+    // By default, any part of the view can be a connection target.
+    return YES;
+}
+
 @end
 
 
@@ -743,7 +769,8 @@ var _windowChildrenObservationContext = 1094;
         value: "Untitled Window",
         CPHUDBackgroundWindowMask: true,
         CPTitledWindowMask: true,
-        CPClosableWindowMask: true
+        CPClosableWindowMask: true,
+        outlets: "delegate"
     };
 }
 
@@ -779,6 +806,9 @@ var _windowChildrenObservationContext = 1094;
         [super mouseDown:theEvent];
         return;
     }
+
+    // On a click into the window's content area, deselect all elements.
+    [[self canvas] deselectViews];
 
     _rubberStart = localPoint;
     _isRubbing = YES;
@@ -1083,6 +1113,12 @@ var _windowChildrenObservationContext = 1094;
     return theNewWindow;
 }
 
+- (BOOL)canAcceptConnectionAtPoint:(CGPoint)aPoint
+{
+    var titleBarHeight = 22.0;
+    return aPoint.y <= titleBarHeight;
+}
+
 @end
 
 
@@ -1094,7 +1130,7 @@ var _windowChildrenObservationContext = 1094;
 
 + (CPDictionary)defaultValues
 {
-    return {value: "Button"};
+    return {value: "Button", outlets: "target, delegate", actions: "takeValueFrom:"};
 }
 
 + (CPDictionary)propertyTypes
@@ -1149,7 +1185,7 @@ var _windowChildrenObservationContext = 1094;
 
 + (CPDictionary)defaultValues
 {
-    return {value: 0.5};
+    return {value: 0.5, outlets: "target, delegate", actions: "takeFloatValueFrom:"};
 }
 
 + (CPDictionary)propertyTypes
@@ -1208,7 +1244,7 @@ var _windowChildrenObservationContext = 1094;
 
 + (CPDictionary)defaultValues
 {
-    return {value: "Text Field"};
+    return {value: "Text Field", outlets: "target, delegate", actions: "takeStringValueFrom:"};
 }
 
 + (CPDictionary)propertyTypes

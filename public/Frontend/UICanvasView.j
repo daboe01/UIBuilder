@@ -309,29 +309,39 @@ var _selectionIndexesObservationContext = 1093;
         [CPBezierPath strokeRect:rubber];
     }
 
-    // Draw existing connections
+    // Draw existing connections for selected views
     var connections = [self connections];
-    for (var i = 0; i < [connections count]; i++)
+    var selectedObjects = [[self dataObjects] objectsAtIndexes:[self selectionIndexes]];
+
+    if ([selectedObjects count] > 0)
     {
-        var connection = [connections objectAtIndex:i];
-        var sourceID = [connection valueForKey:@"sourceID"];
-        var targetID = [connection valueForKey:@"targetID"];
+        var selectedIDs = [selectedObjects valueForKey:@"id"];
 
-        var sourceView = [self viewForElementWithID:sourceID];
-        var targetView = [self viewForElementWithID:targetID];
-
-        if (sourceView && targetView)
+        for (var i = 0; i < [connections count]; i++)
         {
-            var startPoint = [sourceView convertPoint:CGPointMake(CGRectGetMidX([sourceView bounds]), CGRectGetMidY([sourceView bounds])) toView:self];
-            var endPoint;
-            var connectionPoint = [connection valueForKey:@"atPoint"];
+            var connection = [connections objectAtIndex:i];
+            var sourceID = [connection valueForKey:@"sourceID"];
+            var targetID = [connection valueForKey:@"targetID"];
 
-            if (connectionPoint) {
-                endPoint = [connectionPoint pointValue];
-            } else {
-                endPoint = [targetView convertPoint:CGPointMake(CGRectGetMidX([targetView bounds]), CGRectGetMidY([targetView bounds])) toView:self];
+            if ([selectedIDs containsObject:sourceID] || [selectedIDs containsObject:targetID])
+            {
+                var sourceView = [self viewForElementWithID:sourceID];
+                var targetView = [self viewForElementWithID:targetID];
+
+                if (sourceView && targetView)
+                {
+                    var startPoint = [sourceView convertPoint:CGPointMake(CGRectGetMidX([sourceView bounds]), CGRectGetMidY([sourceView bounds])) toView:self];
+                    var endPoint;
+                    var connectionPoint = [connection valueForKey:@"atPoint"];
+
+                    if (connectionPoint) {
+                        endPoint = CGPointMake(connectionPoint.x, connectionPoint.y);
+                    } else {
+                        endPoint = [targetView convertPoint:CGPointMake(CGRectGetMidX([targetView bounds]), CGRectGetMidY([targetView bounds])) toView:self];
+                    }
+                    [self drawLinkFrom:startPoint to:endPoint color:[CPColor blueColor]];
+                }
             }
-            [self drawLinkFrom:startPoint to:endPoint color:[CPColor blueColor]];
         }
     }
 }

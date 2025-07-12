@@ -41,6 +41,10 @@
 
         var yPos = 10;
 
+        // Set panel title
+        [_panel setTitle:elementType];
+
+
         for (var i = 0; i < [properties count]; i++)
         {
             var propertyName = properties[i];

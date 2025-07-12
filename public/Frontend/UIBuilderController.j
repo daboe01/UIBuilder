@@ -391,7 +391,7 @@
     [newConnection setValue:[sourceData valueForKey:@"id"] forKey:@"sourceID"];
     [newConnection setValue:[targetData valueForKey:@"id"] forKey:@"targetID"];
     [newConnection setValue:@"connection_" + _elementCounter++ forKey:@"id"];
-    [newConnection setValue:[NSValue valueWithPoint:atPoint] forKey:@"atPoint"];
+    [newConnection setValue:{x: atPoint.x, y: atPoint.y} forKey:@"atPoint"];
 
     [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_connections] removeObject:newConnection];
     [[[CPApp keyWindow] undoManager] setActionName:@"Add Connection"];

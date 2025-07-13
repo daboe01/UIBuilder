@@ -521,11 +521,15 @@ var kUIElementBottomRightHandle = 8;
             {
                 [canvas showConnectionMenuForSource:self target:targetView at:mouseLoc];
             }
+            else
+            {
+                [canvas clearConnection];
+            }
         }
-
-        // The connection line should not be cleared immediately, but after the menu is handled.
-        // We also don't want to clear the drop target highlight yet.
-        // [[self canvas] clearConnection];
+        else
+        {
+            [canvas clearConnection];
+        }
         
         var canvasSubviews = [canvas subviews];
 

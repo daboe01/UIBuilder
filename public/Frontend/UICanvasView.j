@@ -545,6 +545,11 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (void)mouseDown:(CPEvent)theEvent
 {
+    if (_connectionSource)
+    {
+        [self menuDidEndTracking:nil];
+        return;
+    }
     // A click on the canvas background starts a rubber-band selection.
     [self deselectViews];
     _isRubbing = YES;
@@ -867,9 +872,13 @@ var _selectedConnectionsObservationContext = 1095;
     }
 
     if ([menu numberOfItems] > 0)
+    {
         [CPMenu popUpContextMenu:menu withEvent:[CPApp currentEvent] forView:self];
+    }
     else
+    {
         [self menuDidEndTracking:menu]; // No items, so clean up immediately
+    }
 }
 
 - (void)createTargetActionConnection:(CPMenuItem)sender

@@ -141,26 +141,85 @@
 // what the dragged placeholder view will look like.
 - (void)drawRect:(CGRect)rect
 {
-    // Simple drawing, replace with icons if you have them
+    var bounds = [self bounds];
+
+    // Background
     [[CPColor controlColor] set];
-    [CPBezierPath fillRect:[self bounds]];
+    [CPBezierPath fillRect:bounds];
     [[CPColor controlShadowColor] set];
-    [CPBezierPath strokeRect:[self bounds]];
+    [CPBezierPath strokeRect:bounds];
 
-    var title = [[_dragType componentsSeparatedByString:@"DragType"] objectAtIndex:0];
+    if ([_dragType isEqualToString:UIWindowDragType])
+    {
+        // Draw a window
+        var windowRect = CGRectInset(bounds, 5, 5);
+        var titleBarHeight = 10;
 
-    var textAttributes = @{
-        CPFontAttributeName: [CPFont systemFontOfSize:10],
-        CPForegroundColorAttributeName: [CPColor blackColor]
-    };
+        // Draw the title bar
+        var titleBarRect = CGRectMake(windowRect.origin.x, windowRect.origin.y, windowRect.size.width, titleBarHeight);
+        [[CPColor grayColor] set];
+        [CPBezierPath fillRect:titleBarRect];
 
-    var titleSize = [title sizeWithAttributes:textAttributes];
-    var titlePoint = CGPointMake(
-                                 ([self bounds].size.width - titleSize.width) / 2.0,
-                                 ([self bounds].size.height - titleSize.height) / 2.0
-                                 );
+        // Draw the content area
+        var contentRect = CGRectMake(windowRect.origin.x, windowRect.origin.y + titleBarHeight, windowRect.size.width, windowRect.size.height - titleBarHeight);
+        [[CPColor whiteColor] set];
+        [CPBezierPath fillRect:contentRect];
 
-    [title drawAtPoint:titlePoint withAttributes:textAttributes];
+        // Draw the border for the whole window
+        [[CPColor blackColor] set];
+        [CPBezierPath strokeRect:windowRect];
+    }
+    else if ([_dragType isEqualToString:UIButtonDragType])
+    {
+        // Draw a button
+        var buttonRect = CGRectInset(bounds, 8, 10);
+        var path = [CPBezierPath bezierPathWithRoundedRect:buttonRect radius:5];
+        [[CPColor whiteColor] set];
+        [path fill];
+        [[CPColor blackColor] set];
+        [path stroke];
+    }
+    else if ([_dragType isEqualToString:UISliderDragType])
+    {
+        // Draw a slider
+        var sliderY = bounds.size.height / 2;
+        var path = [CPBezierPath bezierPath];
+        [path moveToPoint:CGPointMake(bounds.origin.x + 5, sliderY)];
+        [path lineToPoint:CGPointMake(bounds.origin.x + bounds.size.width - 5, sliderY)];
+        [[CPColor blackColor] set];
+        [path stroke];
+
+        var knobRect = CGRectMake(bounds.size.width / 2 - 5, sliderY - 5, 10, 10);
+        var knobPath = [CPBezierPath bezierPathWithOvalInRect:knobRect];
+        [[CPColor whiteColor] set];
+        [knobPath fill];
+        [[CPColor blackColor] set];
+        [knobPath stroke];
+    }
+    else if ([_dragType isEqualToString:UITextFieldDragType])
+    {
+        // Draw a text field
+        var fieldRect = CGRectInset(bounds, 5, 12);
+        [[CPColor whiteColor] set];
+        [CPBezierPath fillRect:fieldRect];
+        [[CPColor blackColor] set];
+        [CPBezierPath strokeRect:fieldRect];
+    }
+    else
+    {
+        // Fallback to original text drawing
+        var title = [[_dragType componentsSeparatedByString:@"DragType"] objectAtIndex:0];
+        var textAttributes = @{
+            CPFontAttributeName: [CPFont systemFontOfSize:10],
+            CPForegroundColorAttributeName: [CPColor blackColor]
+        };
+        var titleSize = [title sizeWithAttributes:textAttributes];
+        var titlePoint = CGPointMake(
+                                     (bounds.size.width - titleSize.width) / 2.0,
+                                     (bounds.size.height - titleSize.height) / 2.0
+                                     );
+        [title drawAtPoint:titlePoint withAttributes:textAttributes];
+    }
 }
 
 @end
@@ -232,23 +291,29 @@
 
 - (void)createPalette
 {
-    _palette = [[CPPanel alloc] initWithContentRect:CGRectMake(20, 500, 110, 220)
+    var screenWidth = window.innerWidth;
+    var paletteWidth = 220;
+    var paletteHeight = 60;
+    var paletteX = (screenWidth - paletteWidth) / 2;
+    var paletteY = 22; // Position near the top of the screen
+
+    _palette = [[CPPanel alloc] initWithContentRect:CGRectMake(paletteX, paletteY, paletteWidth, paletteHeight)
                                           styleMask:CPHUDBackgroundWindowMask | CPTitledWindowMask | CPClosableWindowMask];
     [_palette setTitle:@"Elements"];
     [_palette setFloatingPanel:YES];
 
-    var yPos = 160;
+    var xPos = 10;
     var types = [UIWindowDragType, UIButtonDragType, UISliderDragType, UITextFieldDragType];
 
     // Create draggable symbols for each type
     [_canvasView registerForDraggedTypes:types];
 
     for (var i=0; i < [types count]; i++) {
-        var symbol = [[DraggableSymbolView alloc] initWithFrame:CGRectMake(10, yPos, 70, 40)];
+        var symbol = [[DraggableSymbolView alloc] initWithFrame:CGRectMake(xPos, 10, 40, 40)];
         symbol._dragType = types[i];
 
         [[_palette contentView] addSubview:symbol];
-        yPos -= 50;
+        xPos += 50;
     }
 
     [_palette orderFront:self];

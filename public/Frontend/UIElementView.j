@@ -392,6 +392,12 @@ var kUIElementBottomRightHandle = 8;
     var canvas = [self canvas];
     var mouseLoc = [canvas convertPoint:[theEvent locationInWindow] fromView:nil];
 
+    // If _lastMouseLoc is null, it means the drag started outside this view,
+    // so we initialize it with the current mouse location to prevent errors.
+    if (!_lastMouseLoc) {
+        _lastMouseLoc = mouseLoc;
+    }
+
     if ([theEvent modifierFlags] & CPControlKeyMask)
     {
         _isConnecting = YES;

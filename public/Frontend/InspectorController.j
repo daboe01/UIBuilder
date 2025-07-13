@@ -61,7 +61,7 @@
     var buttonBarHeight = 28;
     var tableHeight = connectionsViewBounds.size.height - buttonBarHeight;
 
-    var scrollViewFrame = CGRectMake(0, 0, connectionsViewBounds.size.width, tableHeight);
+    var scrollViewFrame = CGRectMake(3, 3, connectionsViewBounds.size.width - 6, tableHeight - 6);
     var buttonBarFrame = CGRectMake(0, tableHeight, connectionsViewBounds.size.width, buttonBarHeight);
 
     var scrollView = [[CPScrollView alloc] initWithFrame:scrollViewFrame];

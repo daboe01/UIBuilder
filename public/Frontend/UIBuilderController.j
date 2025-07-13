@@ -406,12 +406,10 @@
     if (atPoint)
         [newConnection setValue:{x: atPoint.x, y: atPoint.y} forKey:@"atPoint"];
 
-    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:self] removeConnection:newConnection];
+    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_connectionsController] removeObject:newConnection];
     [[[CPApp keyWindow] undoManager] setActionName:@"Add Connection"];
 
-    var currentConnections = [[_connectionsController content] mutableCopy] || [CPMutableArray array];
-    [currentConnections addObject:newConnection];
-    [_connectionsController setContent:currentConnections];
+    [_connectionsController addObject:newConnection];
 
     console.log("UIBuilderController: addConnectionFrom:to: - Added connection: ", newConnection);
     console.log("Connections controller count after add: " + [[_connectionsController arrangedObjects] count]);
@@ -419,12 +417,10 @@
 
 - (void)removeConnection:(CPDictionary)connection
 {
-    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:self] addConnectionFrom:[connection valueForKey:@"sourceID"] to:[connection valueForKey:@"targetID"] atPoint:[connection valueForKey:@"atPoint"] outlet:[connection valueForKey:@"outlet"] action:[connection valueForKey:@"action"]];
+    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_connectionsController] addObject:connection];
     [[[CPApp keyWindow] undoManager] setActionName:@"Remove Connection"];
 
-    var currentConnections = [[_connectionsController content] mutableCopy];
-    [currentConnections removeObject:connection];
-    [_connectionsController setContent:currentConnections];
+    [_connectionsController removeObject:connection];
 }
 
 #pragma mark -

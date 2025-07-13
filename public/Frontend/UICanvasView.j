@@ -111,7 +111,7 @@ var _selectedConnectionsObservationContext = 1095;
     {
         _connectionsContainer = observableObject;
         _connectionsKeyPath = observableKeyPath;
-        [_connectionsContainer addObserver:self forKeyPath:_connectionsKeyPath options:(CPKeyValueObservingOptionNew | CPKeyValueObservingOptionOld) context:_dataObjectsObservationContext];
+        [_connectionsContainer addObserver:self forKeyPath:_connectionsKeyPath options:(CPKeyValueObservingOptionNew | CPKeyValueObservingOptionOld) context:_connectionsObservationContext];
         _oldConnections = [[self connections] copy] || @[];
     }
     else if ([bindingName isEqualToString:@"selectedConnections"])
@@ -338,8 +338,9 @@ var _selectedConnectionsObservationContext = 1095;
         [CPBezierPath strokeRect:rubber];
     }
 
-    // Draw existing connections if they are selected in the inspector
+    // Draw existing connections that are selected in the connections controller.
     var selectedConnections = [self selectedConnections];
+
     if (selectedConnections && [selectedConnections count] > 0)
     {
         for (var i = 0; i < [selectedConnections count]; i++)
@@ -347,7 +348,6 @@ var _selectedConnectionsObservationContext = 1095;
             var connection = [selectedConnections objectAtIndex:i];
             var sourceID = [connection valueForKey:@"sourceID"];
             var targetID = [connection valueForKey:@"targetID"];
-
             var sourceView = [self viewForElementWithID:sourceID];
             var targetView = [self viewForElementWithID:targetID];
 
@@ -362,6 +362,8 @@ var _selectedConnectionsObservationContext = 1095;
                 } else {
                     endPoint = [targetView convertPoint:CGPointMake(CGRectGetMidX([targetView bounds]), CGRectGetMidY([targetView bounds])) toView:self];
                 }
+
+                // Draw the link with a distinct color, like blue.
                 [self drawLinkFrom:startPoint to:endPoint color:[CPColor blueColor]];
             }
         }
@@ -443,18 +445,51 @@ var _selectedConnectionsObservationContext = 1095;
     [path stroke];
 }
 
-- (UIElementView)viewForElementWithID:(CPString)elementID
+#pragma mark - View Lookup
+
+// Private recursive helper method to search the entire view hierarchy.
+- (UIElementView)_findViewForElementWithID:(CPString)elementID inView:(CPView)aView
 {
-    var subviews = [self subviews];
+    // Iterate through all subviews of the current view
+    var subviews = [aView subviews];
     for (var i = 0; i < [subviews count]; i++)
     {
-        var view = [subviews objectAtIndex:i];
-        if ([view isKindOfClass:[UIElementView class]] && [[view dataObject] valueForKey:@"id"] == elementID)
+        var subview = subviews[i];
+
+        // We are only interested in UIElementView subclasses
+        if (![subview isKindOfClass:[UIElementView class]])
+            continue;
+
+        // 1. Check if the current subview is the one we are looking for.
+        if ([[subview dataObject] valueForKey:@"id"] === elementID)
         {
-            return view;
+            return subview; // Found it!
+        }
+
+        // 2. If not, and this subview has children, recurse into it.
+        //    This is the key step to search inside containers like UIWindowView.
+        if ([[subview subviews] count] > 0)
+        {
+            var foundView = [self _findViewForElementWithID:elementID inView:subview];
+            if (foundView)
+            {
+                return foundView; // Found it in a nested hierarchy.
+            }
         }
     }
+
+    // If we've searched this entire branch and found nothing, return nil.
     return nil;
+}
+
+// Public method to start the search from the canvas itself.
+- (UIElementView)viewForElementWithID:(CPString)elementID
+{
+    if (!elementID)
+        return nil;
+
+    // Start the recursive search from the top-level canvas view.
+    return [self _findViewForElementWithID:elementID inView:self];
 }
 
 - (void)drawConnectionFrom:(CGPoint)startPoint to:(CGPoint)endPoint

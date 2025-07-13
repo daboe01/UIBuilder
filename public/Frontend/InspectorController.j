@@ -107,26 +107,6 @@
     {
         [connectionsController setFilterPredicate:[CPPredicate predicateWithFormat:@"FALSEPREDICATE"]];
     }
-
-    // 2. Set the selection based on the active tab.
-    if (selectedTabViewItem && [selectedTabViewItem identifier] === @"connections")
-    {
-        var allVisibleConnections = [connectionsController arrangedObjects];
-        if ([allVisibleConnections count] > 0)
-        {
-            var allIndexes = [CPIndexSet indexSetWithIndexesInRange:CPMakeRange(0, [allVisibleConnections count])];
-            [connectionsController setSelectionIndexes:allIndexes];
-        }
-        else
-        {
-            [connectionsController setSelectionIndexes:[CPIndexSet indexSet]];
-        }
-    }
-    else
-    {
-        // If any other tab is active, clear the selection to hide connections.
-        [connectionsController setSelectionIndexes:[CPIndexSet indexSet]];
-    }
 }
 
 - (void)tabView:(CPTabView)aTabView didSelectTabViewItem:(CPTabViewItem)aTabViewItem
@@ -164,7 +144,7 @@
             var propertyType = [[viewClass propertyTypes] valueForKey:propertyName];
 
             // Create Label
-            var label = [[CPTextField alloc] initWithFrame:CGRectMake(10, yPos, 100, 20)];
+            var label = [[CPTextField alloc] initWithFrame:CGRectMake(10, yPos + 3, 100, 20)];
             [label setStringValue:propertyName];
             [label setBezeled:NO];
             [label setDrawsBackground:NO];
@@ -179,7 +159,7 @@
                 [checkbox bind:@"value" toObject:selectedObject withKeyPath:propertyName options:nil];
                 [propertiesView addSubview:checkbox];
             } else if (propertyType === UIBString || propertyType === UIBNumber) {
-                var textField = [[CPTextField alloc] initWithFrame:CGRectMake(120, yPos, 150, 25)];
+                var textField = [[CPTextField alloc] initWithFrame:CGRectMake(120, yPos, 150, 27)];
                 [textField bind:@"value" toObject:selectedObject withKeyPath:propertyName options:nil];
                 [textField setBezeled:YES];
                 [textField setEditable:YES];

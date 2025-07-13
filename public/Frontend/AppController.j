@@ -252,10 +252,6 @@
 
 - (void)applicationDidFinishLaunching:(CPNotification)aNotification
 {
-
-    [CPPlatformWindow preventCharacterKeysFromPropagating:["c", "v", "x"]];
-
-    
     // 1. Create the main window and canvas
     _window = [[CPWindow alloc] initWithContentRect:CGRectMakeZero() styleMask:CPBorderlessBridgeWindowMask];
     [_window setTitle:@"Cappuccino UI Builder"];

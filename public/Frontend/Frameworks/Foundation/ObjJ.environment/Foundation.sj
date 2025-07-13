@@ -3121,7 +3121,7 @@ _isNumberType = function(value)
     else
         return NO;
 }
-p;17;CPDateFormatter.jt;116052;@STATIC;1.0;i;9;CPArray.ji;8;CPDate.ji;10;CPString.ji;13;CPFormatter.ji;12;CPTimeZone.ji;10;CPLocale.jt;115941;objj_executeFile("CPArray.j", YES);objj_executeFile("CPDate.j", YES);objj_executeFile("CPString.j", YES);objj_executeFile("CPFormatter.j", YES);objj_executeFile("CPTimeZone.j", YES);objj_executeFile("CPLocale.j", YES);{var the_typedef = objj_allocateTypeDef("CPDateFormatterStyle");
+p;17;CPDateFormatter.jt;116526;@STATIC;1.0;i;9;CPArray.ji;8;CPDate.ji;10;CPString.ji;13;CPFormatter.ji;12;CPTimeZone.ji;10;CPLocale.jt;116415;objj_executeFile("CPArray.j", YES);objj_executeFile("CPDate.j", YES);objj_executeFile("CPString.j", YES);objj_executeFile("CPFormatter.j", YES);objj_executeFile("CPTimeZone.j", YES);objj_executeFile("CPLocale.j", YES);{var the_typedef = objj_allocateTypeDef("CPDateFormatterStyle");
 objj_registerTypeDef(the_typedef);
 }CPDateFormatterNoStyle = 0;
 CPDateFormatterShortStyle = 1;
@@ -4078,6 +4078,16 @@ default:
 {
     if (!aString)
         return ((___r1 = (CPDate.isa.method_msgSend["alloc"] || _objj_forward)(CPDate, "alloc")), ___r1 == null ? ___r1 : (___r1.isa.method_msgSend["initWithTimeIntervalSinceReferenceDate:"] || _objj_forward)(___r1, "initWithTimeIntervalSinceReferenceDate:", -31622400));
+    if (aFormat === "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
+    {
+        var d = new Date(aString);
+        if (d && !isNaN(d.getTime()))
+        {
+            var kCFAbsoluteTimeIntervalSince1970 = 978307200.0;
+            var interval = d.getTime() / 1000.0 - kCFAbsoluteTimeIntervalSince1970;
+            return (CPDate.isa.method_msgSend["dateWithTimeIntervalSinceReferenceDate:"] || _objj_forward)(CPDate, "dateWithTimeIntervalSinceReferenceDate:", interval);
+        }
+    }
     if (aFormat == nil)
         return nil;
     var currentToken = (CPString.isa.method_msgSend["new"] || _objj_forward)(CPString, "new"),
@@ -14643,7 +14653,7 @@ if (typeof window !== 'undefined')
         window.clearTimeout(aTimeoutID);
     };
 }
-p;12;CPTimeZone.jt;25505;@STATIC;1.0;i;10;CPObject.ji;10;CPString.ji;8;CPDate.ji;10;CPLocale.jt;25428;objj_executeFile("CPObject.j", YES);objj_executeFile("CPString.j", YES);objj_executeFile("CPDate.j", YES);objj_executeFile("CPLocale.j", YES);CPTimeZoneNameStyleStandard = 0;
+p;12;CPTimeZone.jt;28670;@STATIC;1.0;i;10;CPObject.ji;10;CPString.ji;8;CPDate.ji;10;CPLocale.jt;28593;objj_executeFile("CPObject.j", YES);objj_executeFile("CPString.j", YES);objj_executeFile("CPDate.j", YES);objj_executeFile("CPLocale.j", YES);CPTimeZoneNameStyleStandard = 0;
 CPTimeZoneNameStyleShortStandard = 1;
 CPTimeZoneNameStyleDaylightSaving = 2;
 CPTimeZoneNameStyleShortDaylightSaving = 3;
@@ -14660,11 +14670,72 @@ var abbreviationDictionary,
     localizedName;
 abbreviationForDate = function(date)
 {
-    var abbreviation = date.toLocaleString('en-US', {timeZoneName: 'long'}).replace(/^([0]?\d|[1][0-2])\/((?:[0]?|[1-2])\d|[3][0-1])\/([2][01]|[1][6-9])\d{2}(,?\s*([0]?\d|[1][0-2])(\:[0-5]\d){1,2})*\s*([aApP][mM]{0,2})?\s*/, "").split(" ").map(    function(l)
+    var dateString = date.toString();
+    var longNameMatch = dateString.match(/\(([^)]+)\)/);
+    if (longNameMatch)
     {
-        return l[0];
-    }).join("");
-    return abbreviation;
+        var timeZoneComponent = longNameMatch[1];
+        if ((abbreviationDictionary == null ? abbreviationDictionary : (abbreviationDictionary.isa.method_msgSend["objectForKey:"] || _objj_forward)(abbreviationDictionary, "objectForKey:", timeZoneComponent)))
+        {
+            return timeZoneComponent;
+        }
+        if (timeZoneComponent.indexOf(' ') > -1)
+        {
+            var generatedAbbr = timeZoneComponent.split(' ').map(            function(word)
+            {
+                return word[0];
+            }).join('');
+            if ((abbreviationDictionary == null ? abbreviationDictionary : (abbreviationDictionary.isa.method_msgSend["objectForKey:"] || _objj_forward)(abbreviationDictionary, "objectForKey:", generatedAbbr)))
+            {
+                return generatedAbbr;
+            }
+        }
+    }
+    try {
+        var ianaName = new Intl.DateTimeFormat().resolvedOptions().timeZone;
+        var currentOffset = -date.getTimezoneOffset();
+        var keys = (abbreviationDictionary == null ? abbreviationDictionary : (abbreviationDictionary.isa.method_msgSend["keyEnumerator"] || _objj_forward)(abbreviationDictionary, "keyEnumerator")),
+            key;
+        var possibleAbbrs = [];
+        while (key = (keys == null ? keys : (keys.isa.method_msgSend["nextObject"] || _objj_forward)(keys, "nextObject")))
+        {
+            if ((abbreviationDictionary == null ? abbreviationDictionary : (abbreviationDictionary.isa.method_msgSend["valueForKey:"] || _objj_forward)(abbreviationDictionary, "valueForKey:", key)) === ianaName)
+            {
+                possibleAbbrs.push(key);
+            }
+        }
+        for (var i = 0; i < possibleAbbrs.length; i++)
+        {
+            var abbr = possibleAbbrs[i];
+            if ((timeDifferenceFromUTC == null ? timeDifferenceFromUTC : (timeDifferenceFromUTC.isa.method_msgSend["valueForKey:"] || _objj_forward)(timeDifferenceFromUTC, "valueForKey:", abbr)) === currentOffset)
+            {
+                return abbr;
+            }
+        }
+        if (possibleAbbrs.length > 0)
+        {
+            return possibleAbbrs[0];
+        }
+    }
+    catch(e) {
+    }
+    return nil;
+}
+_abbreviationForNameAndDate = function(tzName, date)
+{
+    try {
+        var options = {timeZone: tzName, timeZoneName: 'long'};
+        var dateString = date.toLocaleString('en-US', options);
+        var longTZName = dateString.replace(/^([0]?\d|[1][0-2])\/((?:[0]?|[1-2])\d|[3][0-1])\/([2][01]|[1][6-9])\d{2}(,?\s*([0]?\d|[1][0-2])(\:[0-5]\d){1,2})*\s*([aApP][mM]{0,2})?\s*/, "");
+        var abbreviation = longTZName.split(" ").map(        function(l)
+        {
+            return l[0];
+        }).join("");
+        return abbreviation;
+    }
+    catch(e) {
+        return nil;
+    }
 }
 
 {var the_class = objj_allocateClassPair(CPObject, "CPTimeZone"),
@@ -14712,17 +14783,27 @@ class_addMethods(the_class, [new objj_method(sel_getUid("data"), function $CPTim
     if (self = (objj_getClass("CPTimeZone").super_class.method_dtable["init"] || _objj_forward)(self, "init"))
     {
         self._name = tzName;
-        var keys = (abbreviationDictionary == null ? abbreviationDictionary : (abbreviationDictionary.isa.method_msgSend["keyEnumerator"] || _objj_forward)(abbreviationDictionary, "keyEnumerator")),
-            key;
-        while (key = (keys == null ? keys : (keys.isa.method_msgSend["nextObject"] || _objj_forward)(keys, "nextObject")))
+        var currentAbbreviation = _abbreviationForNameAndDate(tzName, (CPDate.isa.method_msgSend["date"] || _objj_forward)(CPDate, "date"));
+        if (currentAbbreviation && (abbreviationDictionary == null ? abbreviationDictionary : (abbreviationDictionary.isa.method_msgSend["containsKey:"] || _objj_forward)(abbreviationDictionary, "containsKey:", currentAbbreviation)))
         {
-            var value = (abbreviationDictionary == null ? abbreviationDictionary : (abbreviationDictionary.isa.method_msgSend["valueForKey:"] || _objj_forward)(abbreviationDictionary, "valueForKey:", key));
-            if ((value == null ? value : (value.isa.method_msgSend["isEqualToString:"] || _objj_forward)(value, "isEqualToString:", self._name)))
+            self._abbreviation = currentAbbreviation;
+        }
+        else
+        {
+            var keys = (abbreviationDictionary == null ? abbreviationDictionary : (abbreviationDictionary.isa.method_msgSend["keyEnumerator"] || _objj_forward)(abbreviationDictionary, "keyEnumerator")),
+                key;
+            while (key = (keys == null ? keys : (keys.isa.method_msgSend["nextObject"] || _objj_forward)(keys, "nextObject")))
             {
-                self._abbreviation = key;
-                break;
+                var value = (abbreviationDictionary == null ? abbreviationDictionary : (abbreviationDictionary.isa.method_msgSend["valueForKey:"] || _objj_forward)(abbreviationDictionary, "valueForKey:", key));
+                if ((value == null ? value : (value.isa.method_msgSend["isEqualToString:"] || _objj_forward)(value, "isEqualToString:", self._name)))
+                {
+                    self._abbreviation = key;
+                    break;
+                }
             }
         }
+        if (!self._abbreviation)
+            return nil;
     }
     return self;
 }
@@ -14888,7 +14969,7 @@ class_addMethods(meta_class, [new objj_method(sel_getUid("initialize"), function
     var date = (CPDate.isa.method_msgSend["date"] || _objj_forward)(CPDate, "date"),
         abbreviation = abbreviationForDate(date);
     systemTimeZone = (self.isa.method_msgSend["timeZoneWithAbbreviation:"] || _objj_forward)(self, "timeZoneWithAbbreviation:", abbreviation);
-    ((___r1 = (CPNotification == null ? CPNotification : (CPNotification.isa.method_msgSend["defaultCenter"] || _objj_forward)(CPNotification, "defaultCenter"))), ___r1 == null ? ___r1 : (___r1.isa.method_msgSend["postNotificationName:object:"] || _objj_forward)(___r1, "postNotificationName:object:", CPSystemTimeZoneDidChangeNotification, systemTimeZone));
+    ((___r1 = (CPNotificationCenter == null ? CPNotificationCenter : (CPNotificationCenter.isa.method_msgSend["defaultCenter"] || _objj_forward)(CPNotificationCenter, "defaultCenter"))), ___r1 == null ? ___r1 : (___r1.isa.method_msgSend["postNotificationName:object:"] || _objj_forward)(___r1, "postNotificationName:object:", CPSystemTimeZoneDidChangeNotification, systemTimeZone));
     var ___r1;
 }
 

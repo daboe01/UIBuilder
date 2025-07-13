@@ -266,8 +266,17 @@
     {
         var pboard = [CPPasteboard generalPasteboard];
         var data = [CPKeyedArchiver archivedDataWithRootObject:selectedData];
-        [pboard declareTypes:[UIBuilderElementPboardType] owner:nil];
+
+        // 1. Declare that you are providing BOTH a custom type and a standard string type.
+        [pboard declareTypes:[UIBuilderElementPboardType, CPStringPboardType] owner:nil];
+
+        // 2. Set the data for your custom type, for your app's internal 'paste' to use.
         [pboard setData:data forType:UIBuilderElementPboardType];
+
+        // 3. Set a string representation for the browser and other applications.
+        //    This can be a simple description or a more complex JSON representation.
+        var description = [selectedData count] + " UI element(s) copied.";
+        [pboard setString:description forType:CPStringPboardType];
     }
 }
 

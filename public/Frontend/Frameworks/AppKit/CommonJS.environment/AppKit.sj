@@ -17524,7 +17524,7 @@ class_addMethods(meta_class, [new objj_method(sel_getUid("currentContext"), func
 
 ,["CPGraphicsContext","CGContext","BOOL"])]);
 }
-p;9;CPImage.jt;39390;@STATIC;1.0;I;21;Foundation/CPBundle.jI;33;Foundation/CPNotificationCenter.jI;21;Foundation/CPObject.jI;22;Foundation/CPRunLoop.jI;21;Foundation/CPString.jI;19;Foundation/CPData.jI;28;Foundation/CPKeyedArchiver.jI;30;Foundation/CPKeyedUnarchiver.ji;12;CGGeometry.ji;17;CPCompatibility.jt;39096;objj_executeFile("Foundation/CPBundle.j", NO);objj_executeFile("Foundation/CPNotificationCenter.j", NO);objj_executeFile("Foundation/CPObject.j", NO);objj_executeFile("Foundation/CPRunLoop.j", NO);objj_executeFile("Foundation/CPString.j", NO);objj_executeFile("Foundation/CPData.j", NO);objj_executeFile("Foundation/CPKeyedArchiver.j", NO);objj_executeFile("Foundation/CPKeyedUnarchiver.j", NO);objj_executeFile("CGGeometry.j", YES);objj_executeFile("CPCompatibility.j", YES);{var the_protocol = objj_allocateProtocol("CPImageDelegate");
+p;9;CPImage.jt;40467;@STATIC;1.0;I;21;Foundation/CPBundle.jI;33;Foundation/CPNotificationCenter.jI;21;Foundation/CPObject.jI;22;Foundation/CPRunLoop.jI;21;Foundation/CPString.jI;19;Foundation/CPData.jI;28;Foundation/CPKeyedArchiver.jI;30;Foundation/CPKeyedUnarchiver.ji;12;CGGeometry.ji;17;CPCompatibility.ji;19;CPGraphicsContext.jt;40149;objj_executeFile("Foundation/CPBundle.j", NO);objj_executeFile("Foundation/CPNotificationCenter.j", NO);objj_executeFile("Foundation/CPObject.j", NO);objj_executeFile("Foundation/CPRunLoop.j", NO);objj_executeFile("Foundation/CPString.j", NO);objj_executeFile("Foundation/CPData.j", NO);objj_executeFile("Foundation/CPKeyedArchiver.j", NO);objj_executeFile("Foundation/CPKeyedUnarchiver.j", NO);objj_executeFile("CGGeometry.j", YES);objj_executeFile("CPCompatibility.j", YES);objj_executeFile("CPGraphicsContext.j", YES);{var the_protocol = objj_allocateProtocol("CPImageDelegate");
 var aProtocol = objj_getProtocol("CPObject");
 if (!aProtocol) throw new SyntaxError("*** Could not find definition for protocol \"CPImageDelegate\"");
 protocol_addProtocol(the_protocol, aProtocol);
@@ -17919,6 +17919,25 @@ var meta_class = the_class.isa;class_addMethods(the_class, [new objj_method(sel_
 }
 
 ,["void","CPCoder"])]);
+}
+{
+var the_class = objj_getClass("CPImage")
+if(!the_class) throw new SyntaxError("*** Could not find definition for class \"CPImage\"");
+var meta_class = the_class.isa;class_addMethods(the_class, [new objj_method(sel_getUid("drawAtPoint:fromRect:operation:fraction:"), function $CPImage__drawAtPoint_fromRect_operation_fraction_(self, _cmd, point, fromRect, op, delta)
+{
+    if (self._loadStatus !== CPImageLoadStatusCompleted)
+        return;
+    var context = (CPGraphicsContext.isa.method_msgSend["currentContext"] || _objj_forward)(CPGraphicsContext, "currentContext").graphicsPort;
+    if (!context)
+        return;
+    CGContextSaveGState(context);
+    CGContextSetBlendMode(context, op);
+    CGContextSetAlpha(context, delta);
+    context.drawImage(self._image, fromRect.origin.x, fromRect.origin.y, fromRect.size.width, fromRect.size.height, point.x, point.y, fromRect.size.width, fromRect.size.height);
+    CGContextRestoreGState(context);
+}
+
+,["void","CGPoint","CPRect","CGBlendMode","float"])]);
 }
 
 {var the_class = objj_allocateClassPair(CPImage, "_CPMaterialIconImage"),
@@ -19849,7 +19868,7 @@ var meta_class = the_class.isa;class_addMethods(the_class, [new objj_method(sel_
 
 ,["void","CPCoder"])]);
 }
-p;20;CPObjectController.jt;50093;@STATIC;1.0;I;25;Foundation/CPDictionary.jI;25;Foundation/CPCountedSet.jI;38;Foundation/_CPCollectionKVCOperators.ji;14;CPController.ji;19;CPKeyValueBinding.jt;49927;objj_executeFile("Foundation/CPDictionary.j", NO);objj_executeFile("Foundation/CPCountedSet.j", NO);objj_executeFile("Foundation/_CPCollectionKVCOperators.j", NO);objj_executeFile("CPController.j", YES);objj_executeFile("CPKeyValueBinding.j", YES);;
+p;20;CPObjectController.jt;50124;@STATIC;1.0;I;25;Foundation/CPDictionary.jI;25;Foundation/CPCountedSet.jI;38;Foundation/_CPCollectionKVCOperators.ji;14;CPController.ji;19;CPKeyValueBinding.jt;49958;objj_executeFile("Foundation/CPDictionary.j", NO);objj_executeFile("Foundation/CPCountedSet.j", NO);objj_executeFile("Foundation/_CPCollectionKVCOperators.j", NO);objj_executeFile("CPController.j", YES);objj_executeFile("CPKeyValueBinding.j", YES);;
 
 {var the_class = objj_allocateClassPair(CPController, "CPObjectController"),
 meta_class = the_class.isa;class_addIvars(the_class, [new objj_ivar("_contentObject", "id"), new objj_ivar("_selection", "id"), new objj_ivar("_objectClass", "Class"), new objj_ivar("_objectClassName", "CPString"), new objj_ivar("_isEditable", "BOOL"), new objj_ivar("_automaticallyPreparesContent", "BOOL"), new objj_ivar("_usesLazyFetching", "BOOL"), new objj_ivar("_isUsingManagedProxy", "BOOL"), new objj_ivar("_managedProxy", "_CPManagedProxy"), new objj_ivar("_observedKeys", "CPCountedSet")]);objj_registerClassPair(the_class);
@@ -20426,7 +20445,7 @@ class_addMethods(the_class, [new objj_method(sel_getUid("initWithController:"), 
     {
         var value = (self.isa.method_msgSend["_controllerMarkerForValues:"] || _objj_forward)(self, "_controllerMarkerForValues:", values);
         ((___r1 = self._cachedValues), ___r1 == null ? ___r1 : (___r1.isa.method_msgSend["setObject:forKey:"] || _objj_forward)(___r1, "setObject:forKey:", value, theKeyPath));
-        return value;
+        return value === CPNullMarker ? nil : value;
     }
     else
         return values;
@@ -37742,7 +37761,7 @@ var meta_class = the_class.isa;class_addMethods(the_class, [new objj_method(sel_
 
 ,["void","CPCoder"])]);
 }
-p;13;CPTextField.jt;106052;@STATIC;1.0;i;11;CPControl.ji;17;CPStringDrawing.ji;17;CPCompatibility.ji;8;CPText.ji;20;CPWindow_Constants.ji;21;_CPImageAndTextView.jt;105908;objj_executeFile("CPControl.j", YES);objj_executeFile("CPStringDrawing.j", YES);objj_executeFile("CPCompatibility.j", YES);objj_executeFile("CPText.j", YES);objj_executeFile("CPWindow_Constants.j", YES);objj_executeFile("_CPImageAndTextView.j", YES);{var the_protocol = objj_allocateProtocol("CPTextFieldDelegate");
+p;13;CPTextField.jt;106048;@STATIC;1.0;i;11;CPControl.ji;17;CPStringDrawing.ji;17;CPCompatibility.ji;8;CPText.ji;20;CPWindow_Constants.ji;21;_CPImageAndTextView.jt;105904;objj_executeFile("CPControl.j", YES);objj_executeFile("CPStringDrawing.j", YES);objj_executeFile("CPCompatibility.j", YES);objj_executeFile("CPText.j", YES);objj_executeFile("CPWindow_Constants.j", YES);objj_executeFile("_CPImageAndTextView.j", YES);{var the_protocol = objj_allocateProtocol("CPTextFieldDelegate");
 var aProtocol = objj_getProtocol("CPControlTextEditingDelegate");
 if (!aProtocol) throw new SyntaxError("*** Could not find definition for protocol \"CPTextFieldDelegate\"");
 protocol_addProtocol(the_protocol, aProtocol);
@@ -38405,7 +38424,7 @@ class_addMethods(the_class, [new objj_method(sel_getUid("setControlSize:"), func
     textSize.height -= contentInset.top + contentInset.bottom;
     if (frameSize.width !== 0 && !(self.isa.method_msgSend["isBezeled"] || _objj_forward)(self, "isBezeled") && (lineBreakMode === CPLineBreakByWordWrapping || lineBreakMode === CPLineBreakByCharWrapping))
     {
-        textSize = (text == null ? text : (text.isa.method_msgSend["sizeWithFont:inWidth:"] || _objj_forward)(text, "sizeWithFont:inWidth:", font, textSize.width)) + 1;
+        textSize = (text == null ? text : (text.isa.method_msgSend["sizeWithFont:inWidth:"] || _objj_forward)(text, "sizeWithFont:inWidth:", font, textSize.width));
     }
     else
     {
@@ -44967,7 +44986,7 @@ class_addMethods(the_class, [new objj_method(sel_getUid("initWithViewAnimations:
 
 ,["void","CPArray"])]);
 }
-p;18;CPViewController.jt;20056;@STATIC;1.0;I;20;Foundation/CPArray.ji;7;CPCib.ji;13;CPResponder.jt;19982;objj_executeFile("Foundation/CPArray.j", NO);objj_executeFile("CPCib.j", YES);objj_executeFile("CPResponder.j", YES);var CPViewControllerCachedCibs;
+p;18;CPViewController.jt;20881;@STATIC;1.0;I;20;Foundation/CPArray.ji;7;CPCib.ji;13;CPResponder.jt;20807;objj_executeFile("Foundation/CPArray.j", NO);objj_executeFile("CPCib.j", YES);objj_executeFile("CPResponder.j", YES);var CPViewControllerCachedCibs;
 
 {var the_class = objj_allocateClassPair(CPResponder, "CPViewController"),
 meta_class = the_class.isa;class_addIvars(the_class, [new objj_ivar("_view", "CPView"), new objj_ivar("_isLoading", "BOOL"), new objj_ivar("_isLazy", "BOOL"), new objj_ivar("_isViewLoaded", "BOOL"), new objj_ivar("_representedObject", "id"), new objj_ivar("_title", "CPString"), new objj_ivar("_cibName", "CPString"), new objj_ivar("_cibBundle", "CPBundle"), new objj_ivar("_cibExternalNameTable", "CPDictionary")]);objj_registerClassPair(the_class);
@@ -45131,6 +45150,8 @@ class_addMethods(the_class, [new objj_method(sel_getUid("view"), function $CPVie
         (self.isa.method_msgSend["loadView"] || _objj_forward)(self, "loadView");
         if (self._view == nil && (cibOwner == null ? cibOwner : (cibOwner.isa.method_msgSend["isKindOfClass:"] || _objj_forward)(cibOwner, "isKindOfClass:", (CPDocument == null ? CPDocument : (CPDocument.isa.method_msgSend["class"] || _objj_forward)(CPDocument, "class")))))
             (self.isa.method_msgSend["setView:"] || _objj_forward)(self, "setView:", (cibOwner == null ? cibOwner : (cibOwner.isa.method_msgSend["valueForKey:"] || _objj_forward)(cibOwner, "valueForKey:", "view")));
+        if (self._view)
+            ((___r1 = self._view), ___r1 == null ? ___r1 : (___r1.isa.method_msgSend["setNextResponder:"] || _objj_forward)(___r1, "setNextResponder:", self));
         if (!self._view)
         {
             var reason = (CPString.isa.method_msgSend["stringWithFormat:"] || _objj_forward)(CPString, "stringWithFormat:", "View for %@ could not be loaded from Cib or no view specified. Override loadView to load the view manually.", self);
@@ -45196,12 +45217,21 @@ class_addMethods(the_class, [new objj_method(sel_getUid("view"), function $CPVie
     if (willChangeIsViewLoaded)
         (self.isa.method_msgSend["willChangeValueForKey:"] || _objj_forward)(self, "willChangeValueForKey:", "isViewLoaded");
     self._view = aView;
+    if (self._view)
+        ((___r1 = self._view), ___r1 == null ? ___r1 : (___r1.isa.method_msgSend["setNextResponder:"] || _objj_forward)(___r1, "setNextResponder:", self));
     self._isViewLoaded = aView != nil;
     if (willChangeIsViewLoaded)
         (self.isa.method_msgSend["didChangeValueForKey:"] || _objj_forward)(self, "didChangeValueForKey:", "isViewLoaded");
+    var ___r1;
 }
 
-,["void","CPView"]), new objj_method(sel_getUid("automaticallyNotifiesObserversOfIsViewLoaded"), function $CPViewController__automaticallyNotifiesObserversOfIsViewLoaded(self, _cmd)
+,["void","CPView"]), new objj_method(sel_getUid("nextResponder"), function $CPViewController__nextResponder(self, _cmd)
+{
+    return ((___r1 = self._view), ___r1 == null ? ___r1 : (___r1.isa.method_msgSend["superview"] || _objj_forward)(___r1, "superview"));
+    var ___r1;
+}
+
+,["id"]), new objj_method(sel_getUid("automaticallyNotifiesObserversOfIsViewLoaded"), function $CPViewController__automaticallyNotifiesObserversOfIsViewLoaded(self, _cmd)
 {
     return NO;
 }
@@ -45250,6 +45280,8 @@ var meta_class = the_class.isa;class_addMethods(the_class, [new objj_method(sel_
     if (self)
     {
         self._view = (aCoder == null ? aCoder : (aCoder.isa.method_msgSend["decodeObjectForKey:"] || _objj_forward)(aCoder, "decodeObjectForKey:", CPViewControllerViewKey));
+        if (self._view)
+            ((___r1 = self._view), ___r1 == null ? ___r1 : (___r1.isa.method_msgSend["setNextResponder:"] || _objj_forward)(___r1, "setNextResponder:", self));
         self._title = (aCoder == null ? aCoder : (aCoder.isa.method_msgSend["decodeObjectForKey:"] || _objj_forward)(aCoder, "decodeObjectForKey:", CPViewControllerTitleKey));
         self._cibName = (aCoder == null ? aCoder : (aCoder.isa.method_msgSend["decodeObjectForKey:"] || _objj_forward)(aCoder, "decodeObjectForKey:", CPViewControllerCibNameKey));
         var bundlePath = (aCoder == null ? aCoder : (aCoder.isa.method_msgSend["decodeObjectForKey:"] || _objj_forward)(aCoder, "decodeObjectForKey:", CPViewControllerBundleKey));
@@ -56489,7 +56521,7 @@ class_addMethods(meta_class, [new objj_method(sel_getUid("sharedMenuManager"), f
 
 ,["_CPMenuManager"])]);
 }
-p;15;_CPMenuWindow.jt;37780;@STATIC;1.0;i;12;CPClipView.ji;13;CPImageView.ji;10;CPWindow.ji;16;_CPMenuManager.jt;37689;objj_executeFile("CPClipView.j", YES);objj_executeFile("CPImageView.j", YES);objj_executeFile("CPWindow.j", YES);objj_executeFile("_CPMenuManager.j", YES);var _CPMenuWindowPool = [],
+p;15;_CPMenuWindow.jt;38485;@STATIC;1.0;i;12;CPClipView.ji;13;CPImageView.ji;10;CPWindow.ji;16;_CPMenuManager.jt;38394;objj_executeFile("CPClipView.j", YES);objj_executeFile("CPImageView.j", YES);objj_executeFile("CPWindow.j", YES);objj_executeFile("_CPMenuManager.j", YES);var _CPMenuWindowPool = [],
     _CPMenuWindowPoolCapacity = 5,
     _CPMenuWindowBackgroundColors = [];
 _CPMenuWindowMenuBarBackgroundStyle = 0;
@@ -56607,6 +56639,16 @@ class_addMethods(the_class, [new objj_method(sel_getUid("initWithContentRect:sty
 ,["void","CGSize"]), new objj_method(sel_getUid("setFrame:display:animate:"), function $_CPMenuWindow__setFrame_display_animate_(self, _cmd, aFrame, shouldDisplay, shouldAnimate)
 {
     self._unconstrainedFrame = CGRectMakeCopy(aFrame);
+    var supermenu = ((___r1 = (self.isa.method_msgSend["menu"] || _objj_forward)(self, "menu")), ___r1 == null ? ___r1 : (___r1.isa.method_msgSend["supermenu"] || _objj_forward)(___r1, "supermenu"));
+    if (supermenu && CGRectGetMaxX(self._unconstrainedFrame) > CGRectGetMaxX(self._constraintRect))
+    {
+        var supermenuWindow = supermenu._menuWindow;
+        if (supermenuWindow)
+        {
+            var supermenuFrame = (supermenuWindow == null ? supermenuWindow : (supermenuWindow.isa.method_msgSend["frame"] || _objj_forward)(supermenuWindow, "frame"));
+            self._unconstrainedFrame.origin.x = CGRectGetMinX(supermenuFrame) - CGRectGetWidth(self._unconstrainedFrame);
+        }
+    }
     var constrainedFrame = CGRectIntersection(self._unconstrainedFrame, self._constraintRect),
         marginInset = ((___r1 = self._menuView), ___r1 == null ? ___r1 : (___r1.isa.method_msgSend["valueForThemeAttribute:"] || _objj_forward)(___r1, "valueForThemeAttribute:", "menu-window-margin-inset")),
         scrollIndicatorHeight = ((___r1 = self._menuView), ___r1 == null ? ___r1 : (___r1.isa.method_msgSend["valueForThemeAttribute:"] || _objj_forward)(___r1, "valueForThemeAttribute:", "menu-window-scroll-indicator-height"));
@@ -74406,7 +74448,7 @@ class_addMethods(the_class, [new objj_method(sel_getUid("initWithLevel:"), funct
 
 ,["void","CPWindow"])]);
 }
-p;22;CPPlatformPasteboard.jt;474;@STATIC;1.0;I;21;Foundation/CPObject.jI;22;Foundation/CPRunLoop.ji;17;CPCompatibility.ji;9;CPEvent.ji;14;CPPasteboard.ji;12;CPPlatform.ji;26;CPPlatformWindow+DOMKeys.jt;301;objj_executeFile("Foundation/CPObject.j", NO);objj_executeFile("Foundation/CPRunLoop.j", NO);objj_executeFile("CPCompatibility.j", YES);objj_executeFile("CPEvent.j", YES);objj_executeFile("CPPasteboard.j", YES);objj_executeFile("CPPlatform.j", YES);objj_executeFile("CPPlatformWindow+DOMKeys.j", YES);p;22;CPPlatformWindow+DOM.jt;7958;@STATIC;1.0;I;33;Foundation/CPNotificationCenter.jI;21;Foundation/CPObject.jI;22;Foundation/CPRunLoop.jI;18;Foundation/CPSet.jI;20;Foundation/CPTimer.ji;25;CPApplication_Constants.ji;17;CPCompatibility.ji;10;CPCursor.ji;18;CPDOMWindowLayer.ji;24;CPDragServer_Constants.ji;9;CPEvent.ji;14;CPPasteboard.ji;12;CPPlatform.ji;22;CPPlatformPasteboard.ji;26;CPPlatformWindow+DOMKeys.ji;18;CPPlatformWindow.ji;8;CPText.ji;20;CPWindow_Constants.jt;7514;objj_executeFile("Foundation/CPNotificationCenter.j", NO);objj_executeFile("Foundation/CPObject.j", NO);objj_executeFile("Foundation/CPRunLoop.j", NO);objj_executeFile("Foundation/CPSet.j", NO);objj_executeFile("Foundation/CPTimer.j", NO);objj_executeFile("CPApplication_Constants.j", YES);objj_executeFile("CPCompatibility.j", YES);objj_executeFile("CPCursor.j", YES);objj_executeFile("CPDOMWindowLayer.j", YES);objj_executeFile("CPDragServer_Constants.j", YES);objj_executeFile("CPEvent.j", YES);objj_executeFile("CPPasteboard.j", YES);objj_executeFile("CPPlatform.j", YES);objj_executeFile("CPPlatformPasteboard.j", YES);objj_executeFile("CPPlatformWindow+DOMKeys.j", YES);objj_executeFile("CPPlatformWindow.j", YES);objj_executeFile("CPText.j", YES);objj_executeFile("CPWindow_Constants.j", YES);var PlatformWindows = (CPSet.isa.method_msgSend["set"] || _objj_forward)(CPSet, "set");
+p;22;CPPlatformPasteboard.jt;474;@STATIC;1.0;I;21;Foundation/CPObject.jI;22;Foundation/CPRunLoop.ji;17;CPCompatibility.ji;9;CPEvent.ji;14;CPPasteboard.ji;12;CPPlatform.ji;26;CPPlatformWindow+DOMKeys.jt;301;objj_executeFile("Foundation/CPObject.j", NO);objj_executeFile("Foundation/CPRunLoop.j", NO);objj_executeFile("CPCompatibility.j", YES);objj_executeFile("CPEvent.j", YES);objj_executeFile("CPPasteboard.j", YES);objj_executeFile("CPPlatform.j", YES);objj_executeFile("CPPlatformWindow+DOMKeys.j", YES);p;22;CPPlatformWindow+DOM.jt;8060;@STATIC;1.0;I;33;Foundation/CPNotificationCenter.jI;21;Foundation/CPObject.jI;22;Foundation/CPRunLoop.jI;18;Foundation/CPSet.jI;20;Foundation/CPTimer.ji;25;CPApplication_Constants.ji;17;CPCompatibility.ji;10;CPCursor.ji;18;CPDOMWindowLayer.ji;24;CPDragServer_Constants.ji;9;CPEvent.ji;14;CPPasteboard.ji;12;CPPlatform.ji;22;CPPlatformPasteboard.ji;26;CPPlatformWindow+DOMKeys.ji;18;CPPlatformWindow.ji;8;CPText.ji;20;CPWindow_Constants.jt;7616;objj_executeFile("Foundation/CPNotificationCenter.j", NO);objj_executeFile("Foundation/CPObject.j", NO);objj_executeFile("Foundation/CPRunLoop.j", NO);objj_executeFile("Foundation/CPSet.j", NO);objj_executeFile("Foundation/CPTimer.j", NO);objj_executeFile("CPApplication_Constants.j", YES);objj_executeFile("CPCompatibility.j", YES);objj_executeFile("CPCursor.j", YES);objj_executeFile("CPDOMWindowLayer.j", YES);objj_executeFile("CPDragServer_Constants.j", YES);objj_executeFile("CPEvent.j", YES);objj_executeFile("CPPasteboard.j", YES);objj_executeFile("CPPlatform.j", YES);objj_executeFile("CPPlatformPasteboard.j", YES);objj_executeFile("CPPlatformWindow+DOMKeys.j", YES);objj_executeFile("CPPlatformWindow.j", YES);objj_executeFile("CPText.j", YES);objj_executeFile("CPWindow_Constants.j", YES);var PlatformWindows = (CPSet.isa.method_msgSend["set"] || _objj_forward)(CPSet, "set");
 var CPDOMEventGetClickCount,
     StopDOMEventPropagation,
     StopContextMenuDOMEventPropagation;
@@ -74457,6 +74499,9 @@ var ModifierKeyCodes = [CPKeyCodes.META, CPKeyCodes.WEBKIT_RIGHT_META, CPKeyCode
 var resizeTimer = nil;
 var PreventScroll = true;
 var blurTimer = nil;
+var MOMENTUM_DAMPING = 0.95,
+    MIN_MOMENTUM_VELOCITY = 0.05,
+    MIN_MOMENTUM_START_VELOCITY = 0.1;
 var touchStartingPointX,
     touchStartingPointY;
 _CPPlatformWindowWillCloseNotification = "_CPPlatformWindowWillCloseNotification";

@@ -194,6 +194,8 @@
     // Bind the canvas to the controller's data model. This is the core of the architecture.
     [_canvasView bind:"dataObjects" toObject:_builderController withKeyPath:@"elementsController.arrangedObjects" options:nil];
     [_canvasView bind:"selectionIndexes" toObject:_builderController withKeyPath:@"elementsController.selectionIndexes" options:nil];
+    [_canvasView bind:"connections" toObject:_builderController withKeyPath:@"connectionsController.arrangedObjects" options:nil];
+    [_canvasView bind:"selectedConnections" toObject:_builderController withKeyPath:@"connectionsController.selectedObjects" options:nil];
     
     [self createPalette];
     [self createInspector];
@@ -260,7 +262,7 @@
 - (void)createInspector
 {
     var inspectorPanel = [[CPPanel alloc] initWithContentRect:CGRectMake(20, 200, 300, 150)
-                                                  styleMask:CPHUDBackgroundWindowMask | CPTitledWindowMask | CPClosableWindowMask];
+                                                  styleMask:CPTitledWindowMask | CPClosableWindowMask];
     [inspectorPanel setTitle:@"Inspector"];
     [inspectorPanel setFloatingPanel:YES];
 
@@ -278,17 +280,66 @@
 
 - (void)run:(id)sender
 {
+    console.log("Run: Starting native UI generation...");
     var canvasSubviews = [_canvasView subviews];
+    var nativeElementMap = [CPMutableDictionary dictionary];
 
+    // First pass: create all native elements and map them by their ID
+    console.log("Run: Creating native elements and building map...");
+    for (var i = 0; i < [canvasSubviews count]; i++)
+    {
+        var view = [canvasSubviews objectAtIndex:i];
+        if ([view isKindOfClass:[UIElementView class]])
+        {
+            // This will now recursively build the map
+            [view nativeUIElementWithMap:nativeElementMap];
+        }
+    }
+
+    // Second pass: connect the native elements
+    console.log("Run: Processing connections...");
+    var connections = [[_builderController connectionsController] content];
+    for (var i = 0; i < [connections count]; i++)
+    {
+        var connection = [connections objectAtIndex:i];
+        var sourceID = [connection valueForKey:@"sourceID"];
+        var targetID = [connection valueForKey:@"targetID"];
+        var action = [connection valueForKey:@"action"];
+
+        console.log(" - Connecting: " + sourceID + " -> " + targetID + " (Action: " + action + ")");
+
+        var nativeSource = [nativeElementMap objectForKey:sourceID];
+        var nativeTarget = [nativeElementMap objectForKey:targetID];
+
+        if (nativeSource && nativeTarget && action)
+        {
+            console.log("   - Found native source and target. Applying connection.");
+            [nativeSource setTarget:nativeTarget];
+            [nativeSource setAction:CPSelectorFromString(action)];
+        }
+        else
+        {
+            console.log("   - WARNING: Could not find native source or target for connection.");
+        }
+    }
+
+    // Third pass: show the windows
+    console.log("Run: Showing windows...");
     for (var i = 0; i < [canvasSubviews count]; i++)
     {
         var view = [canvasSubviews objectAtIndex:i];
         if ([view isKindOfClass:[UIWindowView class]])
         {
-            var nativeElement = [view nativeUIElement];
-            [nativeElement makeKeyAndOrderFront:self];
+            var elementID = [[view dataObject] valueForKey:@"id"];
+            var nativeWindow = [nativeElementMap objectForKey:elementID];
+            if (nativeWindow)
+            {
+                console.log(" - Showing window for ID: " + elementID);
+                [nativeWindow makeKeyAndOrderFront:self];
+            }
         }
     }
+    console.log("Run: Finished.");
 }
 
 @end

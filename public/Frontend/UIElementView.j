@@ -46,6 +46,7 @@ var kUIElementBottomRightHandle = 8;
     BOOL                    _isDragTarget; // Used by subclasses (e.g. UIWindowView)
     CPTrackingArea          _trackingArea;
     BOOL                    _isContainer;
+    BOOL                    _isConnecting;
 }
 
 #pragma mark -
@@ -53,17 +54,17 @@ var kUIElementBottomRightHandle = 8;
 
 + (CPArray)persistentProperties
 {
-    return ["value", "outlets", "actions"];
+    return ["value"];
 }
 
 + (CPDictionary)defaultValues
 {
-    return {value: "Element", outlets: "", actions: "doSomething:"};
+    return {value: "Element"};
 }
 
 + (CPDictionary)propertyTypes
 {
-    return [CPDictionary dictionaryWithObjects:[UIBString, UIBString, UIBString] forKeys:["value", "outlets", "actions"]];
+    return [CPDictionary dictionaryWithObjects:[UIBString] forKeys:["value"]];
 }
 
 - (id)initWithFrame:(CGRect)frame
@@ -89,6 +90,7 @@ var kUIElementBottomRightHandle = 8;
                                                    userInfo:nil];
         [self addTrackingArea:_trackingArea];
         _isContainer = NO;
+        _isConnecting = NO;
     }
     return self;
 }
@@ -392,6 +394,7 @@ var kUIElementBottomRightHandle = 8;
 
     if ([theEvent modifierFlags] & CPControlKeyMask)
     {
+        _isConnecting = YES;
         // If control key is pressed, handle connection drawing
         var startPointInView = CGPointMake(CGRectGetMidX([self bounds]), CGRectGetMidY([self bounds]));
         var startPointInCanvas = [self convertPoint:startPointInView toView:canvas];
@@ -502,7 +505,7 @@ var kUIElementBottomRightHandle = 8;
     var canvas = [self canvas];
     var mouseLoc = [canvas convertPoint:[theEvent locationInWindow] fromView:nil];
 
-    if ([theEvent modifierFlags] & CPControlKeyMask)
+    if (_isConnecting)
     {
         // Handle mouse up for connection
         var targetView = [canvas viewAtPoint:mouseLoc];
@@ -512,7 +515,7 @@ var kUIElementBottomRightHandle = 8;
             var localPoint = [targetView convertPoint:mouseLoc fromView:canvas];
             if ([targetView canAcceptConnectionAtPoint:localPoint])
             {
-                [[self canvas] elementDidConnect:self to:targetView atPoint:mouseLoc];
+                [canvas elementDidConnect:self to:targetView atPoint:mouseLoc];
             }
         }
 
@@ -526,6 +529,7 @@ var kUIElementBottomRightHandle = 8;
             }
         }
         [canvas setNeedsDisplay:YES];
+        _isConnecting = NO;
     }
     else if (_activeHandle != kUIElementNoHandle)
     {
@@ -717,9 +721,21 @@ var kUIElementBottomRightHandle = 8;
 
 - (id)nativeUIElement
 {
+    return [self nativeUIElementWithMap:nil];
+}
+
+- (id)nativeUIElementWithMap:(CPMutableDictionary)aMap
+{
     // Base implementation returns a generic view with a red background to indicate it's not a real UI element.
     var view = [[CPView alloc] initWithFrame:[self frame]];
     [view setBackgroundColor:[CPColor redColor]];
+
+    if (aMap)
+    {
+        var elementID = [[self dataObject] valueForKey:@"id"];
+        [aMap setObject:view forKey:elementID];
+    }
+
     return view;
 }
 
@@ -1089,7 +1105,7 @@ var _windowChildrenObservationContext = 1094;
     return YES;
 }
 
-- (id)nativeUIElement
+- (id)nativeUIElementWithMap:(CPMutableDictionary)aMap
 {
     var newPlatformWindow = [[CPPlatformWindow alloc] initWithContentRect:[self frame]];
 
@@ -1101,12 +1117,19 @@ var _windowChildrenObservationContext = 1094;
     var theNewWindow = [[CPWindow alloc] initWithContentRect:CGRectMake(0, 0, [self frame].size.width, [self frame].size.height) styleMask:styleMask];
     [theNewWindow setPlatformWindow:newPlatformWindow];
 
+    if (aMap)
+    {
+        var elementID = [[self dataObject] valueForKey:@"id"];
+        [aMap setObject:theNewWindow forKey:elementID];
+        console.log(" - Mapped ID: " + elementID + " to native element: ", theNewWindow);
+    }
+
     var contentView = [theNewWindow contentView];
     var subviews = [self subviews];
     for (var i = 0; i < [subviews count]; i++)
     {
         var subview = subviews[i];
-        var nativeSubview = [subview nativeUIElement];
+        var nativeSubview = [subview nativeUIElementWithMap:aMap];
         [contentView addSubview:nativeSubview];
     }
 
@@ -1168,10 +1191,18 @@ var _windowChildrenObservationContext = 1094;
     [[self value] drawAtPoint:CGPointMake((bounds.size.width - valueSize.width) / 2.0 + 1, (bounds.size.height - valueSize.height) / 2.0 - 2) withAttributes:_stringAttributes];
 }
 
-- (id)nativeUIElement
+- (id)nativeUIElementWithMap:(CPMutableDictionary)aMap
 {
     var button = [[CPButton alloc] initWithFrame:[self frame]];
     [button setTitle:[self value]];
+
+    if (aMap)
+    {
+        var elementID = [[self dataObject] valueForKey:@"id"];
+        [aMap setObject:button forKey:elementID];
+        console.log(" - Mapped ID: " + elementID + " to native element: ", button);
+    }
+
     return button;
 }
 
@@ -1227,10 +1258,18 @@ var _windowChildrenObservationContext = 1094;
     [knobPath stroke];
 }
 
-- (id)nativeUIElement
+- (id)nativeUIElementWithMap:(CPMutableDictionary)aMap
 {
     var slider = [[CPSlider alloc] initWithFrame:[self frame]];
     [slider setFloatValue:[self value]];
+
+    if (aMap)
+    {
+        var elementID = [[self dataObject] valueForKey:@"id"];
+        [aMap setObject:slider forKey:elementID];
+        console.log(" - Mapped ID: " + elementID + " to native element: ", slider);
+    }
+
     return slider;
 }
 
@@ -1244,7 +1283,7 @@ var _windowChildrenObservationContext = 1094;
 
 + (CPDictionary)defaultValues
 {
-    return {value: "Text Field", outlets: "target, delegate", actions: "takeStringValueFrom:"};
+    return {value: "Text Field"};
 }
 
 + (CPDictionary)propertyTypes
@@ -1283,10 +1322,18 @@ var _windowChildrenObservationContext = 1094;
     [[self value] drawAtPoint:CGPointMake(5, (bounds.size.height - valueSize.height) / 2.0 - 2) withAttributes:_stringAttributes];
 }
 
-- (id)nativeUIElement
+- (id)nativeUIElementWithMap:(CPMutableDictionary)aMap
 {
     var textField = [[CPTextField alloc] initWithFrame:[self frame]];
     [textField setStringValue:[self value]];
+
+    if (aMap)
+    {
+        var elementID = [[self dataObject] valueForKey:@"id"];
+        [aMap setObject:textField forKey:elementID];
+        console.log(" - Mapped ID: " + elementID + " to native element: ", textField);
+    }
+
     return textField;
 }
 

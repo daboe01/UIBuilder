@@ -54,8 +54,17 @@
 @implementation UIBuilderController : CPViewController
 {
     CPArrayController _elementsController @accessors(property=elementsController);
+    CPArrayController _connectionsController @accessors(property=connectionsController);
     CPMutableArray _connections;
     int _elementCounter; // To generate unique IDs
+
+    // For the connection popup
+    CPPanel _connectionPanel;
+    CPPopUpButton _outletsPopUp;
+    CPPopUpButton _actionsPopUp;
+    CPDictionary _pendingConnectionSource;
+    CPDictionary _pendingConnectionTarget;
+    CGPoint _pendingConnectionPoint;
 }
 
 + (Class)classForElementType:(CPString)elementType
@@ -72,7 +81,7 @@
     self = [super init];
     if (self) {
         _elementsController = [[CPArrayController alloc] init];
-        _connections = [CPMutableArray array];
+        _connectionsController = [[CPArrayController alloc] init];
         _elementCounter = 0;
     }
     return self;
@@ -385,18 +394,57 @@
     [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
 }
 
-- (void)addConnectionFrom:(CPDictionary)sourceData to:(CPDictionary)targetData atPoint:(CGPoint)atPoint
+- (void)addConnectionFrom:(CPDictionary)sourceData to:(CPDictionary)targetData atPoint:(CGPoint)atPoint outlet:(CPString)outlet action:(CPString)action
 {
     var newConnection = [CPConservativeDictionary dictionary];
     [newConnection setValue:[sourceData valueForKey:@"id"] forKey:@"sourceID"];
     [newConnection setValue:[targetData valueForKey:@"id"] forKey:@"targetID"];
+    [newConnection setValue:outlet forKey:@"outlet"];
+    [newConnection setValue:action forKey:@"action"];
     [newConnection setValue:@"connection_" + _elementCounter++ forKey:@"id"];
     [newConnection setValue:{x: atPoint.x, y: atPoint.y} forKey:@"atPoint"];
 
-    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_connections] removeObject:newConnection];
+    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:self] removeConnection:newConnection];
     [[[CPApp keyWindow] undoManager] setActionName:@"Add Connection"];
-    [_connections addObject:newConnection];
+
+    var currentConnections = [[_connectionsController content] mutableCopy] || [CPMutableArray array];
+    [currentConnections addObject:newConnection];
+    [_connectionsController setContent:currentConnections];
+
     console.log("UIBuilderController: addConnectionFrom:to: - Added connection: ", newConnection);
+    console.log("Connections controller count after add: " + [[_connectionsController arrangedObjects] count]);
+}
+
+- (void)removeConnection:(CPDictionary)connection
+{
+    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:self] addConnectionFrom:[connection valueForKey:@"sourceID"] to:[connection valueForKey:@"targetID"] atPoint:[connection valueForKey:@"atPoint"] outlet:[connection valueForKey:@"outlet"] action:[connection valueForKey:@"action"]];
+    [[[CPApp keyWindow] undoManager] setActionName:@"Remove Connection"];
+
+    var currentConnections = [[_connectionsController content] mutableCopy];
+    [currentConnections removeObject:connection];
+    [_connectionsController setContent:currentConnections];
+}
+
+- (void)confirmConnection:(id)sender
+{
+    var selectedOutlet = [_outletsPopUp titleOfSelectedItem];
+    var selectedAction = [_actionsPopUp titleOfSelectedItem];
+
+    if (selectedOutlet && selectedAction)
+    {
+        [self addConnectionFrom:_pendingConnectionSource to:_pendingConnectionTarget atPoint:_pendingConnectionPoint outlet:selectedOutlet action:selectedAction];
+    }
+
+    [_connectionPanel orderOut:self];
+    _pendingConnectionSource = nil;
+    _pendingConnectionTarget = nil;
+}
+
+- (void)cancelConnection:(id)sender
+{
+    [_connectionPanel orderOut:self];
+    _pendingConnectionSource = nil;
+    _pendingConnectionTarget = nil;
 }
 
 #pragma mark -
@@ -465,7 +513,79 @@
 
 - (void)canvasView:(UICanvasView)aCanvas didConnectElement:(UIElementView)sourceElement toElement:(UIElementView)targetElement atPoint:(CGPoint)aPoint
 {
-    [self addConnectionFrom:[sourceElement dataObject] to:[targetElement dataObject] atPoint:aPoint];
+    console.log("UIBuilderController: didConnectElement delegate method called.");
+    _pendingConnectionSource = [sourceElement dataObject];
+    _pendingConnectionTarget = [targetElement dataObject];
+    _pendingConnectionPoint = aPoint;
+
+    // Outlets and actions are now handled in the connections tab, not as properties of the elements.
+    // For now, we'll provide some default options for demonstration.
+    var sourceOutlets = [CPArray arrayWithObject:@"value"]; // Example default outlet
+    var targetActions = [CPArray arrayWithObject:@"takeValueFromSender:"]; // Example default action
+
+    console.log("Source outlets (default): ", sourceOutlets);
+    console.log("Target actions (default): ", targetActions);
+
+    if (!_connectionPanel)
+    {
+        console.log("Creating new connection panel.");
+        _connectionPanel = [[CPPanel alloc] initWithContentRect:CGRectMake(0, 0, 350, 170) styleMask:CPTitledWindowMask];
+        [_connectionPanel setTitle:@"New Connection"];
+
+        var contentView = [_connectionPanel contentView];
+
+        var outletsLabel = [[CPTextField alloc] initWithFrame:CGRectMake(20, 110, 80, 20)];
+        [outletsLabel setStringValue:@"Outlet:"];
+        [outletsLabel setBezeled:NO];
+        [outletsLabel setDrawsBackground:NO];
+        [outletsLabel setEditable:NO];
+        [contentView addSubview:outletsLabel];
+
+        _outletsPopUp = [[CPPopUpButton alloc] initWithFrame:CGRectMake(100, 110, 230, 25)];
+        [contentView addSubview:_outletsPopUp];
+
+        var actionsLabel = [[CPTextField alloc] initWithFrame:CGRectMake(20, 70, 80, 20)];
+        [actionsLabel setStringValue:@"Action:"];
+        [actionsLabel setBezeled:NO];
+        [actionsLabel setDrawsBackground:NO];
+        [actionsLabel setEditable:NO];
+        [contentView addSubview:actionsLabel];
+
+        _actionsPopUp = [[CPPopUpButton alloc] initWithFrame:CGRectMake(100, 70, 230, 25)];
+        [contentView addSubview:_actionsPopUp];
+
+        var okButton = [[CPButton alloc] initWithFrame:CGRectMake(250, 20, 80, 24)];
+        [okButton setTitle:@"OK"];
+        [okButton setTarget:self];
+        [okButton setAction:@selector(confirmConnection:)];
+        [okButton setKeyEquivalent:@"\r"]; // Enter key
+        [contentView addSubview:okButton];
+
+        var cancelButton = [[CPButton alloc] initWithFrame:CGRectMake(160, 20, 80, 24)];
+        [cancelButton setTitle:@"Cancel"];
+        [cancelButton setTarget:self];
+        [cancelButton setAction:@selector(cancelConnection:)];
+        [cancelButton setKeyEquivalent:@"\e"]; // Escape key
+        [contentView addSubview:cancelButton];
+    }
+
+    // Populate popups
+    console.log("Populating popups.");
+    [_outletsPopUp removeAllItems];
+    for (var i=0; i<[sourceOutlets count]; i++) {
+        if (sourceOutlets[i] && [sourceOutlets[i] length] > 0)
+            [_outletsPopUp addItemWithTitle:sourceOutlets[i]];
+    }
+
+    [_actionsPopUp removeAllItems];
+    for (var i=0; i<[targetActions count]; i++) {
+        if (targetActions[i] && [targetActions[i] length] > 0)
+            [_actionsPopUp addItemWithTitle:targetActions[i]];
+    }
+
+    console.log("Ordering panel to front.");
+    [_connectionPanel center];
+    [_connectionPanel makeKeyAndOrderFront:self];
 }
 
 - (void)changeValue:(id)newValue forObject:(id)dataObject

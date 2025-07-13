@@ -30,6 +30,8 @@ function treshold(value, limit)
     id               _connectionsContainer;
     CPString         _connectionsKeyPath;
     CPArray          _oldConnections;
+    id               _selectedConnectionsContainer;
+    CPString         _selectedConnectionsKeyPath;
 
     // Rubber-band selection ivars
     CGPoint          _rubberStart;
@@ -50,6 +52,8 @@ function treshold(value, limit)
 var _propertyObservationContext = 1091;
 var _dataObjectsObservationContext = 1092;
 var _selectionIndexesObservationContext = 1093;
+var _connectionsObservationContext = 1094;
+var _selectedConnectionsObservationContext = 1095;
 
 - (id)initWithFrame:(CGRect)aRect
 {
@@ -79,6 +83,7 @@ var _selectionIndexesObservationContext = 1093;
     [self exposeBinding:"dataObjects"];
     [self exposeBinding:@"selectionIndexes"];
     [self exposeBinding:@"connections"];
+    [self exposeBinding:@"selectedConnections"];
 }
 
 - (void)bind:(CPString)bindingName toObject:(id)observableObject withKeyPath:(CPString)observableKeyPath options:(CPDictionary)options
@@ -104,6 +109,12 @@ var _selectionIndexesObservationContext = 1093;
         [_connectionsContainer addObserver:self forKeyPath:_connectionsKeyPath options:(CPKeyValueObservingOptionNew | CPKeyValueObservingOptionOld) context:_dataObjectsObservationContext];
         _oldConnections = [[self connections] copy] || @[];
     }
+    else if ([bindingName isEqualToString:@"selectedConnections"])
+    {
+        _selectedConnectionsContainer = observableObject;
+        _selectedConnectionsKeyPath = observableKeyPath;
+        [_selectedConnectionsContainer addObserver:self forKeyPath:_selectedConnectionsKeyPath options:CPKeyValueObservingOptionNew | CPKeyValueObservingOptionOld context:_selectedConnectionsObservationContext];
+    }
     else { [super bind:bindingName toObject:observableObject withKeyPath:observableKeyPath options:options]; }
 
     [self setNeedsDisplay:YES];
@@ -121,6 +132,9 @@ var _selectionIndexesObservationContext = 1093;
     } else if ([bindingName isEqualToString:@"connections"]) {
         [_connectionsContainer removeObserver:self forKeyPath:_connectionsKeyPath];
         _connectionsContainer = nil; _connectionsKeyPath = nil;
+    } else if ([bindingName isEqualToString:@"selectedConnections"]) {
+        [_selectedConnectionsContainer removeObserver:self forKeyPath:_selectedConnectionsKeyPath];
+        _selectedConnectionsContainer = nil; _selectedConnectionsKeyPath = nil;
     } else { [super unbind:bindingName]; }
     [self setNeedsDisplay:YES];
 }
@@ -139,6 +153,12 @@ var _selectionIndexesObservationContext = 1093;
 - (CPArray)connections
 {
     var result = [_connectionsContainer valueForKeyPath:_connectionsKeyPath];
+    return (result == [CPNull null]) ? @[] : result;
+}
+
+- (CPArray)selectedConnections
+{
+    var result = [_selectedConnectionsContainer valueForKeyPath:_selectedConnectionsKeyPath];
     return (result == [CPNull null]) ? @[] : result;
 }
 
@@ -292,6 +312,10 @@ var _selectionIndexesObservationContext = 1093;
         [self setNeedsDisplay:YES];
         _oldConnections = [newConnections copy];
     }
+    else if (context == _selectedConnectionsObservationContext)
+    {
+        [self setNeedsDisplay:YES];
+    }
 }
 
 #pragma mark - Drawing & Mouse
@@ -309,38 +333,31 @@ var _selectionIndexesObservationContext = 1093;
         [CPBezierPath strokeRect:rubber];
     }
 
-    // Draw existing connections for selected views
-    var connections = [self connections];
-    var selectedObjects = [[self dataObjects] objectsAtIndexes:[self selectionIndexes]];
-
-    if ([selectedObjects count] > 0)
+    // Draw existing connections if they are selected in the inspector
+    var selectedConnections = [self selectedConnections];
+    if (selectedConnections && [selectedConnections count] > 0)
     {
-        var selectedIDs = [selectedObjects valueForKey:@"id"];
-
-        for (var i = 0; i < [connections count]; i++)
+        for (var i = 0; i < [selectedConnections count]; i++)
         {
-            var connection = [connections objectAtIndex:i];
+            var connection = [selectedConnections objectAtIndex:i];
             var sourceID = [connection valueForKey:@"sourceID"];
             var targetID = [connection valueForKey:@"targetID"];
 
-            if ([selectedIDs containsObject:sourceID] || [selectedIDs containsObject:targetID])
+            var sourceView = [self viewForElementWithID:sourceID];
+            var targetView = [self viewForElementWithID:targetID];
+
+            if (sourceView && targetView)
             {
-                var sourceView = [self viewForElementWithID:sourceID];
-                var targetView = [self viewForElementWithID:targetID];
+                var startPoint = [sourceView convertPoint:CGPointMake(CGRectGetMidX([sourceView bounds]), CGRectGetMidY([sourceView bounds])) toView:self];
+                var endPoint;
+                var connectionPoint = [connection valueForKey:@"atPoint"];
 
-                if (sourceView && targetView)
-                {
-                    var startPoint = [sourceView convertPoint:CGPointMake(CGRectGetMidX([sourceView bounds]), CGRectGetMidY([sourceView bounds])) toView:self];
-                    var endPoint;
-                    var connectionPoint = [connection valueForKey:@"atPoint"];
-
-                    if (connectionPoint) {
-                        endPoint = CGPointMake(connectionPoint.x, connectionPoint.y);
-                    } else {
-                        endPoint = [targetView convertPoint:CGPointMake(CGRectGetMidX([targetView bounds]), CGRectGetMidY([targetView bounds])) toView:self];
-                    }
-                    [self drawLinkFrom:startPoint to:endPoint color:[CPColor blueColor]];
+                if (connectionPoint) {
+                    endPoint = CGPointMake(connectionPoint.x, connectionPoint.y);
+                } else {
+                    endPoint = [targetView convertPoint:CGPointMake(CGRectGetMidX([targetView bounds]), CGRectGetMidY([targetView bounds])) toView:self];
                 }
+                [self drawLinkFrom:startPoint to:endPoint color:[CPColor blueColor]];
             }
         }
     }

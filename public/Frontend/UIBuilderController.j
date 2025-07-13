@@ -48,6 +48,37 @@
     return [self valueForKey:'id'] == [otherObject valueForKey:'id'];
 }
 
+- (id)initWithCoder:(CPCoder)aCoder
+{
+    self = [super initWithCoder:aCoder];
+    if (self)
+    {
+        var allKeys = [aCoder decodeObjectForKey:@"CPConservativeDictionaryKeys"];
+        if (allKeys)
+        {
+            for (var i = 0; i < [allKeys count]; i++)
+            {
+                var key = allKeys[i];
+                var value = [aCoder decodeObjectForKey:key];
+                [self setObject:value forKey:key];
+            }
+        }
+    }
+    return self;
+}
+
+- (void)encodeWithCoder:(CPCoder)aCoder
+{
+    [super encodeWithCoder:aCoder];
+    var allKeys = [self allKeys];
+    [aCoder encodeObject:allKeys forKey:@"CPConservativeDictionaryKeys"];
+    for (var i = 0; i < [allKeys count]; i++)
+    {
+        var key = allKeys[i];
+        [aCoder encodeObject:[self objectForKey:key] forKey:key];
+    }
+}
+
 @end
 
 
@@ -240,6 +271,27 @@
     }
 }
 
+- (void)_assignNewIDsToElement:(CPMutableDictionary)elementData
+{
+    [elementData setValue:@"id_" + _elementCounter++ forKey:@"id"];
+
+    var children = [elementData valueForKey:@"children"];
+    if (children)
+    {
+        var newChildren = [CPMutableArray array];
+        for (var i = 0; i < [children count]; i++)
+        {
+            var child = children[i];
+            // Deep copy child before modifying
+            var newChild = [CPKeyedUnarchiver unarchiveObjectWithData:[CPKeyedArchiver archivedDataWithRootObject:child]];
+            [newChild setValue:[elementData valueForKey:@"id"] forKey:@"parentID"];
+            [self _assignNewIDsToElement:newChild];
+            [newChildren addObject:newChild];
+        }
+        [elementData setValue:newChildren forKey:@"children"];
+    }
+}
+
 - (void)paste:(id)sender
 {
     var pboard = [CPPasteboard generalPasteboard];
@@ -251,18 +303,70 @@
         var pastedElements = [CPKeyedUnarchiver unarchiveObjectWithData:data];
         var newSelection = [CPMutableArray array];
 
+        // Determine the target container
+        var targetContainer = nil;
+        var selectedObjects = [_elementsController selectedObjects];
+        if ([selectedObjects count] > 0)
+        {
+            var firstSelected = selectedObjects[0];
+            var parentID = [firstSelected valueForKey:@"parentID"];
+            if (parentID)
+            {
+                // Find the parent container in the elements controller
+                var allElements = [_elementsController arrangedObjects];
+                for (var i = 0; i < [allElements count]; i++)
+                {
+                    if ([[allElements[i] valueForKey:@"id"] isEqualToString:parentID])
+                    {
+                        targetContainer = allElements[i];
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                // If the selected object has no parent, it must be a window
+                targetContainer = firstSelected;
+            }
+        }
+        else
+        {
+            // If no selection, find the first window
+            var allElements = [_elementsController arrangedObjects];
+            for (var i = 0; i < [allElements count]; i++)
+            {
+                if ([[allElements[i] valueForKey:@"type"] isEqualToString:@"window"])
+                {
+                    targetContainer = allElements[i];
+                    break;
+                }
+            }
+        }
+
         for (var i = 0; i < [pastedElements count]; i++)
         {
-            var elementData = pastedElements[i];
-            var archivedData = [CPKeyedArchiver archivedDataWithRootObject:elementData];
-            var newElement = [CPKeyedUnarchiver unarchiveObjectWithData:archivedData];
+            var newElement = [CPKeyedUnarchiver unarchiveObjectWithData:[CPKeyedArchiver archivedDataWithRootObject:pastedElements[i]]];
 
-            // Offset the new element and give it a new ID
             [newElement setValue:[newElement valueForKey:@"originX"] + 10 forKey:@"originX"];
             [newElement setValue:[newElement valueForKey:@"originY"] + 10 forKey:@"originY"];
-            [newElement setValue:@"id_" + _elementCounter++ forKey:@"id"];
+            
+            [self _assignNewIDsToElement:newElement];
+
+            if (targetContainer && [newElement valueForKey:@"type"] !== @"window")
+            {
+                [newElement setValue:[targetContainer valueForKey:@"id"] forKey:@"parentID"];
+                [[targetContainer mutableArrayValueForKey:@"children"] addObject:newElement];
+            }
+            else
+            {
+                [newElement removeObjectForKey:@"parentID"];
+            }
 
             [_elementsController addObject:newElement];
+            
+            if ([newElement valueForKey:@"children"])
+                [_elementsController addObjects:[newElement valueForKey:@"children"]];
+
             [newSelection addObject:newElement];
         }
         

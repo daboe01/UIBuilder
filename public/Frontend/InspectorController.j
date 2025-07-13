@@ -57,10 +57,26 @@
     // Bind the table's selection to the array controller's selection
     [_connectionsTableView bind:@"selectionIndexes" toObject:connectionsController withKeyPath:@"selectionIndexes" options:nil];
 
-    var scrollView = [[CPScrollView alloc] initWithFrame:[connectionsView bounds]];
+    var connectionsViewBounds = [connectionsView bounds];
+    var buttonBarHeight = 28;
+    var tableHeight = connectionsViewBounds.size.height - buttonBarHeight;
+
+    var scrollViewFrame = CGRectMake(0, 0, connectionsViewBounds.size.width, tableHeight);
+    var buttonBarFrame = CGRectMake(0, tableHeight, connectionsViewBounds.size.width, buttonBarHeight);
+
+    var scrollView = [[CPScrollView alloc] initWithFrame:scrollViewFrame];
     [scrollView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
     [scrollView setDocumentView:_connectionsTableView];
     [connectionsView addSubview:scrollView];
+
+    var buttonBar = [[CPView alloc] initWithFrame:buttonBarFrame];
+    [buttonBar setAutoresizingMask:CPViewWidthSizable | CPViewMinYMargin]; // Stick to bottom
+    [connectionsView addSubview:buttonBar];
+
+    var deleteButton = [CPButtonBar minusButton];
+    [deleteButton setAction:@selector(deleteSelectedConnection:)];
+    [deleteButton setTarget:self];
+    [buttonBar addSubview:deleteButton];
 
     // Replace panel's content view with the tab view
     [_panel setContentView:tabView];
@@ -112,6 +128,13 @@
 - (void)tabView:(CPTabView)aTabView didSelectTabViewItem:(CPTabViewItem)aTabViewItem
 {
     [self _updateConnectionVisibility];
+}
+
+- (void)deleteSelectedConnection:(id)sender
+{
+    var selectedObjects = [[_builderController connectionsController] selectedObjects];
+    if ([selectedObjects count] > 0)
+        [[_builderController connectionsController] removeObjects:selectedObjects];
 }
 
 - (void)updateInspector

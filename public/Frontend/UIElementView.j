@@ -793,7 +793,8 @@ var _windowChildrenObservationContext = 1094;
         CPHUDBackgroundWindowMask: true,
         CPTitledWindowMask: true,
         CPClosableWindowMask: true,
-        outlets: "delegate"
+        outlets: "delegate",
+        actions: "makeKeyAndOrderFront:, orderOut:"
     };
 }
 
@@ -1222,7 +1223,7 @@ var _windowChildrenObservationContext = 1094;
 
 + (CPDictionary)defaultValues
 {
-    return {value: 0.5, outlets: "target, delegate", actions: "takeFloatValueFrom:"};
+    return {value: 0.5, outlets: "target, delegate", actions: "takeFloatValueFrom:, takeIntegerValueFrom:"};
 }
 
 + (CPDictionary)propertyTypes

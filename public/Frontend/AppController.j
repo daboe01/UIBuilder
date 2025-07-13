@@ -204,6 +204,23 @@
         [CPBezierPath fillRect:fieldRect];
         [[CPColor blackColor] set];
         [CPBezierPath strokeRect:fieldRect];
+
+        // Draw an I-beam cursor
+        var ibeamX = CGRectGetMidX(fieldRect);
+        var ibeamY1 = CGRectGetMinY(fieldRect) + 3;
+        var ibeamY2 = CGRectGetMaxY(fieldRect) - 3;
+
+        var ibeamPath = [CPBezierPath bezierPath];
+        [ibeamPath moveToPoint:CGPointMake(ibeamX, ibeamY1)];
+        [ibeamPath lineToPoint:CGPointMake(ibeamX, ibeamY2)];
+        [ibeamPath moveToPoint:CGPointMake(ibeamX - 2, ibeamY1)];
+        [ibeamPath lineToPoint:CGPointMake(ibeamX + 2, ibeamY1)];
+        [ibeamPath moveToPoint:CGPointMake(ibeamX - 2, ibeamY2)];
+        [ibeamPath lineToPoint:CGPointMake(ibeamX + 2, ibeamY2)];
+        
+        [ibeamPath setLineWidth:0.5];
+        [[CPColor blackColor] set];
+        [ibeamPath stroke];
     }
     else
     {

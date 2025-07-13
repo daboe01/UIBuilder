@@ -57,14 +57,6 @@
     CPArrayController _connectionsController @accessors(property=connectionsController);
     CPMutableArray _connections;
     int _elementCounter; // To generate unique IDs
-
-    // For the connection popup
-    CPPanel _connectionPanel;
-    CPPopUpButton _outletsPopUp;
-    CPPopUpButton _actionsPopUp;
-    CPDictionary _pendingConnectionSource;
-    CPDictionary _pendingConnectionTarget;
-    CGPoint _pendingConnectionPoint;
 }
 
 + (Class)classForElementType:(CPString)elementType
@@ -402,7 +394,9 @@
     [newConnection setValue:outlet forKey:@"outlet"];
     [newConnection setValue:action forKey:@"action"];
     [newConnection setValue:@"connection_" + _elementCounter++ forKey:@"id"];
-    [newConnection setValue:{x: atPoint.x, y: atPoint.y} forKey:@"atPoint"];
+    
+    if (atPoint)
+        [newConnection setValue:{x: atPoint.x, y: atPoint.y} forKey:@"atPoint"];
 
     [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:self] removeConnection:newConnection];
     [[[CPApp keyWindow] undoManager] setActionName:@"Add Connection"];
@@ -423,28 +417,6 @@
     var currentConnections = [[_connectionsController content] mutableCopy];
     [currentConnections removeObject:connection];
     [_connectionsController setContent:currentConnections];
-}
-
-- (void)confirmConnection:(id)sender
-{
-    var selectedOutlet = [_outletsPopUp titleOfSelectedItem];
-    var selectedAction = [_actionsPopUp titleOfSelectedItem];
-
-    if (selectedOutlet && selectedAction)
-    {
-        [self addConnectionFrom:_pendingConnectionSource to:_pendingConnectionTarget atPoint:_pendingConnectionPoint outlet:selectedOutlet action:selectedAction];
-    }
-
-    [_connectionPanel orderOut:self];
-    _pendingConnectionSource = nil;
-    _pendingConnectionTarget = nil;
-}
-
-- (void)cancelConnection:(id)sender
-{
-    [_connectionPanel orderOut:self];
-    _pendingConnectionSource = nil;
-    _pendingConnectionTarget = nil;
 }
 
 #pragma mark -
@@ -511,81 +483,26 @@
     [self applyFrameChanges:changes withActionName:@"Resize"];
 }
 
-- (void)canvasView:(UICanvasView)aCanvas didConnectElement:(UIElementView)sourceElement toElement:(UIElementView)targetElement atPoint:(CGPoint)aPoint
+- (void)canvasView:(UICanvasView)aCanvas didConnectElement:(UIElementView)sourceElement toElement:(UIElementView)targetElement asTargetAction:(CPString)actionName
 {
-    console.log("UIBuilderController: didConnectElement delegate method called.");
-    _pendingConnectionSource = [sourceElement dataObject];
-    _pendingConnectionTarget = [targetElement dataObject];
-    _pendingConnectionPoint = aPoint;
+    var sourceData = [sourceElement dataObject];
+    var targetData = [targetElement dataObject];
 
-    // Outlets and actions are now handled in the connections tab, not as properties of the elements.
-    // For now, we'll provide some default options for demonstration.
-    var sourceOutlets = [CPArray arrayWithObject:@"value"]; // Example default outlet
-    var targetActions = [CPArray arrayWithObject:@"takeValueFromSender:"]; // Example default action
+    // For a target-action, the outlet is typically 'target'
+    var outletName = @"target";
 
-    console.log("Source outlets (default): ", sourceOutlets);
-    console.log("Target actions (default): ", targetActions);
+    [self addConnectionFrom:sourceData to:targetData atPoint:nil outlet:outletName action:actionName];
+}
 
-    if (!_connectionPanel)
-    {
-        console.log("Creating new connection panel.");
-        _connectionPanel = [[CPPanel alloc] initWithContentRect:CGRectMake(0, 0, 350, 170) styleMask:CPTitledWindowMask];
-        [_connectionPanel setTitle:@"New Connection"];
+- (void)canvasView:(UICanvasView)aCanvas didConnectElement:(UIElementView)sourceElement toElement:(UIElementView)targetElement asOutlet:(CPString)outletName
+{
+    var sourceData = [sourceElement dataObject];
+    var targetData = [targetElement dataObject];
 
-        var contentView = [_connectionPanel contentView];
+    // For a simple outlet connection, there is no action.
+    var actionName = nil;
 
-        var outletsLabel = [[CPTextField alloc] initWithFrame:CGRectMake(20, 110, 80, 20)];
-        [outletsLabel setStringValue:@"Outlet:"];
-        [outletsLabel setBezeled:NO];
-        [outletsLabel setDrawsBackground:NO];
-        [outletsLabel setEditable:NO];
-        [contentView addSubview:outletsLabel];
-
-        _outletsPopUp = [[CPPopUpButton alloc] initWithFrame:CGRectMake(100, 110, 230, 25)];
-        [contentView addSubview:_outletsPopUp];
-
-        var actionsLabel = [[CPTextField alloc] initWithFrame:CGRectMake(20, 70, 80, 20)];
-        [actionsLabel setStringValue:@"Action:"];
-        [actionsLabel setBezeled:NO];
-        [actionsLabel setDrawsBackground:NO];
-        [actionsLabel setEditable:NO];
-        [contentView addSubview:actionsLabel];
-
-        _actionsPopUp = [[CPPopUpButton alloc] initWithFrame:CGRectMake(100, 70, 230, 25)];
-        [contentView addSubview:_actionsPopUp];
-
-        var okButton = [[CPButton alloc] initWithFrame:CGRectMake(250, 20, 80, 24)];
-        [okButton setTitle:@"OK"];
-        [okButton setTarget:self];
-        [okButton setAction:@selector(confirmConnection:)];
-        [okButton setKeyEquivalent:@"\r"]; // Enter key
-        [contentView addSubview:okButton];
-
-        var cancelButton = [[CPButton alloc] initWithFrame:CGRectMake(160, 20, 80, 24)];
-        [cancelButton setTitle:@"Cancel"];
-        [cancelButton setTarget:self];
-        [cancelButton setAction:@selector(cancelConnection:)];
-        [cancelButton setKeyEquivalent:@"\e"]; // Escape key
-        [contentView addSubview:cancelButton];
-    }
-
-    // Populate popups
-    console.log("Populating popups.");
-    [_outletsPopUp removeAllItems];
-    for (var i=0; i<[sourceOutlets count]; i++) {
-        if (sourceOutlets[i] && [sourceOutlets[i] length] > 0)
-            [_outletsPopUp addItemWithTitle:sourceOutlets[i]];
-    }
-
-    [_actionsPopUp removeAllItems];
-    for (var i=0; i<[targetActions count]; i++) {
-        if (targetActions[i] && [targetActions[i] length] > 0)
-            [_actionsPopUp addItemWithTitle:targetActions[i]];
-    }
-
-    console.log("Ordering panel to front.");
-    [_connectionPanel center];
-    [_connectionPanel makeKeyAndOrderFront:self];
+    [self addConnectionFrom:sourceData to:targetData atPoint:nil outlet:outletName action:actionName];
 }
 
 - (void)changeValue:(id)newValue forObject:(id)dataObject

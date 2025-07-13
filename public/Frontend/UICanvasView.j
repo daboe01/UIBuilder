@@ -17,30 +17,35 @@ function treshold(value, limit)
     return value > 0 ? Math.min(value, limit) : Math.max(value, -limit);
 }
 
-@implementation UICanvasView : CPView
+@implementation UICanvasView : CPView <CPMenuDelegate>
 {
     // Data binding ivars
-    id               _dataObjectsContainer;
-    CPString         _dataObjectsKeyPath;
-    id               _selectionIndexesContainer;
-    CPString         _selectionIndexesKeyPath;
-    CPArray          _oldDataObjects;
+    id                  _dataObjectsContainer;
+    CPString            _dataObjectsKeyPath;
+    id                  _selectionIndexesContainer;
+    CPString            _selectionIndexesKeyPath;
+    CPArray             _oldDataObjects;
 
     // Connections ivars
-    id               _connectionsContainer;
-    CPString         _connectionsKeyPath;
-    CPArray          _oldConnections;
-    id               _selectedConnectionsContainer;
-    CPString         _selectedConnectionsKeyPath;
+    id                  _connectionsContainer;
+    CPString            _connectionsKeyPath;
+    CPArray             _oldConnections;
+    id                  _selectedConnectionsContainer;
+    CPString            _selectedConnectionsKeyPath;
 
     // Rubber-band selection ivars
-    CGPoint          _rubberStart;
-    CGPoint          _rubberEnd;
-    BOOL             _isRubbing;
+    CGPoint             _rubberStart;
+    CGPoint             _rubberEnd;
+    BOOL                _isRubbing;
     
-    ConnectionView   _connectionView;
+    ConnectionView      _connectionView;
     
-    id               _delegate;
+    id                  _delegate;
+
+    // Connection Menu ivars
+    UIElementView       _connectionSource;
+    UIElementView       _connectionTarget;
+    BOOL                _connectionMade;
 }
 
 -(BOOL)acceptsFirstMouse:(CPEvent)aEvent
@@ -606,6 +611,11 @@ var _selectedConnectionsObservationContext = 1095;
         return [[[CPPasteboard generalPasteboard] types] containsObject:UIBuilderElementPboardType];
     }
 
+    if (action == @selector(createTargetActionConnection:) || action == @selector(createOutletConnection:))
+    {
+        return YES;
+    }
+
     var undoManager = [[self window] undoManager];
 
     if (action == @selector(undo:))
@@ -779,6 +789,100 @@ var _selectedConnectionsObservationContext = 1095;
     if (_delegate && [_delegate respondsToSelector:@selector(canvasView:didConnectElement:toElement:atPoint:)]) {
         [_delegate canvasView:self didConnectElement:sourceElement toElement:targetElement atPoint:aPoint];
     }
+}
+
+#pragma mark - Connection Menu
+
+- (void)showConnectionMenuForSource:(UIElementView)sourceView target:(UIElementView)targetView at:(CGPoint)aPoint
+{
+    _connectionSource = sourceView;
+    _connectionTarget = targetView;
+    _connectionMade = NO;
+
+    var menu = [[CPMenu alloc] initWithTitle:@"Connection Menu"];
+    [menu setDelegate:self];
+
+    // 1. Add Target's Actions
+    var targetActions = [[_connectionTarget dataObject] valueForKey:@"actions"];
+    if (targetActions && [targetActions length] > 0)
+    {
+        var actionsArray = [targetActions componentsSeparatedByString:@", "];
+        for (var i = 0; i < [actionsArray count]; i++)
+        {
+            var actionName = actionsArray[i];
+            var menuItem = [[CPMenuItem alloc] initWithTitle:actionName action:@selector(createTargetActionConnection:) keyEquivalent:@""];
+            [menu addItem:menuItem];
+        }
+    }
+
+    // 2. Add Separator
+    if ([menu numberOfItems] > 0)
+        [menu addItem:[CPMenuItem separatorItem]];
+
+    // 3. Add Source's Outlets
+    var sourceOutlets = [[_connectionSource dataObject] valueForKey:@"outlets"];
+    if (sourceOutlets && [sourceOutlets length] > 0)
+    {
+        var outletsArray = [sourceOutlets componentsSeparatedByString:@", "];
+        for (var i = 0; i < [outletsArray count]; i++)
+        {
+            var outletName = outletsArray[i];
+            if (outletName === @"target") continue; // Skip 'target' outlet as requested
+            var menuItem = [[CPMenuItem alloc] initWithTitle:outletName action:@selector(createOutletConnection:) keyEquivalent:@""];
+            [menu addItem:menuItem];
+        }
+    }
+
+    if ([menu numberOfItems] > 0)
+        [CPMenu popUpContextMenu:menu withEvent:[CPApp currentEvent] forView:self];
+    else
+        [self menuDidEndTracking:menu]; // No items, so clean up immediately
+}
+
+- (void)createTargetActionConnection:(CPMenuItem)sender
+{
+    var actionName = [sender title];
+    if (_delegate && [_delegate respondsToSelector:@selector(canvasView:didConnectElement:toElement:asTargetAction:)])
+    {
+        _connectionMade = YES;
+        [self clearConnection];
+        if (_connectionTarget)
+            [_connectionTarget setAsDropTarget:NO];
+
+        [_delegate canvasView:self didConnectElement:_connectionSource toElement:_connectionTarget asTargetAction:actionName];
+    }
+}
+
+- (void)createOutletConnection:(CPMenuItem)sender
+{
+    var outletName = [sender title];
+    if (_delegate && [_delegate respondsToSelector:@selector(canvasView:didConnectElement:toElement:asOutlet:)])
+    {
+        _connectionMade = YES;
+        [self clearConnection];
+        if (_connectionTarget)
+            [_connectionTarget setAsDropTarget:NO];
+
+        [_delegate canvasView:self didConnectElement:_connectionSource toElement:_connectionTarget asOutlet:outletName];
+    }
+}
+
+- (void)menuDidEndTracking:(CPMenu)aMenu
+{
+    // This delegate method is called after a menu item is selected OR the menu is cancelled.
+    if (!_connectionMade)
+    {
+        [self clearConnection];
+        if (_connectionTarget)
+            [_connectionTarget setAsDropTarget:NO];
+    }
+
+    // Reset state
+    _connectionSource = nil;
+    _connectionTarget = nil;
+    _connectionMade = NO;
+
+    [self setNeedsDisplay:YES];
 }
 
 @end

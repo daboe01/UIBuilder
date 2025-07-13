@@ -2,7 +2,7 @@
 
 @class UIBuilderController;
 
-@implementation InspectorController : CPViewController
+@implementation InspectorController : CPViewController <CPTableViewDataSource, CPTabViewDelegate>
 {
     UIBuilderController _builderController @accessors(property=builderController);
     CPPanel             _panel @accessors(property=panel);
@@ -16,6 +16,7 @@
     // Create Tab View
     var tabView = [[CPTabView alloc] initWithFrame:[[_panel contentView] bounds]];
     [tabView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+    [tabView setDelegate:self];
 
     // Properties Tab
     var propertiesView = [[CPView alloc] initWithFrame:CGRectMakeZero()];
@@ -75,26 +76,60 @@
 
 - (void)observeValueForKeyPath:(CPString)keyPath ofObject:(id)object change:(CPDictionary)change context:(id)context
 {
+    // We only observe selection changes now.
     if (keyPath === @"elementsController.selectionIndexes")
     {
         [self updateInspector];
+        [self _updateConnectionVisibility];
+    }
+}
 
-        var selectedObjects = [[_builderController elementsController] selectedObjects];
-        var connectionsController = [_builderController connectionsController];
+- (void)_updateConnectionVisibility
+{
+    var tabView = [[self panel] contentView];
+    if (![tabView isKindOfClass:[CPTabView class]])
+        return;
 
-        if ([selectedObjects count] === 1)
+    var selectedTabViewItem = [tabView selectedTabViewItem];
+    var connectionsController = [_builderController connectionsController];
+    var selectedObjects = [[_builderController elementsController] selectedObjects];
+
+    // 1. Filter the connections based on the selected UI element.
+    if ([selectedObjects count] === 1)
+    {
+        var selectedID = [[selectedObjects objectAtIndex:0] valueForKey:@"id"];
+        var predicate = [CPPredicate predicateWithFormat:@"sourceID == %@ OR targetID == %@", selectedID, selectedID];
+        [connectionsController setFilterPredicate:predicate];
+    }
+    else
+    {
+        [connectionsController setFilterPredicate:[CPPredicate predicateWithFormat:@"FALSEPREDICATE"]];
+    }
+
+    // 2. Set the selection based on the active tab.
+    if (selectedTabViewItem && [selectedTabViewItem identifier] === @"connections")
+    {
+        var allVisibleConnections = [connectionsController arrangedObjects];
+        if ([allVisibleConnections count] > 0)
         {
-            var selectedID = [[selectedObjects objectAtIndex:0] valueForKey:@"id"];
-            var predicate = [CPPredicate predicateWithFormat:@"sourceID == %@ OR targetID == %@", selectedID, selectedID];
-            [connectionsController setFilterPredicate:predicate];
+            var allIndexes = [CPIndexSet indexSetWithIndexesInRange:CPMakeRange(0, [allVisibleConnections count])];
+            [connectionsController setSelectionIndexes:allIndexes];
         }
         else
         {
-            // If nothing or more than one thing is selected, show no connections.
-            // A predicate that always returns false is a good way to do this.
-            [connectionsController setFilterPredicate:[CPPredicate predicateWithFormat:@"FALSEPREDICATE"]];
+            [connectionsController setSelectionIndexes:[CPIndexSet indexSet]];
         }
     }
+    else
+    {
+        // If any other tab is active, clear the selection to hide connections.
+        [connectionsController setSelectionIndexes:[CPIndexSet indexSet]];
+    }
+}
+
+- (void)tabView:(CPTabView)aTabView didSelectTabViewItem:(CPTabViewItem)aTabViewItem
+{
+    [self _updateConnectionVisibility];
 }
 
 - (void)updateInspector

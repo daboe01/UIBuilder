@@ -521,16 +521,19 @@ var kUIElementBottomRightHandle = 8;
             var localPoint = [targetView convertPoint:mouseLoc fromView:canvas];
             if ([targetView canAcceptConnectionAtPoint:localPoint])
             {
-                [canvas elementDidConnect:self to:targetView atPoint:mouseLoc];
+                [canvas showConnectionMenuForSource:self target:targetView at:mouseLoc];
             }
         }
 
-        [[self canvas] clearConnection];
+        // The connection line should not be cleared immediately, but after the menu is handled.
+        // We also don't want to clear the drop target highlight yet.
+        // [[self canvas] clearConnection];
+        
         var canvasSubviews = [canvas subviews];
 
         for (var k = 0; k < [canvasSubviews count]; k++) {
             var subview = [canvasSubviews objectAtIndex:k];
-            if ([subview isKindOfClass:[UIElementView class]]) {
+            if ([subview isKindOfClass:[UIElementView class]] && subview != targetView) {
                 [subview setAsDropTarget:NO];
             }
         }
@@ -833,6 +836,7 @@ var _windowChildrenObservationContext = 1094;
     [[self canvas] deselectViews];
 
     _rubberStart = localPoint;
+    _rubberEnd = _rubberStart;
     _isRubbing = YES;
     [CPApp setTarget:self selector:@selector(_dragOpenSpaceWithEvent:) forNextEventMatchingMask:CPLeftMouseDraggedMask | CPLeftMouseUpMask untilDate:nil inMode:nil dequeue:YES];
 }
@@ -1289,7 +1293,7 @@ var _windowChildrenObservationContext = 1094;
 
 + (CPDictionary)defaultValues
 {
-    return {value: "Text Field"};
+    return {value: "Text Field", outlets: "target, delegate", actions: "takeStringValueFrom:, takeIntegerValueFrom:"};
 }
 
 + (CPDictionary)propertyTypes

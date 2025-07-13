@@ -37,11 +37,12 @@
     [_connectionsTableView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
 
     var columns = [
-        {identifier: "sourceID", title: "Source", width: 100},
         {identifier: "outlet", title: "Outlet", width: 80},
-        {identifier: "targetID", title: "Target", width: 100},
         {identifier: "action", title: "Action", width: 120}
     ];
+
+    // Keep a reference to the array controller
+    var connectionsController = [_builderController connectionsController];
 
     for (var i = 0; i < [columns count]; i++) {
         var colInfo = columns[i];
@@ -49,11 +50,12 @@
         [[column headerView] setStringValue:colInfo.title];
         [column setWidth:colInfo.width];
         [_connectionsTableView addTableColumn:column];
+        // Bind the value of each column to the corresponding key path on the arranged objects
+        [column bind:CPValueBinding toObject:connectionsController withKeyPath:("arrangedObjects." + colInfo.identifier) options:nil];
     }
 
-    [_connectionsTableView bind:@"content" toObject:[_builderController connectionsController] withKeyPath:@"arrangedObjects" options:nil];
-    [_connectionsTableView bind:@"selectionIndexes" toObject:[_builderController connectionsController] withKeyPath:@"selectionIndexes" options:nil];
-    [_connectionsTableView setDataSource:self];
+    // Bind the table's selection to the array controller's selection
+    [_connectionsTableView bind:@"selectionIndexes" toObject:connectionsController withKeyPath:@"selectionIndexes" options:nil];
 
     var scrollView = [[CPScrollView alloc] initWithFrame:[connectionsView bounds]];
     [scrollView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];

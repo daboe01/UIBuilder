@@ -107,8 +107,6 @@
 
     // Set default properties based on type
     [newElementData setValue:elementType forKey:@"type"];
-    [newElementData setValue:aPoint.x forKey:@"originX"];
-    [newElementData setValue:aPoint.y forKey:@"originY"];
     [newElementData setValue:@"id_" + _elementCounter++ forKey:@"id"];
 
     // Set default values from the view class
@@ -133,11 +131,21 @@
         [newElementData setValue:22 forKey:@"height"];
     }
 
+    // Calculate centered position
+    var elementWidth = [newElementData valueForKey:@"width"];
+    var elementHeight = [newElementData valueForKey:@"height"];
+    var centeredX = aPoint.x - (elementWidth / 2);
+    var centeredY = aPoint.y - (elementHeight / 2);
+    [newElementData setValue:centeredX forKey:@"originX"];
+    [newElementData setValue:centeredY forKey:@"originY"];
+
     if (containerData && elementType !== "window")
     {
-        // Convert point to be relative to the container
-        var relativeX = aPoint.x - [containerData valueForKey:@"originX"];
-        var relativeY = aPoint.y - [containerData valueForKey:@"originY"];
+        // Convert point to be relative to the container and center the element
+        var elementWidth = [newElementData valueForKey:@"width"];
+        var elementHeight = [newElementData valueForKey:@"height"];
+        var relativeX = (aPoint.x - [containerData valueForKey:@"originX"]) - (elementWidth / 2);
+        var relativeY = (aPoint.y - [containerData valueForKey:@"originY"]) - (elementHeight / 2);
         [newElementData setValue:relativeX forKey:@"originX"];
         [newElementData setValue:relativeY forKey:@"originY"];
 

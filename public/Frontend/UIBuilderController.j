@@ -159,7 +159,6 @@
     [[[CPApp keyWindow] undoManager] setActionName:@"Add Element"];
     [_elementsController addObject:newElementData];
 
-    document.title = [[_elementsController arrangedObjects] count];
     [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
 }
 

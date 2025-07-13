@@ -327,6 +327,69 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (void)drawRect:(CPRect)rect
 {
+    // === START: Infographic Drawing ===
+
+    var bounds = [self bounds];
+
+    // 1. Define text attributes for the infographic
+    var titleFont = [CPFont fontWithName:@"Helvetica-Bold" size:36];
+    var subtitleFont = [CPFont fontWithName:@"Helvetica" size:18];
+    var featureFont = [CPFont fontWithName:@"Helvetica" size:14];
+    var watermarkColor = [CPColor colorWithCalibratedWhite:0.85 alpha:1.0]; // A light gray for the watermark effect
+
+    var titleAttributes = @{
+        CPFontAttributeName: titleFont,
+        CPForegroundColorAttributeName: watermarkColor
+    };
+    var subtitleAttributes = @{
+        CPFontAttributeName: subtitleFont,
+        CPForegroundColorAttributeName: watermarkColor
+    };
+    var featureAttributes = @{
+        CPFontAttributeName: featureFont,
+        CPForegroundColorAttributeName: watermarkColor
+    };
+
+    // 2. Prepare the text content
+    var title = @"EspressoUI";
+    var subtitle = @"Desktop-Quality Applications in the Browser with Cappuccino";
+    var features = [
+        @"• Drag-and-Drop UI Creation",
+        @"• Direct Manipulation: Move & Resize (Keyboard / Mouse)",
+        @"• Undo/Redo & Keyboard Navigation",
+        @"• Target-Action & Outlet Connections -> Control-Drag",
+        @"• Context sensitive inspector panel",
+        @"• Run the 'real thing' in a separate native window"
+
+    ];
+
+    // 3. Calculate positions and draw the text, centering it on the canvas
+    var titleSize = [title sizeWithAttributes:titleAttributes];
+    var subtitleSize = [subtitle sizeWithAttributes:subtitleAttributes];
+    var totalHeight = titleSize.height + subtitleSize.height + ([features count] * 20) + 40; // Approximate total height
+    var currentY = (bounds.size.height - totalHeight) / 2.0;
+
+    // Draw Title
+    var titlePoint = CGPointMake((bounds.size.width - titleSize.width) / 2.0, currentY);
+    [title drawAtPoint:titlePoint withAttributes:titleAttributes];
+    currentY += titleSize.height + 10;
+
+    // Draw Subtitle
+    var subtitlePoint = CGPointMake((bounds.size.width - subtitleSize.width) / 2.0, currentY);
+    [subtitle drawAtPoint:subtitlePoint withAttributes:subtitleAttributes];
+    currentY += subtitleSize.height + 30;
+
+    // Draw Feature List
+    for (var i = 0; i < [features count]; i++) {
+        var feature = features[i];
+        var featureSize = [feature sizeWithAttributes:featureAttributes];
+        var featurePoint = CGPointMake((bounds.size.width - featureSize.width) / 2.0, currentY);
+        [feature drawAtPoint:featurePoint withAttributes:featureAttributes];
+        currentY += featureSize.height + 5;
+    }
+
+    // === END: Infographic Drawing ===
+
     // The background is drawn by the window. We only draw the rubber-band.
     if (_isRubbing)
     {

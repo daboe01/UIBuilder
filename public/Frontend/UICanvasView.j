@@ -494,7 +494,6 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (void)drawConnectionFrom:(CGPoint)startPoint to:(CGPoint)endPoint
 {
-    console.log("UICanvasView: drawConnectionFrom:to: - Drawing live connection from ", startPoint, " to ", endPoint);
     [_connectionView setStartPoint:startPoint];
     [_connectionView setEndPoint:endPoint];
     [_connectionView setHidden:NO]; // Ensure it's visible when drawing
@@ -536,12 +535,11 @@ var _selectedConnectionsObservationContext = 1095;
                         return deepestView;
                 }
                 // If not a container, or no deeper view found, return this view
-                console.log("UICanvasView: _findDeepestUIElementViewAtPoint:inView: - Found view: ", subview, " at point: ", aPoint);
                 return subview;
             }
         }
     }
-    console.log("UICanvasView: _findDeepestUIElementViewAtPoint:inView: - No UIElementView found at point: ", aPoint);
+
     return nil;
 }
 

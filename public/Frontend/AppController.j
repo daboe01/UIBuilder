@@ -202,11 +202,8 @@
 
     // 5. Create the main menu
     var mainMenuBar = [[CPMenu alloc] initWithTitle:@"MainMenu"];
-    var appMenuItem = [[CPMenuItem alloc] initWithTitle:@"UIBuilder" action:nil keyEquivalent:@""];
     var editMenuItem = [[CPMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
 
-    var appMenu = [[CPMenu alloc] initWithTitle:@"UIBuilder"];
-    [appMenu addItemWithTitle:@"Quit" action:@selector(terminate:) keyEquivalent:@"q"];
 
     var editMenu = [[CPMenu alloc] initWithTitle:@"Edit"];
     [editMenu addItemWithTitle:@"Undo" action:@selector(undo:) keyEquivalent:@"z"];
@@ -217,7 +214,6 @@
     [editMenu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
     [editMenu addItemWithTitle:@"Delete" action:@selector(delete:) keyEquivalent:@""];
 
-    [appMenuItem setSubmenu:appMenu];
     [editMenuItem setSubmenu:editMenu];
 
     var fileMenuItem = [[CPMenuItem alloc] initWithTitle:@"File" action:nil keyEquivalent:@""];
@@ -226,7 +222,6 @@
     [fileMenuItem setSubmenu:fileMenu];
     [mainMenuBar addItem:fileMenuItem];
 
-    [mainMenuBar addItem:appMenuItem];
     [mainMenuBar addItem:editMenuItem];
 
     [CPApp setMainMenu:mainMenuBar];

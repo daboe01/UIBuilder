@@ -2,7 +2,7 @@
 
 @class UIBuilderController;
 
-@implementation InspectorController : CPViewController <CPTableViewDataSource, CPTabViewDelegate>
+@implementation InspectorController : CPViewController
 {
     UIBuilderController _builderController @accessors(property=builderController);
     CPPanel             _panel @accessors(property=panel);

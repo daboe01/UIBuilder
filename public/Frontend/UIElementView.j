@@ -388,7 +388,6 @@ var kUIElementBottomRightHandle = 8;
 
 - (void)mouseDragged:(CPEvent)theEvent
 {
-    console.log("UIElementView: mouseDragged - Event received: ", theEvent.type, " modifierFlags: ", [theEvent modifierFlags]);
     var canvas = [self canvas];
     var mouseLoc = [canvas convertPoint:[theEvent locationInWindow] fromView:nil];
 
@@ -507,7 +506,6 @@ var kUIElementBottomRightHandle = 8;
 
 - (void)mouseUp:(CPEvent)theEvent
 {
-    console.log("UIElementView: mouseUp - Event received: ", theEvent.type, " modifierFlags: ", [theEvent modifierFlags]);
     var canvas = [self canvas];
     var mouseLoc = [canvas convertPoint:[theEvent locationInWindow] fromView:nil];
 
@@ -1131,7 +1129,6 @@ var _windowChildrenObservationContext = 1094;
     {
         var elementID = [[self dataObject] valueForKey:@"id"];
         [aMap setObject:theNewWindow forKey:elementID];
-        console.log(" - Mapped ID: " + elementID + " to native element: ", theNewWindow);
     }
 
     var contentView = [theNewWindow contentView];
@@ -1210,7 +1207,6 @@ var _windowChildrenObservationContext = 1094;
     {
         var elementID = [[self dataObject] valueForKey:@"id"];
         [aMap setObject:button forKey:elementID];
-        console.log(" - Mapped ID: " + elementID + " to native element: ", button);
     }
 
     return button;
@@ -1277,7 +1273,6 @@ var _windowChildrenObservationContext = 1094;
     {
         var elementID = [[self dataObject] valueForKey:@"id"];
         [aMap setObject:slider forKey:elementID];
-        console.log(" - Mapped ID: " + elementID + " to native element: ", slider);
     }
 
     return slider;
@@ -1341,7 +1336,6 @@ var _windowChildrenObservationContext = 1094;
     {
         var elementID = [[self dataObject] valueForKey:@"id"];
         [aMap setObject:textField forKey:elementID];
-        console.log(" - Mapped ID: " + elementID + " to native element: ", textField);
     }
 
     return textField;

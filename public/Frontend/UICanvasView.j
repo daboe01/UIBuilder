@@ -351,15 +351,16 @@ var _selectedConnectionsObservationContext = 1095;
     };
 
     // 2. Prepare the text content
-    var title = @"EspressoUI";
-    var subtitle = @"Desktop-Quality Applications in the Browser with Cappuccino";
+    var title = @"Cappuccino JS";
+    var subtitle = @"Desktop-Quality Applications in the Browser";
     var features = [
         @"• Drag-and-Drop UI Creation",
         @"• Direct Manipulation: Move & Resize (Keyboard / Mouse)",
         @"• Undo/Redo & Keyboard Navigation",
-        @"• Target-Action & Outlet Connections -> Control-Drag",
+        @"• Control-Draggin  -> Target-Action & Outlet Connections",
         @"• Context sensitive inspector panel",
-        @"• Run the 'real thing' in a separate native window"
+        @"• Run the 'real thing' in a separate native window",
+        @"• Source: https://github.com/daboe01/UIBuilder"
 
     ];
 

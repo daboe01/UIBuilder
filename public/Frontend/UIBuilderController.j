@@ -92,11 +92,7 @@
 
 + (Class)classForElementType:(CPString)elementType
 {
-    if (elementType === "window") return UIWindowView;
-    if (elementType === "button") return UIButtonView;
-    if (elementType === "slider") return UISliderView;
-    if (elementType === "textfield") return UITextFieldView;
-    return UIElementView;
+    return [[UIElementView classMap] objectForKey:elementType] || UIElementView;
 }
 
 - (id)init
@@ -132,6 +128,7 @@
 
 - (void)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint
 {
+    console.log("UIBuilderController: addNewElementOfType:", elementType, "atPoint:", aPoint);
     var newElementData = [CPConservativeDictionary dictionary];
     var containerData = [self _containerDataAtPoint:aPoint];
     var viewClass = [UIBuilderController classForElementType:elementType];
@@ -172,6 +169,7 @@
 
     if (containerData && elementType !== "window")
     {
+        console.log("-> Adding as child to container:", [containerData valueForKey:@"id"]);
         // Convert point to be relative to the container and center the element
         var elementWidth = [newElementData valueForKey:@"width"];
         var elementHeight = [newElementData valueForKey:@"height"];
@@ -185,12 +183,13 @@
         [[containerData mutableArrayValueForKey:@"children"] addObject:newElementData];
     }
 
-    // Add to the main controller regardless, so selection works.
+    // Add to the main controller regardless, so selection and KVO works for all objects.
     [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] removeObject:newElementData];
     [[[CPApp keyWindow] undoManager] setActionName:@"Add Element"];
     [_elementsController addObject:newElementData];
 
     [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
+    console.log("-> Finished addNewElementOfType. New element data:", newElementData);
 }
 
 - (void)removeSelectedElementsWithActionName:(CPString)actionName

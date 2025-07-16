@@ -10,30 +10,10 @@
 //
 //
 
-@import "UIBuilderConstants.j";
+@import "UIBuilderConstants.j"
 
-// --- Property Types ---
-UIBString = "UIBString";
-UIBNumber = "UIBNumber";
-UIBBoolean = "UIBBoolean";
+var _classMap = [CPMutableDictionary dictionary];
 
-// --- Constants for Resizing ---
-var kUIElementHandleSize = 8.0;
-var kUIElementNoHandle = 0;
-var kUIElementTopLeftHandle = 1;
-var kUIElementTopMiddleHandle = 2;
-var kUIElementTopRightHandle = 3;
-var kUIElementMiddleLeftHandle = 4;
-var kUIElementMiddleRightHandle = 5;
-var kUIElementBottomLeftHandle = 6;
-var kUIElementBottomMiddleHandle = 7;
-var kUIElementBottomRightHandle = 8;
-
-
-@class UIWindowView
-@class UIButtonView
-@class UISliderView
-@class UITextFieldView;
 
 @implementation UIElementView : CPView
 {
@@ -52,6 +32,22 @@ var kUIElementBottomRightHandle = 8;
 #pragma mark -
 #pragma mark *** Class Methods ***
 
++ (void)initialize
+{
+    if (self === [UIElementView class])
+    {
+        _classMap = [CPMutableDictionary dictionary];
+    }
+}
+
++ (void)registerViewClass:(Class)viewClass forElementType:(CPString)elementType
+{
+    if (!_classMap)
+        [self initialize];
+
+    [_classMap setObject:viewClass forKey:elementType];
+}
+
 + (CPArray)persistentProperties
 {
     return ["value"];
@@ -67,16 +63,21 @@ var kUIElementBottomRightHandle = 8;
     return [CPDictionary dictionaryWithObjects:[UIBString] forKeys:["value"]];
 }
 
++ (CPMutableDictionary)classMap
+{
+    return _classMap;
+}
+
 - (id)initWithFrame:(CGRect)frame
 {
     self = [super initWithFrame:frame];
     if (self)
     {
+        // console.log("UIElementView initWithFrame: for", [self class], "- self.window:", [self window]);
         _stringAttributes = [[CPMutableDictionary alloc] init];
         [_stringAttributes setObject:[CPFont boldSystemFontOfSize:12] forKey:CPFontAttributeName];
         [_stringAttributes setObject:[CPColor blackColor] forKey:CPForegroundColorAttributeName];
 
-        
         _activeHandle = kUIElementNoHandle;
 
         if ([self frame].size.width < 50 || [self frame].size.height < 20)
@@ -84,15 +85,40 @@ var kUIElementBottomRightHandle = 8;
 
         [self setNeedsDisplay:YES];
 
-        _trackingArea = [[CPTrackingArea alloc] initWithRect:CGRectMakeZero()
-                                                    options:CPTrackingMouseMoved | CPTrackingActiveInKeyWindow | CPTrackingInVisibleRect | CPTrackingMouseEnteredAndExited
-                                                      owner:self
-                                                   userInfo:nil];
-        [self addTrackingArea:_trackingArea];
         _isContainer = NO;
         _isConnecting = NO;
     }
     return self;
+}
+
+- (void)viewDidMoveToWindow
+{
+    [super viewDidMoveToWindow];
+    [self setupTrackingArea];
+}
+
+- (void)setupTrackingArea
+{
+    console.log("UIElementView setupTrackingArea: for", [self class], "- self.window:", [self window]);
+    if ([self window])
+    {
+        if (_trackingArea)
+        {
+            [self removeTrackingArea:_trackingArea];
+        }
+        _trackingArea = [[CPTrackingArea alloc] initWithRect:[self bounds]
+                                                     options:(CPTrackingMouseMoved | CPTrackingActiveInKeyWindow | CPTrackingInVisibleRect | CPTrackingMouseEnteredAndExited)
+                                                       owner:self
+                                                    userInfo:nil];
+        [self addTrackingArea:_trackingArea];
+        console.log("  - Tracking area added/updated.");
+    }
+    else if (_trackingArea)
+    {
+        [self removeTrackingArea:_trackingArea];
+        _trackingArea = nil;
+        console.log("  - Tracking area removed.");
+    }
 }
 
 - (void)dealloc
@@ -149,7 +175,7 @@ var kUIElementBottomRightHandle = 8;
     // When the view is removed from its superview, we no longer need to track
     // mouse events within its bounds.
     [self removeTrackingArea:_trackingArea];
-    
+
     // It's crucial to call the superclass's implementation at the end.
     [super removeFromSuperview];
 }
@@ -170,7 +196,7 @@ var kUIElementBottomRightHandle = 8;
         var frame = [self frame];
         frame.origin.x = aFloat;
         [self setFrame:frame];
-        
+
         // Notify the superview (the canvas) that it might need to redraw
         // if anything depends on this view's position.
         [[self superview] setNeedsDisplay:YES];
@@ -469,9 +495,9 @@ var kUIElementBottomRightHandle = 8;
                 frame.size.height += deltaY;
             }
         }
-        
+
         [self setFrame:frame];
-        
+
         _lastMouseLoc = mouseLoc;
         [canvas setNeedsDisplay:YES];
     }
@@ -530,7 +556,7 @@ var kUIElementBottomRightHandle = 8;
         {
             [canvas clearConnection];
         }
-        
+
         var canvasSubviews = [canvas subviews];
 
         for (var k = 0; k < [canvasSubviews count]; k++) {
@@ -604,9 +630,9 @@ var kUIElementBottomRightHandle = 8;
                     frame.size.height += deltaY;
                 }
             }
-            
+
             [self setFrame:frame];
-            
+
             _lastMouseLoc = mouseLoc;
             [canvas setNeedsDisplay:YES];
             [CPApp setTarget:self selector:@selector(_resizeWithEvent:) forNextEventMatchingMask:CPLeftMouseDraggedMask | CPLeftMouseUpMask untilDate:nil inMode:nil dequeue:YES];
@@ -720,7 +746,7 @@ var kUIElementBottomRightHandle = 8;
 {
     var localPoint = [self convertPoint:[theEvent locationInWindow] fromView:nil];
     var handle = [self handleAtPoint:localPoint];
-    
+
     if (handle != kUIElementNoHandle) {
         // In a full implementation, you could return a specific two-headed arrow cursor
         // based on the handle. For now, we use a generic one.
@@ -758,592 +784,3 @@ var kUIElementBottomRightHandle = 8;
 
 @end
 
-
-#pragma mark -
-#pragma mark *** UI Element Subclasses ***
-
-// =================================================================================================
-// UIWindowView
-// A skeleton that looks like a window, and can act as a drop target.
-// =================================================================================================
-
-var _windowChildrenObservationContext = 1094;
-
-@implementation UIWindowView : UIElementView
-{
-    CGPoint          _rubberStart;
-    CGPoint          _rubberEnd;
-    BOOL             _isRubbing;
-}
-
-+ (CPDictionary)propertyTypes
-{
-    var types = [super propertyTypes];
-    [types setObject:UIBBoolean forKey:@"CPHUDBackgroundWindowMask"];
-    [types setObject:UIBBoolean forKey:@"CPTitledWindowMask"];
-    [types setObject:UIBBoolean forKey:@"CPClosableWindowMask"];
-    return types;
-}
-
-+ (CPArray)persistentProperties
-{
-    return [super persistentProperties].concat(["CPHUDBackgroundWindowMask", "CPTitledWindowMask", "CPClosableWindowMask"]);
-}
-
-+ (CPDictionary)defaultValues
-{
-    return {
-        value: "Untitled Window",
-        CPHUDBackgroundWindowMask: true,
-        CPTitledWindowMask: true,
-        CPClosableWindowMask: true,
-        outlets: "delegate",
-        actions: "makeKeyAndOrderFront:, orderOut:"
-    };
-}
-
-- (void)drawRect:(CGRect)rect
-{
-    [super drawRect:rect];
-
-    if (_isRubbing)
-    {
-        var rubber = CGRectUnion(CGRectMake(_rubberStart.x, _rubberStart.y, 0.1, 0.1), CGRectMake(_rubberEnd.x, _rubberEnd.y, 0.1, 0.1));
-        [[[[CPColor alternateSelectedControlColor] colorWithAlphaComponent:0.2] setFill]];
-        [CPBezierPath fillRect:rubber];
-        [[CPColor alternateSelectedControlColor] setStroke];
-        [CPBezierPath setDefaultLineWidth:1.0];
-        [CPBezierPath strokeRect:rubber];
-    }
-}
-
-- (void)mouseDown:(CPEvent)theEvent
-{
-    var localPoint = [self convertPoint:[theEvent locationInWindow] fromView:nil];
-    var titleBarHeight = 30.0;
-
-    // 1. Check for resize handle click first.
-    if ([self handleAtPoint:localPoint] != kUIElementNoHandle) {
-        [super mouseDown:theEvent];
-        return;
-    }
-
-    // 2. Check if the click is within the title bar area.
-    if (localPoint.y <= titleBarHeight) {
-        // Click is in the title bar. Allow the superclass to handle moving the window.
-        [super mouseDown:theEvent];
-        return;
-    }
-
-    // On a click into the window's content area, deselect all elements.
-    [[self canvas] deselectViews];
-
-    _rubberStart = localPoint;
-    _rubberEnd = _rubberStart;
-    _isRubbing = YES;
-    [CPApp setTarget:self selector:@selector(_dragOpenSpaceWithEvent:) forNextEventMatchingMask:CPLeftMouseDraggedMask | CPLeftMouseUpMask untilDate:nil inMode:nil dequeue:YES];
-}
-
-- (void)_dragOpenSpaceWithEvent:(CPEvent)theEvent
-{
-    var canvas = [self canvas];
-    var mouseLoc = [self convertPoint:[theEvent locationInWindow] fromView:nil];
-    _rubberEnd = mouseLoc;
-    var rubberRect = CGRectUnion(CGRectMake(_rubberStart.x, _rubberStart.y, 1, 1), CGRectMake(_rubberEnd.x, _rubberEnd.y, 1, 1));
-
-    switch ([theEvent type])
-    {
-        case CPLeftMouseDragged:
-            var indexesToSelect = [CPMutableIndexSet indexSet];
-            var allDataObjects = [canvas dataObjects];
-
-            for (var i = 0; i < [[self subviews] count]; i++) {
-                var aView = [self subviews][i];
-                if (CGRectIntersectsRect([aView frame], rubberRect)) {
-                    var dataIndex = [allDataObjects indexOfObject:[aView dataObject]];
-                    if (dataIndex != CPNotFound) {
-                        [indexesToSelect addIndex:dataIndex];
-                    }
-                }
-            }
-            [canvas setSelectionIndexes:indexesToSelect];
-            [self setNeedsDisplay:YES];
-            [CPApp setTarget:self selector:@selector(_dragOpenSpaceWithEvent:) forNextEventMatchingMask:CPLeftMouseDraggedMask | CPLeftMouseUpMask untilDate:nil inMode:nil dequeue:YES];
-            break;
-
-        case CPLeftMouseUp:
-            _isRubbing = NO;
-            [self setNeedsDisplay:YES];
-            break;
-    }
-}
-
-- (void)dealloc
-{
-    [self setDataObject:nil];
-    [super dealloc];
-}
-
-- (void)setDataObject:(id)newDataObject
-{
-    var oldDataObject = [self dataObject];
-
-    if (newDataObject != oldDataObject)
-    {
-        if (oldDataObject)
-            [oldDataObject removeObserver:self forKeyPath:@"children" context:_windowChildrenObservationContext];
-
-        [super setDataObject:newDataObject];
-
-        if (newDataObject)
-        {
-            [newDataObject addObserver:self forKeyPath:@"children" options:CPKeyValueObservingOptionNew | CPKeyValueObservingOptionOld context:_windowChildrenObservationContext];
-            [self _addChildrenViews:[newDataObject valueForKey:@"children"]];
-        }
-    }
-}
-
-- (void)_addChildrenViews:(CPArray)childDataObjects
-{
-    if (!childDataObjects) return;
-
-    var canvas = [self superview];
-
-    for (var i = 0; i < [childDataObjects count]; i++)
-    {
-        var childData = childDataObjects[i];
-        // This is a bit of a hack. We are reaching into the canvas's private method.
-        // A better solution would be a dedicated ViewFactory or similar.
-        if ([canvas respondsToSelector:@selector(_createViewForDataObject:superview:)])
-            [canvas _createViewForDataObject:childData superview:self];
-    }
-}
-
-- (void)_removeChildrenViews:(CPArray)childDataObjects
-{
-    if (!childDataObjects) return;
-
-    var canvas = [self superview];
-    var viewsToRemove = [];
-    var subviews = [self subviews];
-
-    for (var i = 0; i < [subviews count]; i++)
-    {
-        var subview = subviews[i];
-        if ([childDataObjects containsObject:[subview dataObject]])
-            [viewsToRemove addObject:subview];
-    }
-
-    for (i = 0; i < [viewsToRemove count]; i++)
-    {
-        if ([canvas respondsToSelector:@selector(_removeViewAndChildren:)])
-            [canvas _removeViewAndChildren:viewsToRemove[i]];
-    }
-}
-
-
-- (void)observeValueForKeyPath:(CPString)keyPath ofObject:(id)object change:(CPDictionary)change context:(id)context
-{
-    if (context == _windowChildrenObservationContext)
-    {
-        var oldChildren = [change objectForKey:CPKeyValueChangeOldKey];
-        var newChildren = [change objectForKey:CPKeyValueChangeNewKey];
-
-        var added = [newChildren mutableCopy];
-        [added removeObjectsInArray:oldChildren];
-        [self _addChildrenViews:added];
-
-        var removed = [oldChildren mutableCopy];
-        [removed removeObjectsInArray:newChildren];
-        [self _removeChildrenViews:removed];
-    }
-    else
-    {
-        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
-    }
-}
-
-
-- (id)initWithFrame:(CGRect)aRect
-{
-    self = [super initWithFrame:aRect];
-    if (self) {
-        
-        if (CGRectIsEmpty(aRect)) {
-            [self setFrameSize:CGSizeMake(250, 200)];
-        }
-        _isContainer = YES;
-        
-        // This view can accept drops of other elements.
-        [self registerForDraggedTypes:[
-            UIButtonDragType,
-            UISliderDragType,
-            UITextFieldDragType
-        ]];
-    }
-    return self;
-}
-
-- (void)drawSkeleton:(CGRect)rect
-{
-    var bounds = [self bounds];
-    var titleBarHeight = 22.0;
-    
-    // Main window background
-    [[[CPColor windowBackgroundColor] colorWithAlphaComponent:0.9] setFill];
-    var bgPath = [CPBezierPath bezierPathWithRoundedRect:bounds radius:6.0];
-    [bgPath fill];
-    
-    // Title bar
-    var titleBarRect = CGRectMake(bounds.origin.x, bounds.origin.y, bounds.size.width, titleBarHeight);
-    var titleBarPath = [CPBezierPath bezierPathWithRoundedRect:titleBarRect xRadius:6.0 yRadius:6.0];
-    [[[CPColor secondarySelectedControlColor] colorWithAlphaComponent:0.6] setFill];
-    [titleBarPath fill];
-    
-    // Window border
-    [[CPColor darkGrayColor] setStroke];
-    [bgPath setLineWidth:1.0];
-    [bgPath stroke];
-    
-    // Value text
-    [_stringAttributes setObject:[CPColor whiteColor] forKey:CPForegroundColorAttributeName];
-    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
-    [[self value] drawAtPoint:CGPointMake((bounds.size.width - valueSize.width) / 2.0, (titleBarHeight - valueSize.height) / 2.0 - 4) withAttributes:_stringAttributes];
-    [_stringAttributes setObject:[CPColor blackColor] forKey:CPForegroundColorAttributeName]; // reset color
-    
-    // Traffic light buttons
-    var circleRadius = 5.0;
-    var startX = 10.0;
-    var startY = titleBarHeight / 2.0;
-    [[CPColor redColor] setFill];
-    [CPBezierPath fillRect:CGRectMake(startX, startY - circleRadius, circleRadius*2, circleRadius*2)];
-    [[CPColor orangeColor] setFill];
-    [CPBezierPath fillRect:CGRectMake(startX + 18, startY - circleRadius, circleRadius*2, circleRadius*2)];
-    [[CPColor greenColor] setFill];
-    [CPBezierPath fillRect:CGRectMake(startX + 36, startY - circleRadius, circleRadius*2, circleRadius*2)];
-}
-
-// --- Drag Destination Methods ---
-
-- (CPDragOperation)draggingEntered:(CPDraggingInfo)sender
-{
-    var pasteboard = [sender draggingPasteboard];
-    var acceptedTypes = [self registeredDraggedTypes];
-    var localPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
-    var titleBarHeight = 30.0;
-
-    // Check if the dragged type is a new UI element (from the palette)
-    if ([acceptedTypes containsObject:UIWindowDragType] || [acceptedTypes containsObject:UIButtonDragType] || [acceptedTypes containsObject:UISliderDragType] || [acceptedTypes containsObject:UITextFieldDragType])
-    {
-        _isDragTarget = YES;
-        [self setNeedsDisplay:YES];
-        return CPDragOperationGeneric;
-    }
-    // Check if it's a connection drag (control key is pressed)
-    else if ([sender draggingSourceOperationMask] & CPControlKeyMask && localPoint.y <= titleBarHeight)
-    
-    {
-        debugger
-        _isDragTarget = YES;
-        [self setNeedsDisplay:YES];
-        return CPDragOperationGeneric;
-    }
-
-    return CPDragOperationNone;
-}
-
-- (CPDragOperation)draggingUpdated:(CPDraggingInfo)sender
-{
-    var localPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
-    var titleBarHeight = 30.0;
-    var acceptedTypes = [self registeredDraggedTypes];
-
-    // Check if the dragged type is a new UI element (from the palette)
-    if ([acceptedTypes containsObject:UIButtonDragType] || [acceptedTypes containsObject:UISliderDragType] || [acceptedTypes containsObject:UITextFieldDragType])
-    {
-        _isDragTarget = YES;
-        [self setNeedsDisplay:YES];
-        return CPDragOperationGeneric;
-    }
-    // Check if it's a connection drag (control key is pressed)
-    else if ([sender draggingSourceOperationMask] & CPControlKeyMask && localPoint.y <= titleBarHeight)
-    {
-        _isDragTarget = YES;
-        [self setNeedsDisplay:YES];
-        return CPDragOperationGeneric;
-    }
-    else
-    {
-        _isDragTarget = NO;
-        [self setNeedsDisplay:YES];
-        return CPDragOperationNone;
-    }
-}
-
-- (void)draggingExited:(CPDraggingInfo)sender
-{
-    _isDragTarget = NO;
-    [self setNeedsDisplay:YES];
-}
-
-- (BOOL)performDragOperation:(CPDraggingInfo)sender
-{
-    var dropPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
-    var pasteboard = [sender draggingPasteboard];
-    var types = [pasteboard types];
-    var draggedType = types[0];
-    var elementType;
-
-    // Determine if it's a new UI element drop
-    if      (draggedType === UIButtonDragType) elementType = "button";
-    else if (draggedType === UISliderDragType) elementType = "slider";
-    else if (draggedType === UITextFieldDragType) elementType = "textfield";
-
-    if (elementType)
-    {
-        // We need to find the canvas and then the delegate
-        var canvas = [self superview];
-        var delegate = [canvas delegate];
-        if (delegate && [delegate respondsToSelector:@selector(addNewElementOfType:atPoint:)])
-        {
-            var canvasPoint = [self convertPoint:dropPoint toView:canvas];
-            [delegate addNewElementOfType:elementType atPoint:canvasPoint];
-        }
-    }
-    // If it's a connection drag, the logic is handled in _connectWithEvent: in UIElementView
-
-    _isDragTarget = NO;
-    [self setNeedsDisplay:YES];
-    
-    return YES;
-}
-
-- (id)nativeUIElementWithMap:(CPMutableDictionary)aMap
-{
-    var newPlatformWindow = [[CPPlatformWindow alloc] initWithContentRect:[self frame]];
-
-    var styleMask = 0;
-    if ([[self dataObject] valueForKey:@"CPHUDBackgroundWindowMask"]) styleMask |= CPHUDBackgroundWindowMask;
-    if ([[self dataObject] valueForKey:@"CPTitledWindowMask"]) styleMask |= CPTitledWindowMask;
-    if ([[self dataObject] valueForKey:@"CPClosableWindowMask"]) styleMask |= CPClosableWindowMask;
-
-    var theNewWindow = [[CPWindow alloc] initWithContentRect:CGRectMake(0, 0, [self frame].size.width, [self frame].size.height) styleMask:styleMask];
-    [theNewWindow setPlatformWindow:newPlatformWindow];
-
-    if (aMap)
-    {
-        var elementID = [[self dataObject] valueForKey:@"id"];
-        [aMap setObject:theNewWindow forKey:elementID];
-    }
-
-    var contentView = [theNewWindow contentView];
-    var subviews = [self subviews];
-    for (var i = 0; i < [subviews count]; i++)
-    {
-        var subview = subviews[i];
-        var nativeSubview = [subview nativeUIElementWithMap:aMap];
-        [contentView addSubview:nativeSubview];
-    }
-
-    return theNewWindow;
-}
-
-- (BOOL)canAcceptConnectionAtPoint:(CGPoint)aPoint
-{
-    var titleBarHeight = 22.0;
-    return aPoint.y <= titleBarHeight;
-}
-
-@end
-
-
-// =================================================================================================
-// UIButtonView
-// A skeleton that looks like a push button.
-// =================================================================================================
-@implementation UIButtonView : UIElementView
-
-+ (CPDictionary)defaultValues
-{
-    return {value: "Button", outlets: "target, delegate", actions: "takeValueFrom:"};
-}
-
-+ (CPDictionary)propertyTypes
-{
-    return [super propertyTypes].copy({value: UIBString});
-}
-- (id)initWithFrame:(CGRect)aRect
-{
-    self = [super initWithFrame:aRect];
-    if (self) {
-        if (CGRectIsEmpty(aRect)) {
-            [self setFrameSize:CGSizeMake(100, 24)];
-        }
-    }
-    return self;
-}
-
-- (void)drawSkeleton:(CGRect)rect
-{
-    var bounds = CGRectInset([self bounds], 1, 1);
-    
-    // Draw button shape with gradient
-    var buttonPath = [CPBezierPath bezierPathWithRoundedRect:bounds radius:5.0];
-    var gradient = [[CPGradient alloc] initWithStartingColor:[CPColor whiteColor]
-                                                 endingColor:[CPColor controlColor]];
-    [gradient drawInBezierPath:buttonPath angle:90];
-    
-    // Draw button border
-    [[CPColor grayColor] setStroke];
-    [buttonPath setLineWidth:1.0];
-    [buttonPath stroke];
-    
-    // Draw value
-    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
-    [[self value] drawAtPoint:CGPointMake((bounds.size.width - valueSize.width) / 2.0 + 1, (bounds.size.height - valueSize.height) / 2.0 - 2) withAttributes:_stringAttributes];
-}
-
-- (id)nativeUIElementWithMap:(CPMutableDictionary)aMap
-{
-    var button = [[CPButton alloc] initWithFrame:[self frame]];
-    [button setTitle:[self value]];
-
-    if (aMap)
-    {
-        var elementID = [[self dataObject] valueForKey:@"id"];
-        [aMap setObject:button forKey:elementID];
-    }
-
-    return button;
-}
-
-@end
-
-// =================================================================================================
-// UISliderView
-// A skeleton that looks like a slider.
-// =================================================================================================
-@implementation UISliderView : UIElementView
-
-+ (CPDictionary)defaultValues
-{
-    return {value: 0.5, outlets: "target, delegate", actions: "takeFloatValueFrom:, takeIntegerValueFrom:"};
-}
-
-+ (CPDictionary)propertyTypes
-{
-    return [super propertyTypes].copy({value: UIBNumber});
-}
-- (id)initWithFrame:(CGRect)aRect
-{
-    self = [super initWithFrame:aRect];
-    if (self) {
-        if (CGRectIsEmpty(aRect)) {
-            [self setFrameSize:CGSizeMake(150, 20)];
-        }
-    }
-    return self;
-}
-
-- (void)drawSkeleton:(CGRect)rect
-{
-    var bounds = CGRectInset([self bounds], 8, 0);
-    var midY = bounds.size.height / 2.0;
-
-    // Draw track
-    [[CPColor grayColor] setStroke];
-    var trackPath = [CPBezierPath bezierPath];
-    [trackPath setLineWidth:3.0];
-    [trackPath moveToPoint:CGPointMake(bounds.origin.x, midY)];
-    [trackPath lineToPoint:CGPointMake(bounds.origin.x + bounds.size.width, midY)];
-    [trackPath stroke];
-    
-    // Draw knob
-    var knobX = bounds.origin.x + bounds.size.width * [self value];
-    var knobRect = CGRectMake(knobX - 8, midY - 8, 16, 16);
-    var knobPath = [CPBezierPath bezierPathWithOvalInRect:knobRect];
-    [[CPColor whiteColor] setFill];
-    [knobPath fill];
-    [[CPColor darkGrayColor] setStroke];
-    [knobPath setLineWidth:1.0];
-    [knobPath stroke];
-}
-
-- (id)nativeUIElementWithMap:(CPMutableDictionary)aMap
-{
-    var slider = [[CPSlider alloc] initWithFrame:[self frame]];
-    [slider setFloatValue:[self value]];
-
-    if (aMap)
-    {
-        var elementID = [[self dataObject] valueForKey:@"id"];
-        [aMap setObject:slider forKey:elementID];
-    }
-
-    return slider;
-}
-
-@end
-
-// =================================================================================================
-// UITextFieldView
-// A skeleton that looks like a text field.
-// =================================================================================================
-@implementation UITextFieldView : UIElementView
-
-+ (CPDictionary)defaultValues
-{
-    return {value: "Text Field", outlets: "target, delegate", actions: "takeStringValueFrom:, takeIntegerValueFrom:"};
-}
-
-+ (CPDictionary)propertyTypes
-{
-    return [super propertyTypes].copy({value: UIBString});
-}
-- (id)initWithFrame:(CGRect)aRect
-{
-    self = [super initWithFrame:aRect];
-    if (self)
-    {
-        if (CGRectIsEmpty(aRect))
-        {
-            [self setFrameSize:CGSizeMake(150, 22)];
-        }
-        [_stringAttributes setObject:[CPFont systemFontOfSize:12] forKey:CPFontAttributeName];
-        [_stringAttributes setObject:[CPColor grayColor] forKey:CPForegroundColorAttributeName];
-    }
-    return self;
-}
-
-- (void)drawSkeleton:(CGRect)rect
-{
-    var bounds = CGRectInset([self bounds], 1, 1);
-    
-    // Background
-    [[CPColor textBackgroundColor] setFill];
-    [CPBezierPath fillRect:bounds];
-    
-    // Inset border
-    [[CPColor grayColor] setStroke];
-    [CPBezierPath strokeRect:bounds];
-    
-    // Draw placeholder value
-    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
-    [[self value] drawAtPoint:CGPointMake(5, (bounds.size.height - valueSize.height) / 2.0 - 2) withAttributes:_stringAttributes];
-}
-
-- (id)nativeUIElementWithMap:(CPMutableDictionary)aMap
-{
-    var textField = [[CPTextField alloc] initWithFrame:[self frame]];
-    [textField setStringValue:[self value]];
-
-    if (aMap)
-    {
-        var elementID = [[self dataObject] valueForKey:@"id"];
-        [aMap setObject:textField forKey:elementID];
-    }
-
-    return textField;
-}
-
-@end

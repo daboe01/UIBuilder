@@ -10,6 +10,8 @@
 @import "UIElementView.j";
 @import "InspectorController.j";
 
+var CGSizeZero = CGSizeMake(0, 0);
+
 @implementation CPColor (StandardColors)
 
 // A standard light gray for control backgrounds, like buttons.
@@ -102,16 +104,29 @@
 @end
 
 
+
 // A simple draggable symbol for the palette
 @implementation DraggableSymbolView : CPView
 {
     CPString _dragType;
+    CPString _elementType;
 }
 
 - (void)setDragType:(CPString)aType
 {
     _dragType = aType;
 }
+
+- (void)setElementType:(CPString)anElementType
+{
+    _elementType = anElementType;
+}
+
+- (CGSize)size
+{
+    return [self bounds].size;
+}
+
 -(BOOL)acceptsFirstMouse:(CPEvent)aEvent
 {
     return YES;
@@ -222,6 +237,173 @@
         [[CPColor blackColor] set];
         [ibeamPath stroke];
     }
+    else if ([_dragType isEqualToString:UICheckBoxDragType])
+    {
+        var boxRect = CGRectInset(bounds, 12, 12);
+        [[CPColor whiteColor] set];
+        [CPBezierPath fillRect:boxRect];
+        [[CPColor blackColor] set];
+        [CPBezierPath strokeRect:boxRect];
+    }
+    else if ([_dragType isEqualToString:UILabelDragType])
+    {
+        var text = "Label";
+        var textAttributes = @{
+            CPFontAttributeName: [CPFont systemFontOfSize:10],
+            CPForegroundColorAttributeName: [CPColor blackColor]
+        };
+        var textSize = [text sizeWithAttributes:textAttributes];
+        [text drawAtPoint:CGPointMake((bounds.size.width - textSize.width) / 2, (bounds.size.height - textSize.height) / 2) withAttributes:textAttributes];
+    }
+    else if ([_dragType isEqualToString:UISearchFieldDragType])
+    {
+        var fieldRect = CGRectInset(bounds, 5, 12);
+        [[CPColor whiteColor] set];
+        [CPBezierPath fillRect:fieldRect];
+        [[CPColor blackColor] set];
+        [CPBezierPath strokeRect:fieldRect];
+        var iconRect = CGRectMake(8, 14, 8, 8);
+        [[CPColor grayColor] setStroke];
+        var path = [CPBezierPath bezierPathWithOvalInRect:CGRectMake(iconRect.origin.x, iconRect.origin.y, 6, 6)];
+        [path moveToPoint:CGPointMake(iconRect.origin.x + 5, iconRect.origin.y + 5)];
+        [path lineToPoint:CGPointMake(iconRect.origin.x + 8, iconRect.origin.y + 8)];
+        [path stroke];
+    }
+    else if ([_dragType isEqualToString:UISecureFieldDragType])
+    {
+        var fieldRect = CGRectInset(bounds, 5, 12);
+        [[CPColor whiteColor] set];
+        [CPBezierPath fillRect:fieldRect];
+        [[CPColor blackColor] set];
+        [CPBezierPath strokeRect:fieldRect];
+        var dots = "....";
+        var textAttributes = @{
+            CPFontAttributeName: [CPFont systemFontOfSize:10],
+            CPForegroundColorAttributeName: [CPColor blackColor]
+        };
+        [dots drawAtPoint:CGPointMake(10, 12) withAttributes:textAttributes];
+    }
+    else if ([_dragType isEqualToString:UITextViewDragType])
+    {
+        var viewRect = CGRectInset(bounds, 5, 5);
+        [[CPColor whiteColor] set];
+        [CPBezierPath fillRect:viewRect];
+        [[CPColor blackColor] set];
+        [CPBezierPath strokeRect:viewRect];
+    }
+    else if ([_dragType isEqualToString:UIScrollViewDragType])
+    {
+        var viewRect = CGRectInset(bounds, 5, 5);
+        [[CPColor whiteColor] set];
+        [CPBezierPath fillRect:viewRect];
+        [[CPColor blackColor] set];
+        [CPBezierPath strokeRect:viewRect];
+        var scrollbarRect = CGRectMake(viewRect.origin.x + viewRect.size.width - 8, viewRect.origin.y, 8, viewRect.size.height);
+        [[CPColor lightGrayColor] set];
+        [CPBezierPath fillRect:scrollbarRect];
+    }
+    else if ([_dragType isEqualToString:UITableViewDragType])
+    {
+        var viewRect = CGRectInset(bounds, 5, 5);
+        [[CPColor whiteColor] set];
+        [CPBezierPath fillRect:viewRect];
+        [[CPColor blackColor] set];
+        [CPBezierPath strokeRect:viewRect];
+        var headerRect = CGRectMake(viewRect.origin.x, viewRect.origin.y, viewRect.size.width, 10);
+        [[CPColor lightGrayColor] set];
+        [CPBezierPath fillRect:headerRect];
+    }
+    else if ([_dragType isEqualToString:UISplitViewDragType])
+    {
+        var viewRect = CGRectInset(bounds, 5, 5);
+        [[CPColor whiteColor] set];
+        [CPBezierPath fillRect:viewRect];
+        [[CPColor blackColor] set];
+        [CPBezierPath strokeRect:viewRect];
+        var dividerRect = CGRectMake(viewRect.origin.x + viewRect.size.width / 2 - 1, viewRect.origin.y, 2, viewRect.size.height);
+        [[CPColor grayColor] set];
+        [CPBezierPath fillRect:dividerRect];
+    }
+    else if ([_dragType isEqualToString:UIImageViewDragType])
+    {
+        var viewRect = CGRectInset(bounds, 5, 5);
+        [[CPColor whiteColor] set];
+        [CPBezierPath fillRect:viewRect];
+        [[CPColor blackColor] set];
+        [CPBezierPath strokeRect:viewRect];
+        var path = [CPBezierPath bezierPath];
+        [path moveToPoint:CGPointMake(10, 10)];
+        [path lineToPoint:CGPointMake(30, 30)];
+        [path moveToPoint:CGPointMake(30, 10)];
+        [path lineToPoint:CGPointMake(10, 30)];
+        [path stroke];
+    }
+    else if ([_dragType isEqualToString:UIPopUpButtonDragType])
+    {
+        var buttonRect = CGRectInset(bounds, 8, 10);
+        var path = [CPBezierPath bezierPathWithRoundedRect:buttonRect radius:5];
+        [[CPColor whiteColor] set];
+        [path fill];
+        [[CPColor blackColor] set];
+        [path stroke];
+        var arrowPath = [CPBezierPath bezierPath];
+        [arrowPath moveToPoint:CGPointMake(bounds.size.width - 15, 18)];
+        [arrowPath lineToPoint:CGPointMake(bounds.size.width - 10, 22)];
+        [arrowPath lineToPoint:CGPointMake(bounds.size.width - 5, 18)];
+        [arrowPath stroke];
+    }
+    else if ([_dragType isEqualToString:UIComboBoxDragType])
+    {
+        var fieldRect = CGRectInset(bounds, 5, 12);
+        [[CPColor whiteColor] set];
+        [CPBezierPath fillRect:fieldRect];
+        [[CPColor blackColor] set];
+        [CPBezierPath strokeRect:fieldRect];
+        var arrowPath = [CPBezierPath bezierPath];
+        [arrowPath moveToPoint:CGPointMake(bounds.size.width - 15, 18)];
+        [arrowPath lineToPoint:CGPointMake(bounds.size.width - 10, 22)];
+        [arrowPath lineToPoint:CGPointMake(bounds.size.width - 5, 18)];
+        [arrowPath stroke];
+    }
+    else if ([_dragType isEqualToString:UIStepperDragType])
+    {
+        var upRect = CGRectMake(10, 10, 20, 10);
+        var downRect = CGRectMake(10, 20, 20, 10);
+        [[CPColor whiteColor] set];
+        [CPBezierPath fillRect:upRect];
+        [CPBezierPath fillRect:downRect];
+        [[CPColor blackColor] set];
+        [CPBezierPath strokeRect:upRect];
+        [CPBezierPath strokeRect:downRect];
+    }
+    else if ([_dragType isEqualToString:UIDatePickerDragType])
+    {
+        var fieldRect = CGRectInset(bounds, 5, 12);
+        [[CPColor whiteColor] set];
+        [CPBezierPath fillRect:fieldRect];
+        [[CPColor blackColor] set];
+        [CPBezierPath strokeRect:fieldRect];
+        var iconRect = CGRectMake(bounds.size.width - 15, 14, 8, 8);
+        [[CPColor grayColor] set];
+        [CPBezierPath fillRect:iconRect];
+    }
+    else if ([_dragType isEqualToString:UIProgressIndicatorDragType])
+    {
+        var barRect = CGRectInset(bounds, 5, 15);
+        [[CPColor lightGrayColor] set];
+        [CPBezierPath fillRect:barRect];
+        var progressRect = CGRectMake(barRect.origin.x, barRect.origin.y, barRect.size.width / 2, barRect.size.height);
+        [[CPColor blueColor] set];
+        [CPBezierPath fillRect:progressRect];
+    }
+    else if ([_dragType isEqualToString:UIBoxDragType])
+    {
+        var boxRect = CGRectInset(bounds, 5, 5);
+        [[CPColor lightGrayColor] set];
+        [CPBezierPath fillRect:boxRect];
+        [[CPColor blackColor] set];
+        [CPBezierPath strokeRect:boxRect];
+    }
     else
     {
         // Fallback to original text drawing
@@ -252,6 +434,7 @@
 
 - (void)applicationDidFinishLaunching:(CPNotification)aNotification
 {
+    console.log("AppController applicationDidFinishLaunching: CPApp._delegate:", CPApp._delegate);
     // 1. Create the main window and canvas
     _window = [[CPWindow alloc] initWithContentRect:CGRectMakeZero() styleMask:CPBorderlessBridgeWindowMask];
     [_window setTitle:@"Cappuccino UI Builder"];
@@ -260,6 +443,7 @@
     _canvasView = [[UICanvasView alloc] initWithFrame:[[_window contentView] bounds]];
     [_canvasView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
     [[_window contentView] addSubview:_canvasView];
+    console.log("AppController: _canvasView.window after addSubview:", [_canvasView window]);
 
     // 2. Create the controllers
     _builderController = [[UIBuilderController alloc] init];
@@ -309,28 +493,90 @@
 - (void)createPalette
 {
     var screenWidth = window.innerWidth;
-    var paletteWidth = 220;
-    var paletteHeight = 60;
+    var symbolSize = 40;
+    var labelHeight = 20;
+    var itemHeight = symbolSize + labelHeight;
+    var itemWidth = 65; 
+    var padding = 10;
+    var itemsPerRow = 7;
+
+    var paletteItems = [
+        // Row 1: Windows & Containers
+        [
+            {dragType: UIWindowDragType, elementType: "window", label: "Window"},
+            {dragType: UIBoxDragType, elementType: "box", label: "Box"},
+            {dragType: UIScrollViewDragType, elementType: "scrollView", label: "Scroll View"},
+            {dragType: UISplitViewDragType, elementType: "splitView", label: "Split View"},
+            {dragType: UITableViewDragType, elementType: "tableView", label: "Table View"}
+        ],
+        // Row 2: Text & Fields
+        [
+            {dragType: UILabelDragType, elementType: "label", label: "Label"},
+            {dragType: UITextFieldDragType, elementType: "textfield", label: "Text Field"},
+            {dragType: UISearchFieldDragType, elementType: "searchField", label: "Search Field"},
+            {dragType: UISecureFieldDragType, elementType: "secureField", label: "Secure Field"},
+            {dragType: UITextViewDragType, elementType: "textView", label: "Text View"},
+            {dragType: UIComboBoxDragType, elementType: "comboBox", label: "Combo Box"}
+        ],
+        // Row 3: Buttons & Controls
+        [
+            {dragType: UIButtonDragType, elementType: "button", label: "Button"},
+            {dragType: UICheckBoxDragType, elementType: "checkBox", label: "Check Box"},
+            {dragType: UIPopUpButtonDragType, elementType: "popUpButton", label: "Pop Up"},
+            {dragType: UIStepperDragType, elementType: "stepper", label: "Stepper"},
+            {dragType: UISliderDragType, elementType: "slider", label: "Slider"},
+            {dragType: UIDatePickerDragType, elementType: "datePicker", label: "Date Picker"}
+        ],
+        // Row 4: Other
+        [
+            {dragType: UIImageViewDragType, elementType: "imageView", label: "Image View"},
+            {dragType: UIProgressIndicatorDragType, elementType: "progresIndicator", label: "Progress"}
+        ]
+    ];
+
+    var paletteWidth = padding + itemsPerRow * (itemWidth + padding);
+    var paletteHeight = padding + [paletteItems count] * (itemHeight + padding) + 20;
     var paletteX = (screenWidth - paletteWidth) / 2;
-    var paletteY = 22; // Position near the top of the screen
+    var paletteY = 50;
 
     _palette = [[CPPanel alloc] initWithContentRect:CGRectMake(paletteX, paletteY, paletteWidth, paletteHeight)
                                           styleMask:CPHUDBackgroundWindowMask | CPTitledWindowMask | CPClosableWindowMask];
     [_palette setTitle:@"Elements"];
     [_palette setFloatingPanel:YES];
+    [_palette setAcceptsMouseMovedEvents:NO];
 
-    var xPos = 10;
-    var types = [UIWindowDragType, UIButtonDragType, UISliderDragType, UITextFieldDragType];
+    var contentView = [_palette contentView];
+    var contentViewHeight = [contentView bounds].size.height;
 
-    // Create draggable symbols for each type
-    [_canvasView registerForDraggedTypes:types];
+    for (var r = 0; r < [paletteItems count]; r++) {
+        var rowItems = paletteItems[r];
+        var xPos = padding;
+        var yPos = contentViewHeight - (r + 1) * (itemHeight + padding);
 
-    for (var i=0; i < [types count]; i++) {
-        var symbol = [[DraggableSymbolView alloc] initWithFrame:CGRectMake(xPos, 10, 40, 40)];
-        symbol._dragType = types[i];
+        for (var i = 0; i < [rowItems count]; i++) {
+            var item = rowItems[i];
 
-        [[_palette contentView] addSubview:symbol];
-        xPos += 50;
+            var container = [[CPView alloc] initWithFrame:CGRectMake(xPos, yPos, itemWidth, itemHeight)];
+
+            var symbol = [[DraggableSymbolView alloc] initWithFrame:CGRectMake((itemWidth - symbolSize) / 2, labelHeight, symbolSize, symbolSize)];
+            [symbol setDragType:item.dragType];
+            [symbol setElementType:item.elementType];
+            [container addSubview:symbol];
+
+            var label = [[CPTextField alloc] initWithFrame:CGRectMake(0, 5, itemWidth, labelHeight)];
+            [label setStringValue:item.label];
+            [label setFont:[CPFont systemFontOfSize:10]];
+            [label setTextColor:[CPColor whiteColor]];
+            [label setAlignment:CPCenterTextAlignment];
+            [label setBezeled:NO];
+            [label setDrawsBackground:NO];
+            [label setEditable:NO];
+            [label setSelectable:NO];
+            [container addSubview:label];
+
+            [contentView addSubview:container];
+            xPos += itemWidth + padding;
+        }
     }
 
     [_palette orderFront:self];

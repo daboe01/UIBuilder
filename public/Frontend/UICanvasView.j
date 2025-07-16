@@ -7,10 +7,32 @@
 //  - It correctly instantiates different UIElementView subclasses based on the data model.
 //
 
+
 @import "UIBuilderConstants.j";
 @import "UIElementView.j";
 @import "ConnectionView.j";
-@import "UIBuilderConstants.j";
+
+// Import all the new view classes
+@import "UIWindowView.j";
+@import "UIButtonView.j";
+@import "UISliderView.j";
+@import "UITextFieldView.j";
+@import "UICheckBoxView.j";
+@import "UILabelView.j";
+@import "UISearchFieldView.j";
+@import "UISecureFieldView.j";
+@import "UITextViewView.j";
+@import "UIScrollViewView.j";
+@import "UITableViewView.j";
+@import "UISplitViewView.j";
+@import "UIImageViewView.j";
+@import "UIPopUpButtonView.j";
+@import "UIComboBoxView.j";
+@import "UIStepperView.j";
+@import "UIDatePickerView.j";
+@import "UIProgressIndicatorView.j";
+@import "UIBoxView.j";
+
 
 function treshold(value, limit)
 {
@@ -71,7 +93,22 @@ var _selectedConnectionsObservationContext = 1095;
             UIWindowDragType,
             UIButtonDragType,
             UISliderDragType,
-            UITextFieldDragType
+            UITextFieldDragType,
+            UICheckBoxDragType,
+            UILabelDragType,
+            UISearchFieldDragType,
+            UISecureFieldDragType,
+            UITextViewDragType,
+            UIScrollViewDragType,
+            UITableViewDragType,
+            UISplitViewDragType,
+            UIImageViewDragType,
+            UIPopUpButtonDragType,
+            UIComboBoxDragType,
+            UIStepperDragType,
+            UIDatePickerDragType,
+            UIProgressIndicatorDragType,
+            UIBoxDragType
         ]];
 
         _connectionView = [[ConnectionView alloc] initWithFrame:[self bounds]];
@@ -85,6 +122,7 @@ var _selectedConnectionsObservationContext = 1095;
 
 + (void)initialize
 {
+    [UIElementView registerViewClass:self forElementType:@"canvas"];
     [self exposeBinding:"dataObjects"];
     [self exposeBinding:@"selectionIndexes"];
     [self exposeBinding:@"connections"];
@@ -174,66 +212,83 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (void)startObservingDataObjects:(CPArray)dataObjects
 {
-    if (!dataObjects || dataObjects == [CPNull null])
+    if (!dataObjects || dataObjects == [CPNull null] || [dataObjects count] === 0)
         return;
+
+    console.log("UICanvasView: startObservingDataObjects with:", dataObjects);
+    var canvasWindow = [self window];
+    if (!canvasWindow) {
+        console.error("FATAL: Canvas has no window. Cannot create views.");
+        return;
+    }
 
     for (var i = 0;  i < [dataObjects count]; i++)
     {
         var newDataObject =  dataObjects[i];
-        // Only create views for top-level objects. Children are handled by their parents.
+        // The canvas only creates top-level views. Children are created recursively.
         if (![newDataObject valueForKey:@"parentID"])
-            [self _createViewForDataObject:newDataObject superview:self];
+        {
+            console.log("-> Creating top-level view for:", [newDataObject valueForKey:@"id"]);
+            [self _createViewForDataObject:newDataObject superview:self window:canvasWindow];
+        }
     }
 }
 
-- (void)_createViewForDataObject:(CPDictionary)dataObject superview:(CPView)superview
+- (void)_createViewForDataObject:(CPDictionary)dataObject superview:(CPView)superview window:(CPWindow)aWindow
 {
+    console.log("START _createViewForDataObject id:", [dataObject valueForKey:@"id"], "superview:", [superview class]);
+    
     var type = [dataObject valueForKey:@"type"];
-    var newView;
+    var viewClass = [[UIElementView classMap] objectForKey:type] || UIElementView;
+    var newView = [[viewClass alloc] init];
+    console.log("did create newView");
 
-    // Instantiate the correct view based on the data model's 'type'
-    if (type === "window")
-        newView = [[UIWindowView alloc] init];
-    else if (type === "button")
-        newView = [[UIButtonView alloc] init];
-    else if (type === "slider")
-        newView = [[UISliderView alloc] init];
-    else if (type === "textfield")
-        newView = [[UITextFieldView alloc] init];
-    else
-        newView = [[UIElementView alloc] init]; // Fallback
+    if (!newView) {
+        console.error("FATAL: Failed to init view for class", viewClass);
+        return;
+    }
 
+    [superview addSubview:newView];
     [newView setDataObject:dataObject];
 
-    // Bind view properties to the data model
+    // Bind common properties
     [newView bind:@"originX" toObject:dataObject withKeyPath:@"originX" options:nil];
     [newView bind:@"originY" toObject:dataObject withKeyPath:@"originY" options:nil];
     [newView bind:@"width" toObject:dataObject withKeyPath:@"width" options:nil];
     [newView bind:@"height" toObject:dataObject withKeyPath:@"height" options:nil];
+    console.log("did create bindings");
 
-    if (type === "window")
-    {
+    // For container views, recursively create their children
+    if ([newView isKindOfClass:[UIWindowView class]] || [newView isKindOfClass:[UIBoxView class]] || [newView isKindOfClass:[UIScrollViewView class]]) {
         var children = [dataObject valueForKey:@"children"];
-        for (var j = 0; j < [children count]; j++)
-        {
-            [self _createViewForDataObject:children[j] superview:newView];
+        if (children && [children count] > 0) {
+            console.log(" -> Container has", [children count], "children. Recursing...");
+            for (var j = 0; j < [children count]; j++) {
+                [self _createViewForDataObject:children[j] superview:newView window:aWindow];
+            }
         }
     }
-
-    [superview addSubview:newView];
-    // i have no idea why this is needed, but it is to make the initial click work
-    [CPApp._delegate._window makeKeyAndOrderFront:self];
+    console.log("END _createViewForDataObject id:", [dataObject valueForKey:@"id"]);
 }
+
+// Keep a simple version for external calls if needed, though the main logic uses the windowed one.
+- (void)_createViewForDataObject:(CPDictionary)dataObject superview:(CPView)superview
+{
+    [self _createViewForDataObject:dataObject superview:superview window:[self window]];
+}
+
 
 - (void)stopObservingDataObjects:(CPArray)dataObjects
 {
     if (!dataObjects || dataObjects == [CPNull null]) return;
+    console.log("UICanvasView: stopObservingDataObjects:", dataObjects);
 
     var viewsToRemove = [CPMutableArray array];
     [self _findViewsForDataObjects:dataObjects inView:self foundViews:viewsToRemove];
     
     for (var i = 0; i < [viewsToRemove count]; i++) {
         var viewToRemove = viewsToRemove[i];
+        console.log("-> Removing view:", viewToRemove, "for dataObject:", [viewToRemove dataObject]);
         [self _removeViewAndChildren:viewToRemove];
     }
 }
@@ -260,6 +315,7 @@ var _selectedConnectionsObservationContext = 1095;
 {
     if (context == _dataObjectsObservationContext)
     {
+        console.log("UICanvasView: KVO _dataObjectsObservationContext triggered. Change:", change);
         var newDataObjects = [object valueForKeyPath:_dataObjectsKeyPath];
         var oldDataObjects = _oldDataObjects;
 
@@ -765,7 +821,14 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (CPDragOperation)draggingEntered:(CPDraggingInfo)sender
 {
+    console.log("draggingEntered:", [sender draggingPasteboard]);
     // We accept any of the registered types
+    return CPDragOperationCopy;
+}
+
+- (CPDragOperation)draggingUpdated:(CPDraggingInfo)sender
+{
+    console.log("draggingUpdated:");
     return CPDragOperationCopy;
 }
 
@@ -774,26 +837,33 @@ var _selectedConnectionsObservationContext = 1095;
     var dropPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
     var pasteboard = [sender draggingPasteboard];
     var types = [pasteboard types];
-    var draggedType = types[0]; // Assuming only one type is being dragged
-    var elementType;
+    var elementType = nil;
 
-    if      (draggedType === UIWindowDragType) elementType = "window";
-    else if (draggedType === UIButtonDragType) elementType = "button";
-    else if (draggedType === UISliderDragType) elementType = "slider";
-    else if (draggedType === UITextFieldDragType) elementType = "textfield";
+    // Find the first registered drag type on the pasteboard
+    var registeredTypes = [self registeredDraggedTypes];
+    for (var i = 0; i < [types count]; i++) {
+        var type = types[i];
+        if ([registeredTypes containsObject:type]) {
+            var temp = [type stringByReplacingOccurrencesOfString:@"DragType" withString:@""];
+            if ([temp hasPrefix:@"UI"])
+                temp = [temp substringFromIndex:2];
+            elementType = [temp lowercaseString];
+            break;
+        }
+    }
 
     if (elementType && _delegate)
     {
         if (elementType === "window") {
-            if ([_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:)])
-            {
+    console.log("will instantiate window");
+
+            if ([_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:)]) {
                 [_delegate addNewElementOfType:elementType atPoint:dropPoint];
                 [self setNeedsDisplay:YES];
                 return YES;
             }
         } else {
-            if ([_delegate respondsToSelector:@selector(addNewElementOfType:inNewWindowAtPoint:)])
-            {
+            if ([_delegate respondsToSelector:@selector(addNewElementOfType:inNewWindowAtPoint:)]) {
                 [_delegate addNewElementOfType:elementType inNewWindowAtPoint:dropPoint];
                 [self setNeedsDisplay:YES];
                 return YES;

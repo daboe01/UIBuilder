@@ -278,7 +278,7 @@ var _selectedConnectionsObservationContext = 1095;
 
     var targetSuperview = superview;
     if ([superview isKindOfClass:[UIHBoxView class]] || [superview isKindOfClass:[UIVBoxView class]]) {
-        targetSuperview = [superview view];
+        targetSuperview = [superview layoutView];
     }
     [targetSuperview addSubview:newView];
     [newView setDataObject:dataObject];

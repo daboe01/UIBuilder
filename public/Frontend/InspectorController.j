@@ -2,6 +2,60 @@
 
 @class UIBuilderController;
 
+@implementation CPEnumerationValueTransformer : CPValueTransformer
+{
+    CPArray _enumerationValues;
+}
+
++ (Class)transformedValueClass { return [CPNumber class]; }
++ (BOOL)allowsReverseTransformation { return YES; }
+
+- (id)initWithEnumerationValues:(CPArray)values
+{
+    self = [super init];
+    if (self) {
+        _enumerationValues = [values copy];
+    }
+    return self;
+}
+
+/**
+ * Transforms a model value (like a number for textAlignment or a string for another enum)
+ * into a numeric index for the CPPopUpButton's selectedTag.
+ */
+- (id)transformedValue:(id)value
+{
+    if (!value) return nil;
+
+    // If the model value is already a number, assume it's the index.
+    // This fixes the case for numeric enums like textAlignment.
+    if ([value isKindOfClass:[CPNumber class]])
+    {
+        return value;
+    }
+
+    // Otherwise, assume it's a string/object that we need to find the index of.
+    var index = [_enumerationValues indexOfObject:value];
+    return (index != CPNotFound) ? [CPNumber numberWithInt:index] : nil;
+}
+
+/**
+ * Transforms a numeric index from the CPPopUpButton's selectedTag back
+ * into a value for the model.
+ */
+- (id)reverseTransformedValue:(id)value
+{
+    if (!value || ![value isKindOfClass:[CPNumber class]]) return nil;
+
+    // For properties like textAlignment, the model expects a number, not a string.
+    // By returning the number (the index/tag), we fix the binding.
+    // This establishes a consistent convention that all UIBEnumeration properties
+    // on the model are stored as numbers.
+    return value;
+}
+
+@end
+
 @implementation InspectorController : CPViewController
 {
     UIBuilderController _builderController @accessors(property=builderController);
@@ -193,10 +247,13 @@
                 var values = enumerations[propertyName];
                 if (values) {
                     for (var j = 0; j < [values count]; j++) {
-                        [popUpButton addItemWithTitle:values[j]];
+                        var title = values[j];
+                        var menuItem = [popUpButton addItemWithTitle:title];
+                        [menuItem setTag:j]; // Set the tag to the numeric index
                     }
                 }
-                [popUpButton bind:@"selectedObject" toObject:selectedObject withKeyPath:propertyName options:nil];
+                // Bind selectedTag using the generic enumeration value transformer
+                [popUpButton bind:@"selectedIndex" toObject:selectedObject withKeyPath:propertyName options:@{CPValueTransformerBindingOption: [[CPEnumerationValueTransformer alloc] initWithEnumerationValues:values]}];
                 [propertiesView addSubview:popUpButton];
             } else { // Fallback for unknown types
                 var textField = [[CPTextField alloc] initWithFrame:CGRectMake(120, yPos, 150, 25)];

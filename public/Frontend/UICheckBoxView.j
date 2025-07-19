@@ -1,4 +1,4 @@
-@import "UIElementView.j"
+@class UIElementView
 
 @implementation UICheckBoxView : UIElementView
 

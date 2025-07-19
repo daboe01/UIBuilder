@@ -1,4 +1,4 @@
-@import "UITextFieldView.j"
+@class UIElementView
 
 @implementation UISecureFieldView : UITextFieldView
 

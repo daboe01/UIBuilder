@@ -1,4 +1,4 @@
-@import "UIElementView.j"
+@class UIElementView
 
 @implementation UISplitViewView : UIElementView
 
@@ -20,6 +20,21 @@
         _isContainer = YES;
     }
     return self;
+}
+
+- (void)setDataObject:(id)newDataObject
+{
+    [super setDataObject:newDataObject];
+
+    if (![[self dataObject] valueForKey:@"children"])
+    {
+        var canvas = [self canvas];
+        var delegate = [canvas delegate];
+        if (delegate && [delegate respondsToSelector:@selector(addNewElementOfType:atPoint:inParent:)])
+        {
+            [delegate addNewElementOfType:@"vbox" atPoint:CGPointMake(0, 0) inParent:[self dataObject]];
+        }
+    }
 }
 
 - (void)drawSkeleton:(CGRect)rect

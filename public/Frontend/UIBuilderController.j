@@ -8,7 +8,7 @@
 //
 
 @import <Foundation/CPObject.j>
-@import "UIElementView.j"
+@class UIElementView
 @import "UICanvasView.j"
 @import "UIBuilderConstants.j";
 
@@ -126,11 +126,11 @@
     return nil;
 }
 
-- (void)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint
+- (void)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint inParent:(CPDictionary)parentData
 {
-    console.log("UIBuilderController: addNewElementOfType:", elementType, "atPoint:", aPoint);
+    console.log("UIBuilderController: addNewElementOfType:", elementType, "atPoint:", aPoint, "inParent:", parentData);
     var newElementData = [CPConservativeDictionary dictionary];
-    var containerData = [self _containerDataAtPoint:aPoint];
+    var containerData = parentData || [self _containerDataAtPoint:aPoint];
     var viewClass = [UIBuilderController classForElementType:elementType];
 
     // Set default properties based on type
@@ -154,6 +154,9 @@
     } else if (elementType === "slider") {
         [newElementData setValue:150 forKey:@"width"];
         [newElementData setValue:20 forKey:@"height"];
+    } else if (elementType === "label") {
+        [newElementData setValue:100 forKey:@"width"];
+        [newElementData setValue:20 forKey:@"height"];
     } else { // textfield
         [newElementData setValue:150 forKey:@"width"];
         [newElementData setValue:22 forKey:@"height"];
@@ -171,10 +174,8 @@
     {
         console.log("-> Adding as child to container:", [containerData valueForKey:@"id"]);
         // Convert point to be relative to the container and center the element
-        var elementWidth = [newElementData valueForKey:@"width"];
-        var elementHeight = [newElementData valueForKey:@"height"];
-        var relativeX = (aPoint.x - [containerData valueForKey:@"originX"]) - (elementWidth / 2);
-        var relativeY = (aPoint.y - [containerData valueForKey:@"originY"]) - (elementHeight / 2);
+        var relativeX = aPoint.x - [containerData valueForKey:@"originX"] - (elementWidth / 2);
+        var relativeY = aPoint.y - [containerData valueForKey:@"originY"] - (elementHeight / 2);
         [newElementData setValue:relativeX forKey:@"originX"];
         [newElementData setValue:relativeY forKey:@"originY"];
 
@@ -186,6 +187,7 @@
     // Add to the main controller regardless, so selection and KVO works for all objects.
     [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] removeObject:newElementData];
     [[[CPApp keyWindow] undoManager] setActionName:@"Add Element"];
+
     [_elementsController addObject:newElementData];
 
     [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
@@ -386,34 +388,9 @@
 
 - (void)addNewElementOfType:(CPString)elementType inNewWindowAtPoint:(CGPoint)aPoint
 {
-    // 1. Create the new element to be placed in the window
-    var newElementData = [CPConservativeDictionary dictionary];
-    var viewClass = [UIBuilderController classForElementType:elementType];
-    [newElementData setValue:elementType forKey:@"type"];
-    [newElementData setValue:@"id_" + _elementCounter++ forKey:@"id"];
-
-    var defaultValues = [viewClass defaultValues];
-    for (var key in defaultValues)
-        [newElementData setValue:defaultValues[key] forKey:key];
-
-    var elementWidth, elementHeight;
-
-    if (elementType === "button") {
-        elementWidth = 100;
-        elementHeight = 24;
-    } else if (elementType === "slider") {
-        elementWidth = 150;
-        elementHeight = 20;
-    } else { // textfield
-        elementWidth = 150;
-        elementHeight = 22;
-    }
-    [newElementData setValue:elementWidth forKey:@"width"];
-    [newElementData setValue:elementHeight forKey:@"height"];
-
-    // 2. Create the window that will contain the new element
+    // 1. Create the window data
     var windowData = [CPConservativeDictionary dictionary];
-    var windowClass = [UIBuilderController classForElementType:"window"];
+    var windowClass = [UIBuilderController classForElementType:@"window"];
     var windowWidth = 250, windowHeight = 200;
     [windowData setValue:@"window" forKey:@"type"];
     [windowData setValue:@"id_" + _elementCounter++ forKey:@"id"];
@@ -421,88 +398,56 @@
     [windowData setValue:windowHeight forKey:@"height"];
     [windowData setValue:[] forKey:@"children"];
 
-    defaultValues = [windowClass defaultValues];
-    for (var key in defaultValues) {
-        [windowData setValue:defaultValues[key] forKey:key];
+    var defaultWindowValues = [windowClass defaultValues];
+    for (var key in defaultWindowValues) {
+        [windowData setValue:defaultWindowValues[key] forKey:key];
     }
 
-    // 3. Position the new element in the center of the window
-    var elementX = (windowWidth - elementWidth) / 2;
-    var elementY = (windowHeight - elementHeight) / 2;
-    [newElementData setValue:elementX forKey:@"originX"];
-    [newElementData setValue:elementY forKey:@"originY"];
+    // 2. Position the window so its center is at the drop point
+    [windowData setValue:aPoint.x - (windowWidth / 2) forKey:@"originX"];
+    [windowData setValue:aPoint.y - (windowHeight / 2) forKey:@"originY"];
 
-    // 4. Position the window so the element is at the drop point
-    var windowX = aPoint.x - elementX;
-    var windowY = aPoint.y - elementY;
-    [windowData setValue:windowX forKey:@"originX"];
-    [windowData setValue:windowY forKey:@"originY"];
-
-    // 5. Add the element to the window's children
-    [newElementData setValue:[windowData valueForKey:@"id"] forKey:@"parentID"];
-    [[windowData mutableArrayValueForKey:@"children"] addObject:newElementData];
-
-    console.log("UIBuilderController: addNewElementOfType:inNewWindowAtPoint: - Adding new element to window's children:", newElementData);
-
-    // 6. Add both to the elements controller
-    var undoManager = [[CPApp keyWindow] undoManager];
-    [undoManager beginUndoGrouping];
-    [[undoManager prepareWithInvocationTarget:_elementsController] removeObject:newElementData];
-    [[undoManager prepareWithInvocationTarget:_elementsController] removeObject:windowData];
-    [undoManager setActionName:@"Add Element in New Window"];
+    // 3. Add the window to the elements controller
+    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] removeObject:windowData];
+    [[[CPApp keyWindow] undoManager] setActionName:@"Add Element in New Window"];
     [_elementsController addObject:windowData];
-    [_elementsController addObject:newElementData];
-    [undoManager endUndoGrouping];
 
-    // 7. Select the new element
+    // 4. Create the VBox data and add it as a child of the window
+    var vboxData = [CPConservativeDictionary dictionary];
+    var vboxClass = [UIBuilderController classForElementType:@"vbox"];
+    [vboxData setValue:@"vbox" forKey:@"type"];
+    [vboxData setValue:@"id_" + _elementCounter++ forKey:@"id"];
+    [vboxData setValue:[windowData valueForKey:@"id"] forKey:@"parentID"];
+    var defaultVBoxValues = [vboxClass defaultValues];
+    for (var key in defaultVBoxValues) {
+        [vboxData setValue:defaultVBoxValues[key] forKey:key];
+    }
+    // Make the vbox fill the window's content area
+    [vboxData setValue:0 forKey:@"originX"];
+    [vboxData setValue:22 forKey:@"originY"]; // Below title bar
+    [vboxData setValue:windowWidth forKey:@"width"];
+    [vboxData setValue:windowHeight - 22 forKey:@"height"];
+    [vboxData setValue:[] forKey:@"children"];
+
+    [[windowData mutableArrayValueForKey:@"children"] addObject:vboxData];
+    [_elementsController addObject:vboxData];
+
+
+    // 5. Add the new element inside the VBOX
+    [self addNewElementOfType:elementType atPoint:CGPointMake(0,0) inParent:vboxData];
+
+    // 6. Select the newly added element
+    var newElementData = [[vboxData valueForKey:@"children"] objectAtIndex:0];
     [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
+
+    console.log("UIBuilderController: addNewElementOfType:inNewWindowAtPoint: - Added new element in new window.");
 }
 
 - (void)addNewElementOfType:(CPString)elementType inWindow:(CPDictionary)windowData atPoint:(CGPoint)aPoint
 {
-    console.log("UIBuilderController: addNewElementOfType:inWindow:atPoint: - Adding element ", elementType, " to window ", windowData, " at point ", aPoint);
-    var newElementData = [CPConservativeDictionary dictionary];
-    var viewClass = [UIBuilderController classForElementType:elementType];
-
-    [newElementData setValue:elementType forKey:@"type"];
-    [newElementData setValue:@"id_" + _elementCounter++ forKey:@"id"];
-
-    var defaultValues = [viewClass defaultValues];
-    for (var key in defaultValues)
-        [newElementData setValue:defaultValues[key] forKey:key];
-
-    var elementWidth, elementHeight;
-
-    if (elementType === "button") {
-        elementWidth = 100;
-        elementHeight = 24;
-    } else if (elementType === "slider") {
-        elementWidth = 150;
-        elementHeight = 20;
-    } else { // textfield
-        elementWidth = 150;
-        elementHeight = 22;
-    }
-    [newElementData setValue:elementWidth forKey:@"width"];
-    [newElementData setValue:elementHeight forKey:@"height"];
-
-    // Position the new element relative to the window's origin
-    [newElementData setValue:aPoint.x forKey:@"originX"];
-    [newElementData setValue:aPoint.y forKey:@"originY"];
-
-    // Add as a child to the container window
-    [newElementData setValue:[windowData valueForKey:@"id"] forKey:@"parentID"];
-    [[windowData mutableArrayValueForKey:@"children"] addObject:newElementData];
-
-    // Add to the main controller
-    var undoManager = [[CPApp keyWindow] undoManager];
-    [undoManager beginUndoGrouping];
-    [[undoManager prepareWithInvocationTarget:_elementsController] removeObject:newElementData];
-    [undoManager setActionName:@"Add Element to Window"];
-    [_elementsController addObject:newElementData];
-    [undoManager endUndoGrouping];
-
-    [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
+    // This method is now deprecated. Use addNewElementOfType:atPoint:inParent: instead.
+    console.error("addNewElementOfType:inWindow:atPoint: is deprecated. Use addNewElementOfType:atPoint:inParent: instead.");
+    [self addNewElementOfType:elementType atPoint:aPoint inParent:windowData];
 }
 
 - (void)addConnectionFrom:(CPDictionary)sourceData to:(CPDictionary)targetData atPoint:(CGPoint)atPoint outlet:(CPString)outlet action:(CPString)action

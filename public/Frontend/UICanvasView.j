@@ -32,6 +32,8 @@
 @import "UIDatePickerView.j";
 @import "UIProgressIndicatorView.j";
 @import "UIBoxView.j";
+@import "UIHBoxView.j";
+@import "UIVBoxView.j";
 
 
 function treshold(value, limit)
@@ -222,14 +224,37 @@ var _selectedConnectionsObservationContext = 1095;
         return;
     }
 
-    for (var i = 0;  i < [dataObjects count]; i++)
-    {
-        var newDataObject =  dataObjects[i];
-        // The canvas only creates top-level views. Children are created recursively.
-        if (![newDataObject valueForKey:@"parentID"])
-        {
-            console.log("-> Creating top-level view for:", [newDataObject valueForKey:@"id"]);
-            [self _createViewForDataObject:newDataObject superview:self window:canvasWindow];
+    var objectsToProcess = [dataObjects mutableCopy];
+    var successfullyAdded;
+    var lastCount = 0;
+
+    while ([objectsToProcess count] > 0 && [objectsToProcess count] != lastCount) {
+        lastCount = [objectsToProcess count];
+        successfullyAdded = [CPMutableArray array];
+
+        for (var i = 0; i < [objectsToProcess count]; i++) {
+            var newDataObject = objectsToProcess[i];
+            var parentID = [newDataObject valueForKey:@"parentID"];
+            var parentView = nil;
+
+            if (parentID) {
+                parentView = [self viewForElementWithID:parentID];
+            }
+
+            if (!parentID || parentView) {
+                var superview = parentView || self;
+                console.log("-> Creating view for:", [newDataObject valueForKey:@"id"], "in superview:", superview);
+                [self _createViewForDataObject:newDataObject superview:superview window:canvasWindow];
+                [successfullyAdded addObject:newDataObject];
+            }
+        }
+
+        [objectsToProcess removeObjectsInArray:successfullyAdded];
+    }
+
+    if ([objectsToProcess count] > 0) {
+        for (var i = 0; i < [objectsToProcess count]; i++) {
+            console.error("UICanvasView: Could not create view for object during initial load:", objectsToProcess[i], ". Parent view not found.");
         }
     }
 }
@@ -243,12 +268,19 @@ var _selectedConnectionsObservationContext = 1095;
     var newView = [[viewClass alloc] init];
     console.log("did create newView");
 
+    [newView setIsNewlyCreated:YES];
+    [CPTimer scheduledTimerWithTimeInterval:0.1 target:newView selector:@selector(setIsNewlyCreated:) userInfo:NO repeats:NO];
+
     if (!newView) {
         console.error("FATAL: Failed to init view for class", viewClass);
         return;
     }
 
-    [superview addSubview:newView];
+    var targetSuperview = superview;
+    if ([superview isKindOfClass:[UIHBoxView class]] || [superview isKindOfClass:[UIVBoxView class]]) {
+        targetSuperview = [superview view];
+    }
+    [targetSuperview addSubview:newView];
     [newView setDataObject:dataObject];
 
     // Bind common properties
@@ -258,16 +290,9 @@ var _selectedConnectionsObservationContext = 1095;
     [newView bind:@"height" toObject:dataObject withKeyPath:@"height" options:nil];
     console.log("did create bindings");
 
-    // For container views, recursively create their children
-    if ([newView isKindOfClass:[UIWindowView class]] || [newView isKindOfClass:[UIBoxView class]] || [newView isKindOfClass:[UIScrollViewView class]]) {
-        var children = [dataObject valueForKey:@"children"];
-        if (children && [children count] > 0) {
-            console.log(" -> Container has", [children count], "children. Recursing...");
-            for (var j = 0; j < [children count]; j++) {
-                [self _createViewForDataObject:children[j] superview:newView window:aWindow];
-            }
-        }
-    }
+    // The iterative KVO observer is now responsible for creating children.
+    // This recursive logic is no longer needed and causes conflicts.
+    
     console.log("END _createViewForDataObject id:", [dataObject valueForKey:@"id"]);
 }
 
@@ -321,7 +346,42 @@ var _selectedConnectionsObservationContext = 1095;
 
         var added = [newDataObjects mutableCopy];
         [added removeObjectsInArray:oldDataObjects];
-        [self startObservingDataObjects:added];
+
+        if ([added count] > 0)
+        {
+            var successfullyAdded;
+            var lastCount = 0;
+
+            while ([added count] > 0 && [added count] != lastCount) {
+                lastCount = [added count];
+                successfullyAdded = [CPMutableArray array];
+
+                for (var i = 0; i < [added count]; i++) {
+                    var newDataObject = added[i];
+                    var parentID = [newDataObject valueForKey:@"parentID"];
+                    var parentView = nil;
+
+                    if (parentID) {
+                        parentView = [self viewForElementWithID:parentID];
+                    }
+
+                    if (!parentID || parentView) {
+                        var superview = parentView || self;
+                        console.log("-> Creating view for:", [newDataObject valueForKey:@"id"], "in superview:", superview);
+                        [self _createViewForDataObject:newDataObject superview:superview window:[self window]];
+                        [successfullyAdded addObject:newDataObject];
+                    }
+                }
+
+                [added removeObjectsInArray:successfullyAdded];
+            }
+
+            if ([added count] > 0) {
+                for (var i = 0; i < [added count]; i++) {
+                    console.error("UICanvasView: Could not create view for object:", added[i], ". Parent view not found.");
+                }
+            }
+        }
 
         var removed = [oldDataObjects mutableCopy];
         [removed removeObjectsInArray:newDataObjects];
@@ -832,12 +892,24 @@ var _selectedConnectionsObservationContext = 1095;
     return CPDragOperationCopy;
 }
 
+- (void)draggingExited:(CPDraggingInfo)sender
+{
+    // Do nothing for now
+}
+
+- (BOOL)prepareForDragOperation:(CPDraggingInfo)sender
+{
+    return YES;
+}
+
 - (BOOL)performDragOperation:(CPDraggingInfo)sender
 {
     var dropPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
     var pasteboard = [sender draggingPasteboard];
     var types = [pasteboard types];
     var elementType = nil;
+
+    console.log("UICanvasView: performDragOperation at point:", dropPoint);
 
     // Find the first registered drag type on the pasteboard
     var registeredTypes = [self registeredDraggedTypes];
@@ -854,24 +926,53 @@ var _selectedConnectionsObservationContext = 1095;
 
     if (elementType && _delegate)
     {
-        if (elementType === "window") {
-    console.log("will instantiate window");
+        console.log("-> Determined element type:", elementType);
+        var containerView = [self viewAtPoint:dropPoint];
+        var containerData = nil;
 
-            if ([_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:)]) {
-                [_delegate addNewElementOfType:elementType atPoint:dropPoint];
+        if (containerView && [containerView isKindOfClass:[UIElementView class]] && containerView._isContainer) {
+            containerData = [containerView dataObject];
+            console.log("-> Found container view:", containerView, "with data:", containerData);
+        } else {
+            console.log("-> No container view found at drop point.");
+        }
+
+        if (containerData) {
+            // Dropped inside a container
+            console.log("--> Calling addNewElementOfType:atPoint:inParent:");
+            if ([_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:inParent:)]) {
+                [_delegate addNewElementOfType:elementType atPoint:dropPoint inParent:containerData];
                 [self setNeedsDisplay:YES];
                 return YES;
             }
         } else {
-            if ([_delegate respondsToSelector:@selector(addNewElementOfType:inNewWindowAtPoint:)]) {
-                [_delegate addNewElementOfType:elementType inNewWindowAtPoint:dropPoint];
-                [self setNeedsDisplay:YES];
-                return YES;
+            // Dropped on the canvas background
+            if (elementType === "window") {
+                console.log("--> It's a window, calling addNewElementOfType:atPoint:inParent: with nil parent.");
+                if ([_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:inParent:)]) {
+                    [_delegate addNewElementOfType:elementType atPoint:dropPoint inParent:nil];
+                    [self setNeedsDisplay:YES];
+                    return YES;
+                }
+            } else {
+                console.log("--> Not a window, calling addNewElementOfType:inNewWindowAtPoint:");
+                if ([_delegate respondsToSelector:@selector(addNewElementOfType:inNewWindowAtPoint:)]) {
+                    [_delegate addNewElementOfType:elementType inNewWindowAtPoint:dropPoint];
+                    [self setNeedsDisplay:YES];
+                    return YES;
+                }
             }
         }
     }
 
+    console.log("-> performDragOperation failed or was not handled.");
     return NO;
+}
+
+- (void)concludeDragOperation:(CPDraggingInfo)sender
+{
+    // This is called after the drag is complete.
+    // We don't need to do anything here, but the method must exist.
 }
 
 #pragma mark - Delegate & Selection Management

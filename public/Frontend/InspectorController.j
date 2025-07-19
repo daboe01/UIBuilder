@@ -187,6 +187,17 @@
                 [textField setBezeled:YES];
                 [textField setEditable:YES];
                 [propertiesView addSubview:textField];
+            } else if (propertyType === UIBEnumeration) {
+                var popUpButton = [[CPPopUpButton alloc] initWithFrame:CGRectMake(120, yPos, 150, 27)];
+                var enumerations = [viewClass propertyEnumerations];
+                var values = enumerations[propertyName];
+                if (values) {
+                    for (var j = 0; j < [values count]; j++) {
+                        [popUpButton addItemWithTitle:values[j]];
+                    }
+                }
+                [popUpButton bind:@"selectedObject" toObject:selectedObject withKeyPath:propertyName options:nil];
+                [propertiesView addSubview:popUpButton];
             } else { // Fallback for unknown types
                 var textField = [[CPTextField alloc] initWithFrame:CGRectMake(120, yPos, 150, 25)];
                 [textField bind:@"value" toObject:selectedObject withKeyPath:propertyName options:nil];

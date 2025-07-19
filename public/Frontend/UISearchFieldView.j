@@ -6,7 +6,7 @@
 {
     if (self === [UISearchFieldView class])
     {
-        [UIElementView registerViewClass:self forElementType:@"searchField"];
+        @class UIElementView
     }
 }
 

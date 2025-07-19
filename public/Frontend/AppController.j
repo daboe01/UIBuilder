@@ -509,7 +509,12 @@ var CGSizeZero = CGSizeMake(0, 0);
             {dragType: UISplitViewDragType, elementType: "splitView", label: "Split View"},
             {dragType: UITableViewDragType, elementType: "tableView", label: "Table View"}
         ],
-        // Row 2: Text & Fields
+        // Row 2: Layout
+        [
+            {dragType: UIHBoxDragType, elementType: "hbox", label: "HBox"},
+            {dragType: UIVBoxDragType, elementType: "vbox", label: "VBox"}
+        ],
+        // Row 3: Text & Fields
         [
             {dragType: UILabelDragType, elementType: "label", label: "Label"},
             {dragType: UITextFieldDragType, elementType: "textfield", label: "Text Field"},
@@ -518,7 +523,7 @@ var CGSizeZero = CGSizeMake(0, 0);
             {dragType: UITextViewDragType, elementType: "textView", label: "Text View"},
             {dragType: UIComboBoxDragType, elementType: "comboBox", label: "Combo Box"}
         ],
-        // Row 3: Buttons & Controls
+        // Row 4: Buttons & Controls
         [
             {dragType: UIButtonDragType, elementType: "button", label: "Button"},
             {dragType: UICheckBoxDragType, elementType: "checkBox", label: "Check Box"},
@@ -527,7 +532,7 @@ var CGSizeZero = CGSizeMake(0, 0);
             {dragType: UISliderDragType, elementType: "slider", label: "Slider"},
             {dragType: UIDatePickerDragType, elementType: "datePicker", label: "Date Picker"}
         ],
-        // Row 4: Other
+        // Row 5: Other
         [
             {dragType: UIImageViewDragType, elementType: "imageView", label: "Image View"},
             {dragType: UIProgressIndicatorDragType, elementType: "progresIndicator", label: "Progress"}

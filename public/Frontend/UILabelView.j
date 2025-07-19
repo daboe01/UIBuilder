@@ -1,4 +1,6 @@
-@import "UIElementView.j"
+@import "UIBuilderConstants.j"
+@import "UIBuilderConstants.j"
+@class UIElementView
 
 @implementation UILabelView : UIElementView
 
@@ -12,13 +14,14 @@
 
 + (CPArray)persistentProperties
 {
-    return [super persistentProperties].concat(["value"]);
+    return [super persistentProperties].concat(["textAlign"]);
 }
 
 + (CPDictionary)defaultValues
 {
     return {
-        value: "Label"
+        value: "Label",
+        textAlign: "left"
     };
 }
 
@@ -26,9 +29,16 @@
 {
     var types = [super propertyTypes];
     [types setObject:UIBString forKey:@"value"];
+    [types setObject:UIBEnumeration forKey:@"textAlign"];
     return types;
 }
 
++ (CPDictionary)propertyEnumerations
+{
+    return {
+        textAlign: ["left", "center", "right"]
+    };
+}
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];
@@ -43,10 +53,23 @@
 - (void)drawSkeleton:(CGRect)rect
 {
     var bounds = [self bounds];
-    var value = [[self dataObject] valueForKey:@"value"];
+    var data = [self dataObject];
+    var value = [data valueForKey:@"value"];
+    var textAlign = [data valueForKey:@"textAlign"] || "left";
+
     if (value) {
         var valueSize = [value sizeWithAttributes:_stringAttributes];
-        [value drawAtPoint:CGPointMake(0, (bounds.size.height - valueSize.height) / 2) withAttributes:_stringAttributes];
+        var x;
+
+        if (textAlign === "center") {
+            x = (bounds.size.width - valueSize.width) / 2;
+        } else if (textAlign === "right") {
+            x = bounds.size.width - valueSize.width;
+        } else { // left
+            x = 0;
+        }
+
+        [value drawAtPoint:CGPointMake(x, (bounds.size.height - valueSize.height) / 2) withAttributes:_stringAttributes];
     }
 }
 

@@ -12,6 +12,29 @@
 
 @import "UIBuilderConstants.j"
 
+@class UIWindowView
+@class UIButtonView;
+@class UISliderView;
+@class UITextFieldView;
+@class UICheckBoxView;
+@class UILabelView;
+@class UISearchFieldView;
+@class UISecureFieldView;
+@class UITextViewView;
+@class UIScrollViewView;
+@class UITableViewView;
+@class UISplitViewView;
+@class UIImageViewView;
+@class UIPopUpButtonView;
+@class UIComboBoxView;
+@class UIStepperView;
+@class UIDatePickerView;
+@class UIProgressIndicatorView;
+@class UIBoxView;
+@class UIHBoxView;
+@class UIVBoxView;
+@class UICanvasView;
+
 var _classMap = [CPMutableDictionary dictionary];
 
 
@@ -27,6 +50,7 @@ var _classMap = [CPMutableDictionary dictionary];
     CPTrackingArea          _trackingArea;
     BOOL                    _isContainer;
     BOOL                    _isConnecting;
+    BOOL                    _isNewlyCreated;
 }
 
 #pragma mark -
@@ -37,6 +61,30 @@ var _classMap = [CPMutableDictionary dictionary];
     if (self === [UIElementView class])
     {
         _classMap = [CPMutableDictionary dictionary];
+
+        // Register all UIElementView subclasses here
+        [self registerViewClass:UIWindowView forElementType:@"window"];
+        [self registerViewClass:UIButtonView forElementType:@"button"];
+        [self registerViewClass:UISliderView forElementType:@"slider"];
+        [self registerViewClass:UITextFieldView forElementType:@"textfield"];
+        [self registerViewClass:UICheckBoxView forElementType:@"checkBox"];
+        [self registerViewClass:UILabelView forElementType:@"label"];
+        [self registerViewClass:UISearchFieldView forElementType:@"searchField"];
+        [self registerViewClass:UISecureFieldView forElementType:@"secureField"];
+        [self registerViewClass:UITextViewView forElementType:@"textView"];
+        [self registerViewClass:UIScrollViewView forElementType:@"scrollView"];
+        [self registerViewClass:UITableViewView forElementType:@"tableView"];
+        [self registerViewClass:UISplitViewView forElementType:@"splitView"];
+        [self registerViewClass:UIImageViewView forElementType:@"imageView"];
+        [self registerViewClass:UIPopUpButtonView forElementType:@"popUpButton"];
+        [self registerViewClass:UIComboBoxView forElementType:@"comboBox"];
+        [self registerViewClass:UIStepperView forElementType:@"stepper"];
+        [self registerViewClass:UIDatePickerView forElementType:@"datePicker"];
+        [self registerViewClass:UIProgressIndicatorView forElementType:@"progresIndicator"];
+        [self registerViewClass:UIBoxView forElementType:@"box"];
+        [self registerViewClass:UIHBoxView forElementType:@"hbox"];
+        [self registerViewClass:UIVBoxView forElementType:@"vbox"];
+        [self registerViewClass:UICanvasView forElementType:@"canvas"];
     }
 }
 
@@ -61,6 +109,11 @@ var _classMap = [CPMutableDictionary dictionary];
 + (CPDictionary)propertyTypes
 {
     return [CPDictionary dictionaryWithObjects:[UIBString] forKeys:["value"]];
+}
+
++ (CPDictionary)propertyEnumerations
+{
+    return [CPDictionary dictionary];
 }
 
 + (CPMutableDictionary)classMap
@@ -780,6 +833,19 @@ var _classMap = [CPMutableDictionary dictionary];
 {
     // By default, any part of the view can be a connection target.
     return YES;
+}
+
+- (CPDragOperation)draggingUpdated:(CPDraggingInfo)sender
+{
+    if (_isNewlyCreated)
+        return CPDragOperationNone;
+
+    return CPDragOperationCopy;
+}
+
+- (void)setIsNewlyCreated:(BOOL)isNew
+{
+    _isNewlyCreated = isNew;
 }
 
 @end

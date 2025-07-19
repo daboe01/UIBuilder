@@ -10,7 +10,7 @@
 @import <AppKit/AppKit.j>
 
 @import "UIBuilderConstants.j";
-@import "UIElementView.j";
+@class UIElementView;
 @import "UIWindowView.j";
 @import "UIButtonView.j";
 @import "UISliderView.j";
@@ -35,11 +35,5 @@
 
 function main(args, namedArgs)
 {
-    // Force initialization of all UIElementView subclasses
-    var subclasses = [UIWindowView, UIButtonView, UISliderView, UITextFieldView, UICheckBoxView, UILabelView, UISearchFieldView, UISecureFieldView, UITextViewView, UIScrollViewView, UITableViewView, UISplitViewView, UIImageViewView, UIPopUpButtonView, UIComboBoxView, UIStepperView, UIDatePickerView, UIProgressIndicatorView, UIBoxView];
-    for (var i = 0; i < subclasses.length; i++) {
-        [subclasses[i] initialize];
-    }
-
     CPApplicationMain();
 }

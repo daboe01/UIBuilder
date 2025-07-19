@@ -9,14 +9,6 @@ var _windowChildrenObservationContext = 1094;
     BOOL             _isRubbing;
 }
 
-+ (void)initialize
-{
-    if (self === [UIWindowView class])
-    {
-        [self registerViewClass:self forElementType:@"window"];
-    }
-}
-
 + (CPDictionary)propertyTypes
 {
     var types = [super propertyTypes];
@@ -124,24 +116,11 @@ var _windowChildrenObservationContext = 1094;
     [super dealloc];
 }
 
-- (void)setDataObject:(id)newDataObject
-{
-    // The canvas is responsible for creating children. This view just holds the data.
-    [super setDataObject:newDataObject];
-}
-
-
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];
-    if (self) {
-        console.log("UIWindowView specific init. self after super init:", self);
-        if (CGRectIsEmpty(aRect)) {
-            [self setFrameSize:CGSizeMake(250, 200)];
-        }
-        _isContainer = YES;
-
-        // This view can accept drops of other elements.
+    if (self)
+    {
         [self registerForDraggedTypes:[
             UIButtonDragType,
             UISliderDragType,
@@ -162,6 +141,22 @@ var _windowChildrenObservationContext = 1094;
             UIProgressIndicatorDragType,
             UIBoxDragType
         ]];
+
+        _isContainer = YES;
+        console.log("UIWindowView specific init. self after super init:", self);
+
+        _titleView = [[CPTextField alloc] initWithFrame:CGRectMake(0, 2, [self bounds].size.width, 22)];
+        [_titleView setBezeled:NO];
+        [_titleView setDrawsBackground:NO];
+        [_titleView setEditable:NO];
+        [_titleView setSelectable:NO];
+        [_titleView setFont:[CPFont boldSystemFontOfSize:13]];
+        [_titleView setTextColor:[CPColor whiteColor]];
+        [_titleView setAlignment:CPCenterTextAlignment];
+        [_titleView setAutoresizingMask:CPViewWidthSizable];
+        [self addSubview:_titleView];
+
+        [_titleView bind:@"value" toObject:self withKeyPath:@"dataObject.value" options:nil];
     }
     return self;
 }
@@ -187,12 +182,6 @@ var _windowChildrenObservationContext = 1094;
     [bgPath setLineWidth:1.0];
     [bgPath stroke];
 
-    // Value text
-    [_stringAttributes setObject:[CPColor whiteColor] forKey:CPForegroundColorAttributeName];
-    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
-    [[self value] drawAtPoint:CGPointMake((bounds.size.width - valueSize.width) / 2.0, (titleBarHeight - valueSize.height) / 2.0 - 4) withAttributes:_stringAttributes];
-    [_stringAttributes setObject:[CPColor blackColor] forKey:CPForegroundColorAttributeName]; // reset color
-
     // Traffic light buttons
     var circleRadius = 5.0;
     var startX = 10.0;
@@ -207,94 +196,34 @@ var _windowChildrenObservationContext = 1094;
 
 // --- Drag Destination Methods ---
 
-- (CPDragOperation)draggingEntered:(CPDraggingInfo)sender
+- (CPDragOperation)draggingEntered:(id <CPDraggingInfo>)sender
 {
-    var pasteboard = [sender draggingPasteboard];
-    var acceptedTypes = [self registeredDraggedTypes];
-    var localPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
-    var titleBarHeight = 30.0;
-
-    // Check if the dragged type is a new UI element (from the palette)
-    if ([acceptedTypes containsObject:[[pasteboard types] objectAtIndex:0]])
-    {
-        _isDragTarget = YES;
-        [self setNeedsDisplay:YES];
-        return CPDragOperationGeneric;
-    }
-    // Check if it's a connection drag (control key is pressed)
-    else if ([sender draggingSourceOperationMask] & CPControlKeyMask && localPoint.y <= titleBarHeight)
-
-    {
-        debugger
-        _isDragTarget = YES;
-        [self setNeedsDisplay:YES];
-        return CPDragOperationGeneric;
-    }
-
-    return CPDragOperationNone;
+    return [[self superview] draggingEntered:sender];
 }
 
-- (CPDragOperation)draggingUpdated:(CPDraggingInfo)sender
+- (CPDragOperation)draggingUpdated:(id <CPDraggingInfo>)sender
 {
-    var localPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
-    var titleBarHeight = 30.0;
-    var acceptedTypes = [self registeredDraggedTypes];
-    var pasteboard = [sender draggingPasteboard];
-
-    // Check if the dragged type is a new UI element (from the palette)
-    if ([acceptedTypes containsObject:[[pasteboard types] objectAtIndex:0]])
-    {
-        _isDragTarget = YES;
-        [self setNeedsDisplay:YES];
-        return CPDragOperationGeneric;
-    }
-    // Check if it's a connection drag (control key is pressed)
-    else if ([sender draggingSourceOperationMask] & CPControlKeyMask && localPoint.y <= titleBarHeight)
-    {
-        _isDragTarget = YES;
-        [self setNeedsDisplay:YES];
-        return CPDragOperationGeneric;
-    }
-    else
-    {
-        _isDragTarget = NO;
-        [self setNeedsDisplay:YES];
-        return CPDragOperationNone;
-    }
+    return [[self superview] draggingUpdated:sender];
 }
 
-- (void)draggingExited:(CPDraggingInfo)sender
+- (void)draggingExited:(id <CPDraggingInfo>)sender
 {
-    _isDragTarget = NO;
-    [self setNeedsDisplay:YES];
+    [[self superview] draggingExited:sender];
 }
 
-- (BOOL)performDragOperation:(CPDraggingInfo)sender
+- (BOOL)prepareForDragOperation:(id <CPDraggingInfo>)sender
 {
-    var dropPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
-    var pasteboard = [sender draggingPasteboard];
-    var draggedType = [[pasteboard types] objectAtIndex:0];
-    var elementType = [[draggedType componentsSeparatedByString:@"DragType"] objectAtIndex:0];
-    elementType = [elementType stringByReplacingOccurrencesOfString:@"UI" withString:@""];
-    elementType = [elementType stringByReplacingCharactersInRange:CPMakeRange(0, 1) withString:[[elementType substringToIndex:1] lowercaseString]];
+    return [[self superview] prepareForDragOperation:sender];
+}
 
-    if (elementType)
-    {
-        // We need to find the canvas and then the delegate
-        var canvas = [self superview];
-        var delegate = [canvas delegate];
-        if (delegate && [delegate respondsToSelector:@selector(addNewElementOfType:atPoint:)])
-        {
-            var canvasPoint = [self convertPoint:dropPoint toView:canvas];
-            [delegate addNewElementOfType:elementType atPoint:canvasPoint];
-        }
-    }
-    // If it's a connection drag, the logic is handled in _connectWithEvent: in UIElementView
+- (BOOL)performDragOperation:(id <CPDraggingInfo>)sender
+{
+    return [[self superview] performDragOperation:sender];
+}
 
-    _isDragTarget = NO;
-    [self setNeedsDisplay:YES];
-
-    return YES;
+- (void)concludeDragOperation:(id <CPDraggingInfo>)sender
+{
+    [[self superview] concludeDragOperation:sender];
 }
 
 - (id)nativeUIElementWithMap:(CPMutableDictionary)aMap

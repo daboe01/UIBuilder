@@ -913,46 +913,68 @@ var _selectedConnectionsObservationContext = 1095;
 - (CPDragOperation)draggingUpdated:(CPDraggingInfo)sender
 {
     var dropPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
-    var view = [self viewAtPoint:dropPoint];
-    var targetHBox = nil;
-    var targetVBox = nil;
+    var viewAtDrop = [self viewAtPoint:dropPoint];
+    console.log("--- Dragging Update ---");
+    console.log("Drop Point:", dropPoint, "View at Drop:", viewAtDrop ? [viewAtDrop class] : "nil");
 
-    // Reset indicators
+    // Always reset indicators
     [_insertionIndicatorView setHidden:YES];
     if (_highlightedHBox) {
         [_highlightedHBox setAsDropTarget:NO];
         _highlightedHBox = nil;
     }
 
-    // Find the HBox or VBox to highlight
-    if (view) {
-        var currentView = view;
+    var targetVBox = nil;
+
+    // 1. Find the parent VBox
+    if (viewAtDrop) {
+        var currentView = viewAtDrop;
         while(currentView && currentView != self) {
-            if ([currentView isKindOfClass:[UIHBoxView class]]) {
-                targetHBox = currentView;
-                break; // Prefer the inner-most HBox
-            }
             if ([currentView isKindOfClass:[UIVBoxView class]]) {
-                targetVBox = currentView; // Might be this one if no HBox is found deeper
+                targetVBox = currentView;
+                console.log("Found targetVBox:", targetVBox);
+                break;
             }
             currentView = [currentView superview];
         }
     }
 
-    // Update HBox highlighting
+    if (!targetVBox) {
+        console.log("No VBox found. Exiting.");
+        return CPDragOperationCopy;
+    }
+
+    // 2. We have a VBox. Now check for HBoxes inside it.
+    var targetHBox = nil;
+    var localPointInVBox = [self convertPoint:dropPoint toView:targetVBox];
+    var vboxSubviews = [targetVBox subviews];
+
+    for (var i = 0; i < [vboxSubviews count]; i++) {
+        var subview = vboxSubviews[i];
+        if ([subview isKindOfClass:[UIHBoxView class]] && CGRectContainsPoint([subview frame], localPointInVBox)) {
+            targetHBox = subview;
+            console.log("Found targetHBox inside VBox:", targetHBox);
+            break;
+        }
+    }
+
+    // 3. Apply highlighting logic
     if (targetHBox) {
+        console.log("Highlighting HBox:", targetHBox);
         _highlightedHBox = targetHBox;
         [_highlightedHBox setAsDropTarget:YES];
-    }
-    // If we are over a VBox but not a specific HBox, check for the lower third
-    else if (targetVBox) {
-        var localPoint = [self convertPoint:dropPoint toView:targetVBox];
+    } else {
+        // No HBox hit, check for lower third of the VBox
+        console.log("Inside VBox, but no HBox hit. Checking for lower third...");
         var bounds = [targetVBox bounds];
         var lowerThirdY = bounds.origin.y + (bounds.size.height * 2 / 3);
+        console.log("VBox localPoint.y:", localPointInVBox.y, "Lower Third Y starts at:", lowerThirdY);
 
-        if (localPoint.y > lowerThirdY) {
+        if (localPointInVBox.y > lowerThirdY) {
+            console.log("!!! Condition MET. Showing insertion indicator. !!!");
             var indicatorHeight = 10;
             var indicatorFrame = CGRectMake(bounds.origin.x, bounds.origin.y + bounds.size.height - indicatorHeight, bounds.size.width, indicatorHeight);
+            
             var canvasIndicatorFrame = [targetVBox convertRect:indicatorFrame toView:self];
 
             [_insertionIndicatorView setFrame:canvasIndicatorFrame];

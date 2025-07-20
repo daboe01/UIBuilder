@@ -5,6 +5,9 @@ var _windowChildrenObservationContext = 1094;
 
 @implementation UIWindowView : UIElementView
 {
+    CPTextField _titleView;
+    BOOL _isDropTarget;
+
     CGPoint          _rubberStart;
     CGPoint          _rubberEnd;
     BOOL             _isRubbing;
@@ -47,9 +50,40 @@ var _windowChildrenObservationContext = 1094;
         [CPBezierPath fillRect:rubber];
         [[CPColor alternateSelectedControlColor] setStroke];
         [CPBezierPath setDefaultLineWidth:1.0];
-        [CPBezierPath strokeRect:rubber];
     }
+
+    // Border
+    if (_isDropTarget) {
+        [[CPColor redColor] set];
+        [CPBezierPath setDefaultLineWidth:2.0];
+    } else {
+        [[CPColor darkGrayColor] set];
+        [CPBezierPath setDefaultLineWidth:1.0];
+    }
+    [CPBezierPath strokeRect:_bounds];
 }
+
+#pragma mark - Drag and Drop
+
+- (CPDragOperation)draggingEntered:(id <CPDraggingInfo>)sender
+{
+    _isDropTarget = YES;
+    [self setNeedsDisplay:YES];
+    return CPDragOperationGeneric;
+}
+
+- (void)draggingExited:(id <CPDraggingInfo>)sender
+{
+    _isDropTarget = NO;
+    [self setNeedsDisplay:YES];
+x}
+
+- (void)concludeDragOperation:(id <CPDraggingInfo>)sender
+{
+    _isDropTarget = NO;
+    [self setNeedsDisplay:YES];
+}
+
 
 - (void)mouseDown:(CPEvent)theEvent
 {
@@ -195,21 +229,9 @@ var _windowChildrenObservationContext = 1094;
     [CPBezierPath fillRect:CGRectMake(startX + 36, startY - circleRadius, circleRadius*2, circleRadius*2)];
 }
 
-// --- Drag Destination Methods ---
-
-- (CPDragOperation)draggingEntered:(id <CPDraggingInfo>)sender
-{
-    return [[self superview] draggingEntered:sender];
-}
-
 - (CPDragOperation)draggingUpdated:(id <CPDraggingInfo>)sender
 {
     return [[self superview] draggingUpdated:sender];
-}
-
-- (void)draggingExited:(id <CPDraggingInfo>)sender
-{
-    [[self superview] draggingExited:sender];
 }
 
 - (BOOL)prepareForDragOperation:(id <CPDraggingInfo>)sender
@@ -220,11 +242,6 @@ var _windowChildrenObservationContext = 1094;
 - (BOOL)performDragOperation:(id <CPDraggingInfo>)sender
 {
     return [[self superview] performDragOperation:sender];
-}
-
-- (void)concludeDragOperation:(id <CPDraggingInfo>)sender
-{
-    [[self superview] concludeDragOperation:sender];
 }
 
 - (id)nativeUIElementWithMap:(CPMutableDictionary)aMap

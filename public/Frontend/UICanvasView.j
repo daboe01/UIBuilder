@@ -41,40 +41,37 @@ function treshold(value, limit)
     return value > 0 ? Math.min(value, limit) : Math.max(value, -limit);
 }
 
-@implementation UICanvasView : CPView <CPMenuDelegate>
+@implementation UICanvasView : CPView
 {
-    // Data binding ivars
-    id                  _dataObjectsContainer;
-    CPString            _dataObjectsKeyPath;
-    id                  _selectionIndexesContainer;
-    CPString            _selectionIndexesKeyPath;
-    CPArray             _oldDataObjects;
+    CPPoint         _dragPoint;
+    BOOL            _didDrag;
+    CPArray         _selection;
+    CPView          _rubberband;
+    CPPoint         _rubberbandStartPoint;
 
-    // Connections ivars
-    id                  _connectionsContainer;
-    CPString            _connectionsKeyPath;
-    CPArray             _oldConnections;
-    id                  _selectedConnectionsContainer;
-    CPString            _selectedConnectionsKeyPath;
-
-    // Rubber-band selection ivars
-    CGPoint             _rubberStart;
-    CGPoint             _rubberEnd;
-    BOOL                _isRubbing;
-    
-    ConnectionView      _connectionView;
-    
-    id                  _delegate;
-
-    // Drag and Drop
-    UIElementView       _highlightedHBox;
-    UIElementView       _highlightedVBox;
-    CPView              _insertionIndicatorView;
-
-    // Connection Menu ivars
-    UIElementView       _connectionSource;
-    UIElementView       _connectionTarget;
-    BOOL                _connectionMade;
+    UIHSpaceView    _draggedHSpace;
+    BOOL            _isManipulatingHSpace;
+    BOOL            _isRubbing;
+    CGPoint         _rubberStart;
+    CGPoint         _rubberEnd;
+    UIHBoxView      _highlightedHBox;
+    UIVBoxView      _highlightedVBox;
+    ConnectionView  _connectionView;
+    CPView          _insertionIndicatorView;
+    id              _delegate;
+    id              _connectionsContainer;
+    CPString        _connectionsKeyPath;
+    CPArray         _oldConnections;
+    id              _selectedConnectionsContainer;
+    CPString        _selectedConnectionsKeyPath;
+    id              _dataObjectsContainer;
+    CPString        _dataObjectsKeyPath;
+    CPArray         _oldDataObjects;
+    id              _selectionIndexesContainer;
+    CPString        _selectionIndexesKeyPath;
+    UIElementView   _connectionSource;
+    UIElementView   _connectionTarget;
+    BOOL            _connectionMade;
 }
 
 -(BOOL)acceptsFirstMouse:(CPEvent)aEvent

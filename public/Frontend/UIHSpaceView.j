@@ -12,7 +12,6 @@
 + (CPDictionary)defaultValues
 {
     return {
-        value: "HSpace",
         size: "min",
         width: 10
     };
@@ -36,16 +35,26 @@
     return self;
 }
 
-- (void)drawRect:(CGRect)rect
+- (void)drawRect:(CGRect)aRect
 {
-    // Don't call super, we want a completely custom look.
-    [self drawSkeleton:rect];
-
-    // We still want to see selection handles if it's selected.
     if ([self isSelected])
     {
-        [self drawHandles];
+        [super drawRect:aRect];
+        return;
     }
+
+    var bounds = [self bounds];
+    var path = [CPBezierPath bezierPath];
+    var y = bounds.size.height / 2.0;
+
+    [path moveToPoint:CGPointMake(bounds.origin.x, y)];
+    [path lineToPoint:CGPointMake(bounds.origin.x + bounds.size.width, y)];
+
+    [[CPColor blackColor] set];
+    var dashes = [2.0, 2.0];
+    [path setLineDash:dashes count:2 phase:0.0];
+    [path setLineWidth:1.0];
+    [path stroke];
 }
 
 - (void)drawSkeleton:(CGRect)rect

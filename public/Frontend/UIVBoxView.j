@@ -1,7 +1,8 @@
-@class UIElementView
+@class UIElementView;
 
 @implementation UIVBoxView : UIElementView
 {
+    BOOL _isDropTarget;
 }
 
 + (CPDictionary)defaultValues
@@ -89,12 +90,33 @@
     }
 }
 
+- (void)drawRect:(CGRect)rect
+{
+    [super drawRect:rect];
+    [self drawSkeleton:rect];
+}
+
 - (void)drawSkeleton:(CGRect)rect
 {
     var layer = [self layer];
     [layer setBorderColor:[[CPColor grayColor] CGColor]];
     [layer setBorderWidth:1.0];
     [layer setLineDashPattern:[2,2]];
+
+    if (_isDropTarget)
+    {
+        [[[CPColor yellowColor] colorWithAlphaComponent:0.5] setFill];
+        [CPBezierPath fillRect:[self bounds]];
+    }
+}
+
+- (void)setAsDropTarget:(BOOL)isDropTarget
+{
+    if (_isDropTarget !== isDropTarget)
+    {
+        _isDropTarget = isDropTarget;
+        [self setNeedsDisplay:YES];
+    }
 }
 
 @end

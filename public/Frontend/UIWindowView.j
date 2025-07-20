@@ -76,7 +76,7 @@ var _windowChildrenObservationContext = 1094;
 {
     _isDropTarget = NO;
     [self setNeedsDisplay:YES];
-x}
+}
 
 - (void)concludeDragOperation:(id <CPDraggingInfo>)sender
 {

@@ -68,6 +68,7 @@ function treshold(value, limit)
 
     // Drag and Drop
     UIElementView       _highlightedHBox;
+    UIElementView       _highlightedVBox;
     CPView              _insertionIndicatorView;
 
     // Connection Menu ivars
@@ -923,6 +924,10 @@ var _selectedConnectionsObservationContext = 1095;
         [_highlightedHBox setAsDropTarget:NO];
         _highlightedHBox = nil;
     }
+    if (_highlightedVBox) {
+        [_highlightedVBox setAsDropTarget:NO];
+        _highlightedVBox = nil;
+    }
 
     var targetVBox = nil;
 
@@ -964,22 +969,10 @@ var _selectedConnectionsObservationContext = 1095;
         _highlightedHBox = targetHBox;
         [_highlightedHBox setAsDropTarget:YES];
     } else {
-        // No HBox hit, check for lower third of the VBox
-        console.log("Inside VBox, but no HBox hit. Checking for lower third...");
-        var bounds = [targetVBox bounds];
-        var lowerThirdY = bounds.origin.y + (bounds.size.height * 2 / 3);
-        console.log("VBox localPoint.y:", localPointInVBox.y, "Lower Third Y starts at:", lowerThirdY);
-
-        if (localPointInVBox.y > lowerThirdY) {
-            console.log("!!! Condition MET. Showing insertion indicator. !!!");
-            var indicatorHeight = 10;
-            var indicatorFrame = CGRectMake(bounds.origin.x, bounds.origin.y + bounds.size.height - indicatorHeight, bounds.size.width, indicatorHeight);
-            
-            var canvasIndicatorFrame = [targetVBox convertRect:indicatorFrame toView:self];
-
-            [_insertionIndicatorView setFrame:canvasIndicatorFrame];
-            [_insertionIndicatorView setHidden:NO];
-        }
+        // No HBox hit, so highlight the VBox itself
+        console.log("Highlighting VBox:", targetVBox);
+        _highlightedVBox = targetVBox;
+        [_highlightedVBox setAsDropTarget:YES];
     }
     
     return CPDragOperationCopy;
@@ -990,6 +983,10 @@ var _selectedConnectionsObservationContext = 1095;
     if (_highlightedHBox) {
         [_highlightedHBox setAsDropTarget:NO];
         _highlightedHBox = nil;
+    }
+    if (_highlightedVBox) {
+        [_highlightedVBox setAsDropTarget:NO];
+        _highlightedVBox = nil;
     }
     [_insertionIndicatorView setHidden:YES];
 }
@@ -1004,6 +1001,10 @@ var _selectedConnectionsObservationContext = 1095;
     if (_highlightedHBox) {
         [_highlightedHBox setAsDropTarget:NO];
         _highlightedHBox = nil;
+    }
+    if (_highlightedVBox) {
+        [_highlightedVBox setAsDropTarget:NO];
+        _highlightedVBox = nil;
     }
     [_insertionIndicatorView setHidden:YES];
 

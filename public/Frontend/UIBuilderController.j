@@ -88,6 +88,7 @@
     CPArrayController _connectionsController @accessors(property=connectionsController);
     CPMutableArray _connections;
     int _elementCounter; // To generate unique IDs
+    UICanvasView _canvasView @accessors(property=canvasView);
 }
 
 + (Class)classForElementType:(CPString)elementType
@@ -126,9 +127,102 @@
     return nil;
 }
 
+- (CPDictionary)_ensureVBoxForWindow:(CPDictionary)windowData
+{
+    var children = [windowData valueForKey:@"children"];
+    for (var i = 0; i < [children count]; i++) {
+        if ([[children[i] valueForKey:@"type"] isEqualToString:@"vbox"]) {
+            console.log("-> Found existing VBox in window.");
+            return children[i];
+        }
+    }
+
+    // No VBox found, create one.
+    console.log("-> No VBox found in window. Creating one on-the-fly.");
+    var vboxData = [CPConservativeDictionary dictionary];
+    var vboxClass = [UIBuilderController classForElementType:@"vbox"];
+    var windowWidth = [windowData valueForKey:@"width"];
+    var windowHeight = [windowData valueForKey:@"height"];
+
+    [vboxData setValue:@"vbox" forKey:@"type"];
+    [vboxData setValue:@"id_" + _elementCounter++ forKey:@"id"];
+    [vboxData setValue:[windowData valueForKey:@"id"] forKey:@"parentID"];
+
+    var defaultVBoxValues = [vboxClass defaultValues];
+    for (var key in defaultVBoxValues) {
+        [vboxData setValue:defaultVBoxValues[key] forKey:key];
+    }
+
+    // Make the vbox fill the window's content area
+    [vboxData setValue:0 forKey:@"originX"];
+    [vboxData setValue:22 forKey:@"originY"]; // Below title bar
+    [vboxData setValue:windowWidth forKey:@"width"];
+    [vboxData setValue:windowHeight - 22 forKey:@"height"];
+    [vboxData setValue:[] forKey:@"children"];
+
+    [[windowData mutableArrayValueForKey:@"children"] addObject:vboxData];
+    [_elementsController addObject:vboxData]; // IMPORTANT: Add to controller for KVO
+
+    return vboxData;
+}
+
 - (void)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint inParent:(CPDictionary)parentData
 {
     console.log("UIBuilderController: addNewElementOfType:", elementType, "atPoint:", aPoint, "inParent:", parentData);
+
+    if (parentData)
+        console.log("-> Parent data type is: '" + [parentData valueForKey:@"type"] + "'");
+
+    var isLayoutElement = (elementType === "hbox" || elementType === "vbox" || elementType === "hspace" || elementType === "vspace");
+
+    // Scenario: Dropping into a window. Ensure it has a VBox.
+    if (parentData && [parentData valueForKey:@"type"] === "window" && !isLayoutElement)
+    {
+        var vboxData = [self _ensureVBoxForWindow:parentData];
+        // Retarget the drop operation to the VBox
+        parentData = vboxData;
+        console.log("-> Retargeted drop to VBox:", [parentData valueForKey:@"id"]);
+    }
+
+    // Scenario: Dropping a non-layout element into a VBox
+    if (parentData && [parentData valueForKey:@"type"] === "vbox" && !isLayoutElement)
+    {
+        var canvas = [self canvasView];
+        var viewAtDropPoint = [canvas viewAtPoint:aPoint];
+        var targetHBox = nil;
+
+        // Determine if the drop is on an existing HBox
+        if (viewAtDropPoint) {
+            var currentView = viewAtDropPoint;
+            while(currentView && currentView != canvas) {
+                if ([currentView isKindOfClass:[UIHBoxView class]]) {
+                    targetHBox = [currentView dataObject];
+                    break;
+                }
+                currentView = [currentView superview];
+            }
+        }
+
+        if (targetHBox)
+        {
+            // Scenario 1: Dropped on an existing HBox. Add the element to it.
+            console.log("-> VBox Drop: Adding to existing HBox:", [targetHBox valueForKey:@"id"]);
+            [self addNewElementOfType:elementType atPoint:aPoint inParent:targetHBox];
+            return;
+        }
+        else
+        {
+            // Scenario 2: Dropped elsewhere in the VBox. Create a new HBox at the bottom.
+            console.log("-> VBox Drop: Creating new HBox at the end.");
+            var newHBoxData = [self addNewHBoxInParent:parentData atIndex:-1]; // -1 appends to the end
+            [_elementsController addObject:newHBoxData];
+
+            // Add the new element inside the newly created HBox.
+            [self addNewElementOfType:elementType atPoint:CGPointMake(0, 0) inParent:newHBoxData];
+            return;
+        }
+    }
+
     var newElementData = [CPConservativeDictionary dictionary];
     var containerData = parentData || [self _containerDataAtPoint:aPoint];
     var viewClass = [UIBuilderController classForElementType:elementType];
@@ -157,6 +251,12 @@
     } else if (elementType === "label") {
         [newElementData setValue:100 forKey:@"width"];
         [newElementData setValue:20 forKey:@"height"];
+    } else if (elementType === "hspace") {
+        [newElementData setValue:50 forKey:@"width"];
+        [newElementData setValue:20 forKey:@"height"];
+    } else if (elementType === "vspace") {
+        [newElementData setValue:20 forKey:@"width"];
+        [newElementData setValue:50 forKey:@"height"];
     } else { // textfield
         [newElementData setValue:150 forKey:@"width"];
         [newElementData setValue:22 forKey:@"height"];
@@ -173,22 +273,32 @@
     if (containerData && elementType !== "window")
     {
         console.log("-> Adding as child to container:", [containerData valueForKey:@"id"]);
-        // Convert point to be relative to the container and center the element
-        var relativeX = aPoint.x - [containerData valueForKey:@"originX"] - (elementWidth / 2);
-        var relativeY = aPoint.y - [containerData valueForKey:@"originY"] - (elementHeight / 2);
-        [newElementData setValue:relativeX forKey:@"originX"];
-        [newElementData setValue:relativeY forKey:@"originY"];
+        // Convert point to be relative to the container
+        var relativeX = aPoint.x - [containerData valueForKey:@"originX"];
+        var relativeY = aPoint.y - [containerData valueForKey:@"originY"];
 
-        // Add as a child to the container
+        // For HBox, we don't center, we just add. Layout is managed by the HBox.
+        if ([containerData valueForKey:@"type"] === 'hbox') {
+             [newElementData setValue:0 forKey:@"originX"];
+             [newElementData setValue:0 forKey:@"originY"];
+        } else {
+            [newElementData setValue:relativeX - (elementWidth / 2) forKey:@"originX"];
+            [newElementData setValue:relativeY - (elementHeight / 2) forKey:@"originY"];
+        }
+
         [newElementData setValue:[containerData valueForKey:@"id"] forKey:@"parentID"];
         [[containerData mutableArrayValueForKey:@"children"] addObject:newElementData];
     }
 
-    // Add to the main controller regardless, so selection and KVO works for all objects.
+    // Add to the main elements controller to trigger KVO
     [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] removeObject:newElementData];
     [[[CPApp keyWindow] undoManager] setActionName:@"Add Element"];
-
     [_elementsController addObject:newElementData];
+
+    // If we just created a new top-level window, ensure it has a VBox by default.
+    if (elementType === "window" && !containerData) {
+        [self _ensureVBoxForWindow:newElementData];
+    }
 
     [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
     console.log("-> Finished addNewElementOfType. New element data:", newElementData);
@@ -386,6 +496,20 @@
     }
 }
 
+- (CPDictionary)parentOfElement:(CPDictionary)elementData
+{
+    var parentID = [elementData valueForKey:@"parentID"];
+    if (!parentID) return nil;
+
+    var allElements = [_elementsController arrangedObjects];
+    for (var i = 0; i < [allElements count]; i++)
+    {
+        if ([[allElements[i] valueForKey:@"id"] isEqualToString:parentID])
+            return allElements[i];
+    }
+    return nil;
+}
+
 - (void)addNewElementOfType:(CPString)elementType inNewWindowAtPoint:(CGPoint)aPoint
 {
     // 1. Create the window data
@@ -441,6 +565,86 @@
     [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
 
     console.log("UIBuilderController: addNewElementOfType:inNewWindowAtPoint: - Added new element in new window.");
+}
+
+- (CPDictionary)addNewHBoxInParent:(CPDictionary)parentData
+{
+    var hboxData = [CPConservativeDictionary dictionary];
+    var hboxClass = [UIBuilderController classForElementType:@"hbox"];
+    [hboxData setValue:@"hbox" forKey:@"type"];
+    [hboxData setValue:@"id_" + _elementCounter++ forKey:@"id"];
+    [hboxData setValue:[parentData valueForKey:@"id"] forKey:@"parentID"];
+    var defaultHBoxValues = [hboxClass defaultValues];
+    for (var key in defaultHBoxValues) {
+        [hboxData setValue:defaultHBoxValues[key] forKey:key];
+    }
+    [hboxData setValue:0 forKey:@"originX"];
+    [hboxData setValue:0 forKey:@"originY"];
+    [hboxData setValue:[parentData valueForKey:@"width"] forKey:@"width"];
+    [hboxData setValue:50 forKey:@"height"]; // Default height
+    [hboxData setValue:[] forKey:@"children"];
+
+    [[parentData mutableArrayValueForKey:@"children"] addObject:hboxData];
+
+    return hboxData;
+}
+
+- (CPDictionary)addNewHBoxInParent:(CPDictionary)parentData atIndex:(int)index
+{
+    var hboxData = [CPConservativeDictionary dictionary];
+    var hboxClass = [UIBuilderController classForElementType:@"hbox"];
+    [hboxData setValue:@"hbox" forKey:@"type"];
+    [hboxData setValue:@"id_" + _elementCounter++ forKey:@"id"];
+    [hboxData setValue:[parentData valueForKey:@"id"] forKey:@"parentID"];
+    var defaultHBoxValues = [hboxClass defaultValues];
+    for (var key in defaultHBoxValues) {
+        [hboxData setValue:defaultHBoxValues[key] forKey:key];
+    }
+    [hboxData setValue:0 forKey:@"originX"];
+    [hboxData setValue:0 forKey:@"originY"]; // VBox will handle layout
+    [hboxData setValue:[parentData valueForKey:@"width"] forKey:@"width"];
+    [hboxData setValue:50 forKey:@"height"]; // Default height
+    [hboxData setValue:[] forKey:@"children"];
+
+    var parentChildren = [parentData mutableArrayValueForKey:@"children"];
+    if (index >= 0 && index <= [parentChildren count]) {
+        [parentChildren insertObject:hboxData atIndex:index];
+    } else {
+        [parentChildren addObject:hboxData]; // Fallback to adding at the end
+    }
+    
+    return hboxData;
+}
+
+- (CPDictionary)addNewHBoxAfterHBox:(CPDictionary)siblingHBoxData inParent:(CPDictionary)parentData
+{
+    var hboxData = [CPConservativeDictionary dictionary];
+    var hboxClass = [UIBuilderController classForElementType:@"hbox"];
+    [hboxData setValue:@"hbox" forKey:@"type"];
+    [hboxData setValue:@"id_" + _elementCounter++ forKey:@"id"];
+    [hboxData setValue:[parentData valueForKey:@"id"] forKey:@"parentID"];
+    var defaultHBoxValues = [hboxClass defaultValues];
+    for (var key in defaultHBoxValues) {
+        [hboxData setValue:defaultHBoxValues[key] forKey:key];
+    }
+    [hboxData setValue:0 forKey:@"originX"];
+    [hboxData setValue:0 forKey:@"originY"];
+    [hboxData setValue:[parentData valueForKey:@"width"] forKey:@"width"];
+    [hboxData setValue:50 forKey:@"height"]; // Default height
+    [hboxData setValue:[] forKey:@"children"];
+
+    var parentChildren = [parentData mutableArrayValueForKey:@"children"];
+    var index = [parentChildren indexOfObject:siblingHBoxData];
+    if (index != CPNotFound)
+    {
+        [parentChildren insertObject:hboxData atIndex:index + 1];
+    }
+    else
+    {
+        [parentChildren addObject:hboxData];
+    }
+    
+    return hboxData;
 }
 
 - (void)addNewElementOfType:(CPString)elementType inWindow:(CPDictionary)windowData atPoint:(CGPoint)aPoint

@@ -66,6 +66,10 @@ function treshold(value, limit)
     
     id                  _delegate;
 
+    // Drag and Drop
+    UIElementView       _highlightedHBox;
+    CPView              _insertionIndicatorView;
+
     // Connection Menu ivars
     UIElementView       _connectionSource;
     UIElementView       _connectionTarget;
@@ -110,12 +114,23 @@ var _selectedConnectionsObservationContext = 1095;
             UIStepperDragType,
             UIDatePickerDragType,
             UIProgressIndicatorDragType,
-            UIBoxDragType
+            UIBoxDragType,
+            UIHBoxDragType,
+            UIVBoxDragType,
+            UIHSpaceDragType,
+            UIVSpaceDragType
         ]];
 
         _connectionView = [[ConnectionView alloc] initWithFrame:[self bounds]];
         [_connectionView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
         [self addSubview:_connectionView];
+
+        _insertionIndicatorView = [[CPView alloc] initWithFrame:CGRectMakeZero()];
+        [_insertionIndicatorView setBackgroundColor:[[CPColor yellowColor] colorWithAlphaComponent:0.5]];
+        [[_insertionIndicatorView layer] setBorderColor:[[CPColor yellowColor] CGColor]];
+        [[_insertionIndicatorView layer] setBorderWidth:1.0];
+        [_insertionIndicatorView setHidden:YES];
+        [self addSubview:_insertionIndicatorView];
     }
     return self;
 }
@@ -276,11 +291,7 @@ var _selectedConnectionsObservationContext = 1095;
         return;
     }
 
-    var targetSuperview = superview;
-    if ([superview isKindOfClass:[UIHBoxView class]] || [superview isKindOfClass:[UIVBoxView class]]) {
-        targetSuperview = [superview layoutView];
-    }
-    [targetSuperview addSubview:newView];
+    [superview addSubview:newView];
     [newView setDataObject:dataObject];
 
     // Bind common properties
@@ -689,37 +700,50 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (UIElementView)viewAtPoint:(CGPoint)aPoint
 {
+    // Start the search from the top-level canvas view.
     return [self _findDeepestUIElementViewAtPoint:aPoint inView:self];
 }
 
 - (UIElementView)_findDeepestUIElementViewAtPoint:(CGPoint)aPoint inView:(CPView)currentView
 {
-    // Iterate through subviews in reverse order to get the topmost view
+    // Iterate backwards to check top-most views first
     for (var i = [[currentView subviews] count] - 1; i >= 0; i--)
     {
         var subview = [[currentView subviews] objectAtIndex:i];
-        
-        // Convert the point to the subview's coordinate system
-        var localPoint = [subview convertPoint:aPoint fromView:currentView];
 
-        if ([subview isKindOfClass:[UIElementView class]])
+        // We only care about UIElementView subclasses that are visible
+        if (![subview isKindOfClass:[UIElementView class]] || [subview isHidden])
+            continue;
+
+        var localPoint = [currentView convertPoint:aPoint toView:subview];
+
+        // If the point is inside the subview's bounds, it's a candidate.
+        if (CGRectContainsPoint([subview bounds], localPoint))
         {
-            if (CGRectContainsPoint([subview bounds], localPoint))
+            // If this subview is a container, recursively search its children.
+            // This is the crucial step to find the *deepest* view.
+            if (subview._isContainer && [[subview subviews] count] > 0)
             {
-                // If this is a container view, recursively search its subviews
-                if (subview._isContainer)
+                var deeperView = [self _findDeepestUIElementViewAtPoint:localPoint inView:subview];
+                if (deeperView)
                 {
-                    var deepestView = [self _findDeepestUIElementViewAtPoint:localPoint inView:subview];
-
-                    if (deepestView)
-                        return deepestView;
+                    return deeperView; // Found a more specific view inside.
                 }
-                // If not a container, or no deeper view found, return this view
-                return subview;
             }
+
+            // If no deeper view was found, or if this isn't a container,
+            // this is the deepest view at this point in the hierarchy.
+            return subview;
         }
     }
 
+    // If no subview at this level contains the point, check if the current view itself is a candidate
+    if ([currentView isKindOfClass:[UIElementView class]] && CGRectContainsPoint([currentView bounds], aPoint)) {
+        return currentView;
+    }
+
+
+    // If no subview at this level contains the point, return nil.
     return nil;
 }
 
@@ -888,13 +912,64 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (CPDragOperation)draggingUpdated:(CPDraggingInfo)sender
 {
-    console.log("draggingUpdated:");
+    var dropPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
+    var view = [self viewAtPoint:dropPoint];
+    var targetHBox = nil;
+    var targetVBox = nil;
+
+    // Reset indicators
+    [_insertionIndicatorView setHidden:YES];
+    if (_highlightedHBox) {
+        [_highlightedHBox setAsDropTarget:NO];
+        _highlightedHBox = nil;
+    }
+
+    // Find the HBox or VBox to highlight
+    if (view) {
+        var currentView = view;
+        while(currentView && currentView != self) {
+            if ([currentView isKindOfClass:[UIHBoxView class]]) {
+                targetHBox = currentView;
+                break; // Prefer the inner-most HBox
+            }
+            if ([currentView isKindOfClass:[UIVBoxView class]]) {
+                targetVBox = currentView; // Might be this one if no HBox is found deeper
+            }
+            currentView = [currentView superview];
+        }
+    }
+
+    // Update HBox highlighting
+    if (targetHBox) {
+        _highlightedHBox = targetHBox;
+        [_highlightedHBox setAsDropTarget:YES];
+    }
+    // If we are over a VBox but not a specific HBox, check for the lower third
+    else if (targetVBox) {
+        var localPoint = [self convertPoint:dropPoint toView:targetVBox];
+        var bounds = [targetVBox bounds];
+        var lowerThirdY = bounds.origin.y + (bounds.size.height * 2 / 3);
+
+        if (localPoint.y > lowerThirdY) {
+            var indicatorHeight = 10;
+            var indicatorFrame = CGRectMake(bounds.origin.x, bounds.origin.y + bounds.size.height - indicatorHeight, bounds.size.width, indicatorHeight);
+            var canvasIndicatorFrame = [targetVBox convertRect:indicatorFrame toView:self];
+
+            [_insertionIndicatorView setFrame:canvasIndicatorFrame];
+            [_insertionIndicatorView setHidden:NO];
+        }
+    }
+    
     return CPDragOperationCopy;
 }
 
 - (void)draggingExited:(CPDraggingInfo)sender
 {
-    // Do nothing for now
+    if (_highlightedHBox) {
+        [_highlightedHBox setAsDropTarget:NO];
+        _highlightedHBox = nil;
+    }
+    [_insertionIndicatorView setHidden:YES];
 }
 
 - (BOOL)prepareForDragOperation:(CPDraggingInfo)sender
@@ -904,6 +979,12 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (BOOL)performDragOperation:(CPDraggingInfo)sender
 {
+    if (_highlightedHBox) {
+        [_highlightedHBox setAsDropTarget:NO];
+        _highlightedHBox = nil;
+    }
+    [_insertionIndicatorView setHidden:YES];
+
     var dropPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
     var pasteboard = [sender draggingPasteboard];
     var types = [pasteboard types];
@@ -927,10 +1008,27 @@ var _selectedConnectionsObservationContext = 1095;
     if (elementType && _delegate)
     {
         console.log("-> Determined element type:", elementType);
-        var containerView = [self viewAtPoint:dropPoint];
-        var containerData = nil;
+        var viewAtDropPoint = [self viewAtPoint:dropPoint];
+        var containerView = nil;
 
-        if (containerView && [containerView isKindOfClass:[UIElementView class]] && containerView._isContainer) {
+        if (viewAtDropPoint) {
+            if (viewAtDropPoint._isContainer) {
+                containerView = viewAtDropPoint;
+            } else {
+                // Dropped on a non-container, find its containing view
+                var parent = [viewAtDropPoint superview];
+                while (parent && parent != self) {
+                    if ([parent isKindOfClass:[UIElementView class]] && parent._isContainer) {
+                        containerView = parent;
+                        break;
+                    }
+                    parent = [parent superview];
+                }
+            }
+        }
+
+        var containerData = nil;
+        if (containerView) {
             containerData = [containerView dataObject];
             console.log("-> Found container view:", containerView, "with data:", containerData);
         } else {

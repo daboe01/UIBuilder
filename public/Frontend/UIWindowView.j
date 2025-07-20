@@ -1,6 +1,7 @@
 @import "UIElementView.j"
 
 var _windowChildrenObservationContext = 1094;
+@class UIElementView;
 
 @implementation UIWindowView : UIElementView
 {

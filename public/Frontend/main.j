@@ -30,6 +30,10 @@
 @import "UIDatePickerView.j";
 @import "UIProgressIndicatorView.j";
 @import "UIBoxView.j";
+@import "UIHBoxView.j";
+@import "UIVBoxView.j";
+@import "UIHSpaceView.j";
+@import "UIVSpaceView.j";
 @import "UICanvasView.j";
 @import "AppController.j";
 

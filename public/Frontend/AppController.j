@@ -404,6 +404,24 @@ var CGSizeZero = CGSizeMake(0, 0);
         [[CPColor blackColor] set];
         [CPBezierPath strokeRect:boxRect];
     }
+    else if ([_dragType isEqualToString:UIHSpaceDragType])
+    {
+        var lineY = bounds.size.height / 2;
+        var path = [CPBezierPath bezierPath];
+        [path moveToPoint:CGPointMake(bounds.origin.x + 5, lineY)];
+        [path lineToPoint:CGPointMake(bounds.origin.x + bounds.size.width - 5, lineY)];
+        [[CPColor blackColor] set];
+        [path stroke];
+    }
+    else if ([_dragType isEqualToString:UIVSpaceDragType])
+    {
+        var lineX = bounds.size.width / 2;
+        var path = [CPBezierPath bezierPath];
+        [path moveToPoint:CGPointMake(lineX, bounds.origin.y + 5)];
+        [path lineToPoint:CGPointMake(lineX, bounds.origin.y + bounds.size.height - 5)];
+        [[CPColor blackColor] set];
+        [path stroke];
+    }
     else
     {
         // Fallback to original text drawing
@@ -435,6 +453,33 @@ var CGSizeZero = CGSizeMake(0, 0);
 - (void)applicationDidFinishLaunching:(CPNotification)aNotification
 {
     console.log("AppController applicationDidFinishLaunching: CPApp._delegate:", CPApp._delegate);
+
+    // Force all UIElementView subclasses to be initialized.
+    [UIWindowView class];
+    [UIButtonView class];
+    [UISliderView class];
+    [UITextFieldView class];
+    [UICheckBoxView class];
+    [UILabelView class];
+    [UISearchFieldView class];
+    [UISecureFieldView class];
+    [UITextViewView class];
+    [UIScrollViewView class];
+    [UITableViewView class];
+    [UISplitViewView class];
+    [UIImageViewView class];
+    [UIPopUpButtonView class];
+    [UIComboBoxView class];
+    [UIStepperView class];
+    [UIDatePickerView class];
+    [UIProgressIndicatorView class];
+    [UIBoxView class];
+    [UIHBoxView class];
+    [UIVBoxView class];
+    [UIHSpaceView class];
+    [UIVSpaceView class];
+    [UICanvasView class];
+
     // 1. Create the main window and canvas
     _window = [[CPWindow alloc] initWithContentRect:CGRectMakeZero() styleMask:CPBorderlessBridgeWindowMask];
     [_window setTitle:@"Cappuccino UI Builder"];
@@ -450,6 +495,7 @@ var CGSizeZero = CGSizeMake(0, 0);
 
     // 3. Wire everything together
     [_canvasView setDelegate:_builderController];
+    [_builderController setCanvasView:_canvasView];
 
     // Bind the canvas to the controller's data model. This is the core of the architecture.
     [_canvasView bind:"dataObjects" toObject:_builderController withKeyPath:@"elementsController.arrangedObjects" options:nil];
@@ -512,7 +558,9 @@ var CGSizeZero = CGSizeMake(0, 0);
         // Row 2: Layout
         [
             {dragType: UIHBoxDragType, elementType: "hbox", label: "HBox"},
-            {dragType: UIVBoxDragType, elementType: "vbox", label: "VBox"}
+            {dragType: UIVBoxDragType, elementType: "vbox", label: "VBox"},
+            {dragType: UIHSpaceDragType, elementType: "hspace", label: "HSpace"},
+            {dragType: UIVSpaceDragType, elementType: "vspace", label: "VSpace"}
         ],
         // Row 3: Text & Fields
         [

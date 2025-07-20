@@ -6,20 +6,14 @@
  * Copyright 2011, Your Company All rights reserved.
  */
 
-@import "GSAutoLayoutManager.j"
-
 @implementation GSAutoLayoutVBox : CPView
 {
-    GSAutoLayoutManager _vManager;
-    GSAutoLayoutManager _hManager;
 }
 
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];
     if (self) {
-        _vManager = [[GSAutoLayoutManager alloc] init];
-        _hManager = [[GSAutoLayoutManager alloc] init];
         [self setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
     }
     return self;
@@ -28,15 +22,27 @@
 - (void)addSubview:(CPView)aView
 {
     [super addSubview:aView];
-    [_vManager addLine:@"line1"];
-    [_vManager addSegment:[aView description] forLine:@"line1"];
     [self setNeedsLayout:YES];
 }
 
 - (void)layoutSubviews
 {
     [super layoutSubviews];
-    [_vManager layout];
+
+    var subviews = [self subviews];
+    var count = [subviews count];
+    if (count === 0) return;
+
+    var bounds = [self bounds];
+    var itemHeight = bounds.size.height / count;
+    var currentY = 0;
+
+    for (var i = 0; i < count; i++)
+    {
+        var subview = subviews[i];
+        [subview setFrame:CGRectMake(0, currentY, bounds.size.width, itemHeight)];
+        currentY += itemHeight;
+    }
 }
 
 @end

@@ -23,9 +23,11 @@ UIStepperDragType = "UIStepperDragType";
 UIDatePickerDragType = "UIDatePickerDragType";
 UIProgressIndicatorDragType = "UIProgressIndicatorDragType";
 UIBoxDragType = "UIBoxDragType";
-UIBoxDragType = "UIBoxDragType";
-UIHBoxDragType = "UIHBoxDragType";
-UIVBoxDragType = "UIVBoxDragType";
+
+UIHSpaceDragType = "UIHSpaceDragType";
+UIVSpaceDragType = "UIVSpaceDragType";
+UIHBoxDragType   = "UIHBoxDragType";
+UIVBoxDragType   = "UIVBoxDragType";
 
 // --- Property Types ---
 UIBString = "UIBString";

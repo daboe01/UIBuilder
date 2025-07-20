@@ -52,10 +52,13 @@
 
 - (void)drawSkeleton:(CGRect)rect
 {
+    console.log("UILabelView drawSkeleton: for " + [self class]);
     var bounds = [self bounds];
     var data = [self dataObject];
     var value = [data valueForKey:@"value"];
     var textAlign = [data valueForKey:@"textAlign"] || "left";
+
+    console.log("UILabelView drawSkeleton: value is " + value);
 
     if (value) {
         var valueSize = [value sizeWithAttributes:_stringAttributes];

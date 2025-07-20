@@ -38,53 +38,18 @@
     if (count === 0) return;
 
     var bounds = [self bounds];
-    var totalMinWidth = 0;
-    var expandableSpaces = 0;
-    var regularViews = 0;
-
-    for (var i = 0; i < count; i++)
-    {
-        var subview = subviews[i];
-        if ([subview isKindOfClass:[UIHSpaceView class]])
-        {
-            if ([[subview dataObject] valueForKey:@"size"] === "min")
-                totalMinWidth += [[subview dataObject] valueForKey:@"width"];
-            else
-                expandableSpaces++;
-        }
-        else
-        {
-            regularViews++;
-        }
-    }
-
-    var flexibleWidth = 0;
-    if (regularViews + expandableSpaces > 0)
-        flexibleWidth = (bounds.size.width - totalMinWidth) / (regularViews + expandableSpaces);
-
-    if (flexibleWidth < 0)
-        flexibleWidth = 0;
-
     var currentX = 0;
 
+    // A simple layout that respects the width of each subview.
     for (var i = 0; i < count; i++)
     {
         var subview = subviews[i];
-        var frameWidth = 0;
+        var frameWidth = [subview frame].size.width;
 
-        if ([subview isKindOfClass:[UIHSpaceView class]])
-        {
-            if ([[subview dataObject] valueForKey:@"size"] === "min")
-                frameWidth = [[subview dataObject] valueForKey:@"width"];
-            else
-                frameWidth = flexibleWidth;
-        }
-        else
-        {
-            frameWidth = flexibleWidth;
-        }
+        // Set the origin, but keep the width and height from the subview itself.
+        [subview setFrameOrigin:CGPointMake(currentX, 0)];
+        subview._frame.size.height = [self bounds].size.height;
 
-        [subview setFrame:CGRectMake(currentX, 0, frameWidth, bounds.size.height)];
         currentX += frameWidth;
     }
 }

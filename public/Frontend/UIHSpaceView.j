@@ -25,10 +25,22 @@
     return types;
 }
 
+- (id)init
+{
+    self = [super initWithFrame:CPMakeRect(0,0,0,0)];
+    if (self) {
+        console.log("UIHSpaceView init");
+        [self setBackgroundColor:[CPColor clearColor]];
+        [self setClipsToBounds:NO];
+    }
+    return self;
+}
+
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];
     if (self) {
+        console.log("UIHSpaceView initWithFrame:");
         [self setBackgroundColor:[CPColor clearColor]];
         [self setClipsToBounds:NO];
     }
@@ -37,6 +49,7 @@
 
 - (void)drawRect:(CGRect)aRect
 {
+    console.log("UIHSpaceView drawRect:");
     if ([self isSelected])
     {
         [super drawRect:aRect];

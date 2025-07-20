@@ -34,6 +34,9 @@
 @class UIHBoxView;
 @class UIVBoxView;
 @class UICanvasView;
+@class UIHSpaceView;
+@class UIVSpaceView;
+@class UICanvasView;
 
 var _classMap = [CPMutableDictionary dictionary];
 
@@ -84,6 +87,7 @@ var _classMap = [CPMutableDictionary dictionary];
         [self registerViewClass:UIBoxView forElementType:@"box"];
         [self registerViewClass:UIHBoxView forElementType:@"hbox"];
         [self registerViewClass:UIVBoxView forElementType:@"vbox"];
+        [self registerViewClass:UIHSpaceView forElementType:@"hspace"];
         [self registerViewClass:UIVSpaceView forElementType:@"vspace"];
         [self registerViewClass:UICanvasView forElementType:@"canvas"];
     }
@@ -250,10 +254,7 @@ var _classMap = [CPMutableDictionary dictionary];
         var frame = [self frame];
         frame.origin.x = aFloat;
         [self setFrame:frame];
-
-        // Notify the superview (the canvas) that it might need to redraw
-        // if anything depends on this view's position.
-        [[self superview] setNeedsDisplay:YES];
+        [[self superview] setNeedsLayout:YES];
     }
 }
 
@@ -269,7 +270,7 @@ var _classMap = [CPMutableDictionary dictionary];
         var frame = [self frame];
         frame.origin.y = aFloat;
         [self setFrame:frame];
-        [[self superview] setNeedsDisplay:YES];
+        [[self superview] setNeedsLayout:YES];
     }
 }
 
@@ -286,7 +287,7 @@ var _classMap = [CPMutableDictionary dictionary];
         // Enforce a minimum width to prevent rendering issues.
         frame.size.width = MAX(aFloat, 20.0);
         [self setFrame:frame];
-        [[self superview] setNeedsDisplay:YES];
+        [[self superview] setNeedsLayout:YES];
     }
 }
 
@@ -303,7 +304,7 @@ var _classMap = [CPMutableDictionary dictionary];
         // Enforce a minimum height.
         frame.size.height = MAX(aFloat, 20.0);
         [self setFrame:frame];
-        [[self superview] setNeedsDisplay:YES];
+        [[self superview] setNeedsLayout:YES];
     }
 }
 

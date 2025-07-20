@@ -718,4 +718,9 @@ var CGSizeZero = CGSizeMake(0, 0);
     console.log("Run: Finished.");
 }
 
+- (void)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint inParent:(id)parent atIndex:(int)index
+{
+    [_builderController addNewElementOfType:elementType atPoint:aPoint inParent:parent atIndex:index];
+}
+
 @end

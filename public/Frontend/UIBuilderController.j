@@ -168,6 +168,11 @@
 
 - (void)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint inParent:(CPDictionary)parentData
 {
+    [self addNewElementOfType:elementType atPoint:aPoint inParent:parentData atIndex:-1];
+}
+
+- (void)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint inParent:(CPDictionary)parentData atIndex:(int)index
+{
     console.log("UIBuilderController: addNewElementOfType:", elementType, "atPoint:", aPoint, "inParent:", parentData);
 
     if (parentData)
@@ -207,7 +212,7 @@
         {
             // Scenario 1: Dropped on an existing HBox. Add the element to it.
             console.log("-> VBox Drop: Adding to existing HBox:", [targetHBox valueForKey:@"id"]);
-            [self addNewElementOfType:elementType atPoint:aPoint inParent:targetHBox];
+            [self addNewElementOfType:elementType atPoint:aPoint inParent:targetHBox atIndex:index];
             return;
         }
         else
@@ -218,7 +223,7 @@
             [_elementsController addObject:newHBoxData];
 
             // Add the new element inside the newly created HBox.
-            [self addNewElementOfType:elementType atPoint:CGPointMake(0, 0) inParent:newHBoxData];
+            [self addNewElementOfType:elementType atPoint:CGPointMake(0, 0) inParent:newHBoxData atIndex:index];
             return;
         }
     }
@@ -287,7 +292,11 @@
         }
 
         [newElementData setValue:[containerData valueForKey:@"id"] forKey:@"parentID"];
-        [[containerData mutableArrayValueForKey:@"children"] addObject:newElementData];
+        var children = [containerData mutableArrayValueForKey:@"children"];
+        if (index >= 0 && index < [children count])
+            [children insertObject:newElementData atIndex:index];
+        else
+            [children addObject:newElementData];
     }
 
     // Add to the main elements controller to trigger KVO

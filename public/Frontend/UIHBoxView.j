@@ -91,21 +91,27 @@
 
 - (void)drawRect:(CGRect)rect
 {
-    [super drawRect:rect];
     [self drawSkeleton:rect];
+
+    if ([self isSelected])
+    {
+        [self drawHandles];
+    }
 }
 
 - (void)drawSkeleton:(CGRect)rect
 {
-    var layer = [self layer];
-    [layer setBorderColor:[[CPColor grayColor] CGColor]];
-    [layer setBorderWidth:1.0];
-    [layer setLineDashPattern:[2,2]];
+    var bounds = [self bounds];
+    var path = [CPBezierPath bezierPathWithRect:bounds];
+    [[CPColor grayColor] setStroke];
+    [path setLineWidth:1.0];
+    [path setLineDash:[2,2] count:2 phase:0];
+    [path stroke];
 
     if (_isDropTarget)
     {
         [[[CPColor yellowColor] colorWithAlphaComponent:0.5] setFill];
-        [CPBezierPath fillRect:[self bounds]];
+        [CPBezierPath fillRect:bounds];
     }
 }
 

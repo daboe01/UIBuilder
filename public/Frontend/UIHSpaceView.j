@@ -36,20 +36,32 @@
     return self;
 }
 
+- (void)drawRect:(CGRect)rect
+{
+    // Don't call super, we want a completely custom look.
+    [self drawSkeleton:rect];
+
+    // We still want to see selection handles if it's selected.
+    if ([self isSelected])
+    {
+        [self drawHandles];
+    }
+}
+
 - (void)drawSkeleton:(CGRect)rect
 {
-    var layer = [self layer];
-    [layer setBorderColor:[[CPColor grayColor] CGColor]];
-    [layer setBorderWidth:1.0];
-    [layer setLineDashPattern:[2,2]];
-
-    var context = [[CPGraphicsContext currentContext] graphicsPort];
     var bounds = [self bounds];
+    var midY = CGRectGetMidY(bounds);
 
-    CGContextBeginPath(context);
-    CGContextMoveToPoint(context, CGRectGetMinX(bounds), CGRectGetMidY(bounds));
-    CGContextAddLineToPoint(context, CGRectGetMaxX(bounds), CGRectGetMidY(bounds));
-    CGContextStrokePath(context);
+    // Draw a simple horizontal line
+    var path = [CPBezierPath bezierPath];
+    [path moveToPoint:CGPointMake(bounds.origin.x, midY)];
+    [path lineToPoint:CGPointMake(bounds.origin.x + bounds.size.width, midY)];
+
+    [[CPColor grayColor] setStroke];
+    [path setLineWidth:1.0];
+    [path setLineDash:[2,2] count:2 phase:0];
+    [path stroke];
 }
 
 @end

@@ -478,8 +478,39 @@ var _classMap = [CPMutableDictionary dictionary];
 
     if ([theEvent modifierFlags] & CPControlKeyMask)
     {
-        // Connection logic remains the same
-        // ...
+        _isConnecting = YES;
+        // If control key is pressed, handle connection drawing
+        var startPointInView = CGPointMake(CGRectGetMidX([self bounds]), CGRectGetMidY([self bounds]));
+        var startPointInCanvas = [self convertPoint:startPointInView toView:canvas];
+
+        var canvasSubviews = [canvas subviews];
+        for (var k = 0; k < [canvasSubviews count]; k++) {
+            var subview = [canvasSubviews objectAtIndex:k];
+            if ([subview isKindOfClass:[UIElementView class]]) {
+                [subview setAsDropTarget:NO];
+            }
+        }
+        var targetView = [canvas viewAtPoint:mouseLoc];
+
+        if (targetView && targetView != self)
+        {
+            var localPoint = [targetView convertPoint:mouseLoc fromView:canvas];
+            if ([targetView canAcceptConnectionAtPoint:localPoint])
+            {
+                var endPointInView = CGPointMake(CGRectGetMidX([targetView bounds]), CGRectGetMidY([targetView bounds]));
+                var endPointInCanvas = [targetView convertPoint:endPointInView toView:canvas];
+                [canvas drawConnectionFrom:startPointInCanvas to:endPointInCanvas];
+                [targetView setAsDropTarget:YES];
+            }
+            else
+            {
+                [canvas drawConnectionFrom:startPointInCanvas to:mouseLoc];
+            }
+        }
+        else
+        {
+            [canvas drawConnectionFrom:startPointInCanvas to:mouseLoc];
+        }
     }
     else if (_activeHandle != kUIElementNoHandle)
     {

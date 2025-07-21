@@ -300,9 +300,25 @@
     }
 
     // Add to the main elements controller to trigger KVO
-    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] removeObject:newElementData];
+    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:self] removeElement:newElementData fromParent:containerData];
     [[[CPApp keyWindow] undoManager] setActionName:@"Add Element"];
-    [_elementsController addObject:newElementData];
+
+    var arrangedObjects = [_elementsController arrangedObjects];
+    var insertionIndex = -1;
+
+    if (containerData)
+    {
+        var childDataObjects = [containerData valueForKey:@"children"];
+        var referenceChild = childDataObjects[index];
+        insertionIndex = [arrangedObjects indexOfObject:referenceChild] - 1;
+    }
+    if (insertionIndex < 0)
+        insertionIndex = 0;
+
+    if (insertionIndex >= 0 && insertionIndex <= [arrangedObjects count])
+    {
+        [_elementsController insertObject:newElementData atArrangedObjectIndex:insertionIndex];
+    }
 
     // If we just created a new top-level window, ensure it has a VBox by default.
     if (elementType === "window" && !containerData) {
@@ -326,6 +342,15 @@
 - (void)removeSelectedElements
 {
     [self removeSelectedElementsWithActionName:@"Delete"];
+}
+
+- (void)removeElement:(CPDictionary)elementData fromParent:(CPDictionary)parentData
+{
+    if (parentData)
+    {
+        [[parentData mutableArrayValueForKey:@"children"] removeObject:elementData];
+    }
+    [_elementsController removeObject:elementData];
 }
 
 - (void)cut:(id)sender

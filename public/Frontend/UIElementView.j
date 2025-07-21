@@ -493,7 +493,7 @@ var _classMap = [CPMutableDictionary dictionary];
         var deltaY = mouseLoc.y - _lastMouseLoc.y;
 
         var selectedViews = [canvas selectedSubViews];
-        var processedContainers = [CPSet set]; // Use a set to track containers we've already handled in this drag event
+        var processedContainers = [CPSet set];
 
         for (var i = 0; i < [selectedViews count]; i++)
         {
@@ -503,46 +503,51 @@ var _classMap = [CPMutableDictionary dictionary];
             if (([parent isKindOfClass:[UIHBoxView class]] || [parent isKindOfClass:[UIVBoxView class]]) && ![processedContainers containsObject:parent])
             {
                 var viewIndex = [[parent subviews] indexOfObject:view];
-                var precedingView = (viewIndex > 0) ? [[parent subviews] objectAtIndex:viewIndex - 1] : nil;
                 var appController = [CPApp delegate];
 
                 if ([parent isKindOfClass:[UIHBoxView class]])
                 {
-                    if (precedingView && [precedingView isKindOfClass:[UIHSpaceView class]])
+                    var viewToTheLeft = [[parent subviews] indexOfObject:viewIndex ? viewIndex - 1 : 0];
+
+                    if ([viewToTheLeft isKindOfClass:[UIHSpaceView class]])
+                        view = viewToTheLeft;
+
+                    if ([view isKindOfClass:[UIHSpaceView class]])
                     {
-                        var currentWidth = [[precedingView dataObject] valueForKey:@"width"];
+                        var currentWidth = [[view dataObject] valueForKey:@"width"];
                         var newWidth = currentWidth + deltaX;
-                        [[precedingView dataObject] setValue:MAX(0, newWidth) forKey:@"width"];
+                        [[view dataObject] setValue:MAX(0, newWidth) forKey:@"width"];
                     }
-                    else if (!parent._spacerCreatedForDrag)
+                    else
                     {
-                        // Always insert the spacer to the left (at the current view's index)
-                        [appController addNewElementOfType:@"hspace" atPoint:CGPointMake(0,0) inParent:[parent dataObject] atIndex:viewIndex];
-                        parent._spacerCreatedForDrag = YES;
+                        var spacer = [appController addNewElementOfType:@"hspace" atPoint:CGPointMake(0,0)
+                                                               inParent:[parent dataObject]
+                                                                atIndex:viewIndex ? viewIndex - 1 : 0];
+                        [[spacer dataObject] setValue:MAX(0, deltaX) forKey:@"width"];
                     }
                 }
                 else // It's a UIVBoxView
                 {
-                     if (precedingView && [precedingView isKindOfClass:[UIVSpaceView class]])
+                    var precedingView = (viewIndex > 0) ? [[parent subviews] objectAtIndex:viewIndex - 1] : nil;
+
+                    if (precedingView && [precedingView isKindOfClass:[UIVSpaceView class]])
                     {
                         var currentHeight = [[precedingView dataObject] valueForKey:@"height"];
                         var newHeight = currentHeight + deltaY;
                         [[precedingView dataObject] setValue:MAX(0, newHeight) forKey:@"height"];
                     }
-                    else if (!parent._spacerCreatedForDrag)
+                    else
                     {
-                        [appController addNewElementOfType:@"vspace" atPoint:CGPointMake(0,0) inParent:[parent dataObject] atIndex:viewIndex];
-                        parent._spacerCreatedForDrag = YES;
+                        var spacer = [appController addNewElementOfType:@"vspace" atPoint:CGPointMake(0,0) inParent:[parent dataObject] atIndex:viewIndex];
+                        [[spacer dataObject] setValue:MAX(0, deltaY) forKey:@"height"];
                     }
                 }
+                [parent setNeedsLayout:YES];
                 [processedContainers addObject:parent];
             }
             else if (![parent isKindOfClass:[UIHBoxView class]] && ![parent isKindOfClass:[UIVBoxView class]])
             {
-                // This is a "toplevel" view (or in a simple container like UIWindowView).
-                // Just move it.
                 var newOrigin = CGPointMake([view frame].origin.x + deltaX, [view frame].origin.y + deltaY);
-                
                 var superview = [view superview];
                 if ([superview isKindOfClass:[UIWindowView class]])
                 {
@@ -567,15 +572,22 @@ var _classMap = [CPMutableDictionary dictionary];
 
     // Reset spacer creation flag for all containers that were part of the drag
     var selectedViews = [canvas selectedSubViews];
-    var processedContainers = [CPSet set];
     for (var i = 0;  i < [selectedViews count]; i++)
     {
         var view = selectedViews[i];
         var parentView = [view superview];
-        if (([parentView isKindOfClass:[UIHBoxView class]] || [parentView isKindOfClass:[UIVBoxView class]]) && ![processedContainers containsObject:parentView])
+        if ([parentView isKindOfClass:[UIHBoxView class]] || [parentView isKindOfClass:[UIVBoxView class]])
         {
-            parentView._spacerCreatedForDrag = NO;
-            [processedContainers addObject:parentView];
+            var subviews = [parentView subviews];
+            for (var j = [subviews count] - 1; j >= 0; j--)
+            {
+                var subview = subviews[j];
+                if (([subview isKindOfClass:[UIHSpaceView class]] && [[subview dataObject] valueForKey:@"width"] <= 0) ||
+                    ([subview isKindOfClass:[UIVSpaceView class]] && [[subview dataObject] valueForKey:@"height"] <= 0))
+                {
+                    [[CPApp delegate] deleteElement:subview];
+                }
+            }
         }
     }
 

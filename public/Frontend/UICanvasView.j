@@ -272,9 +272,9 @@ var _selectedConnectionsObservationContext = 1095;
     }
 }
 
-- (void)_createViewForDataObject:(CPDictionary)dataObject superview:(CPView)superview window:(CPWindow)aWindow
+- (void)_createViewForDataObject:(CPDictionary)dataObject superview:(CPView)superview window:(CPWindow)aWindow atIndex:(int)index
 {
-    console.log("START _createViewForDataObject id:", [dataObject valueForKey:@"id"], "superview:", [superview class]);
+    console.log("START _createViewForDataObject id:", [dataObject valueForKey:@"id"], "superview:", [superview class], "atIndex:", index);
     
     var type = [dataObject valueForKey:@"type"];
     var viewClass = [[UIElementView classMap] objectForKey:type] || UIElementView;
@@ -289,7 +289,11 @@ var _selectedConnectionsObservationContext = 1095;
         return;
     }
 
-    [superview addSubview:newView];
+    if (index >= 0 && [superview respondsToSelector:@selector(_insertSubview:atIndex:)])
+        [superview _insertSubview:newView atIndex:index];
+    else
+        [superview addSubview:newView];
+        
     [newView setDataObject:dataObject];
 
     // Bind common properties
@@ -308,7 +312,7 @@ var _selectedConnectionsObservationContext = 1095;
 // Keep a simple version for external calls if needed, though the main logic uses the windowed one.
 - (void)_createViewForDataObject:(CPDictionary)dataObject superview:(CPView)superview
 {
-    [self _createViewForDataObject:dataObject superview:superview window:[self window]];
+    [self _createViewForDataObject:dataObject superview:superview window:[self window] atIndex:-1];
 }
 
 
@@ -376,8 +380,16 @@ var _selectedConnectionsObservationContext = 1095;
 
                     if (!parentID || parentView) {
                         var superview = parentView || self;
+                        var index = -1;
+                        if (parentView)
+                        {
+                            var parentData = [parentView dataObject];
+                            var siblingData = [parentData valueForKey:@"children"];
+                            index = [siblingData indexOfObject:newDataObject];
+                        }
+                        
                         console.log("-> Creating view for:", [newDataObject valueForKey:@"id"], "in superview:", superview);
-                        [self _createViewForDataObject:newDataObject superview:superview window:[self window]];
+                        [self _createViewForDataObject:newDataObject superview:superview window:[self window] atIndex:index];
                         [successfullyAdded addObject:newDataObject];
                     }
                 }

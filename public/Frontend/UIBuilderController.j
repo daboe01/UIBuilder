@@ -197,7 +197,8 @@
         var targetHBox = nil;
 
         // Determine if the drop is on an existing HBox
-        if (viewAtDropPoint) {
+        if (viewAtDropPoint)
+        {
             var currentView = viewAtDropPoint;
             while(currentView && currentView != canvas) {
                 if ([currentView isKindOfClass:[UIHBoxView class]]) {
@@ -213,6 +214,7 @@
             // Scenario 1: Dropped on an existing HBox. Add the element to it.
             console.log("-> VBox Drop: Adding to existing HBox:", [targetHBox valueForKey:@"id"]);
             [self addNewElementOfType:elementType atPoint:aPoint inParent:targetHBox atIndex:index];
+
             return;
         }
         else
@@ -224,6 +226,7 @@
 
             // Add the new element inside the newly created HBox.
             [self addNewElementOfType:elementType atPoint:CGPointMake(0, 0) inParent:newHBoxData atIndex:index];
+            [[canvas viewForElementWithID:[newHBoxData valueForKey:@"id"]] layoutSubviews];
             return;
         }
     }

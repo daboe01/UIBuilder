@@ -40,6 +40,7 @@
     var bounds = [self bounds];
     var totalFixedAndMinHeight = 0;
     var expandableSpaces = 0;
+    var totalHeight = 0;
 
     // First pass: Calculate total height of fixed elements and count expandable ones.
     for (var i = 0; i < count; i++)
@@ -63,9 +64,15 @@
     if (expandableSpaces > 0) {
         var remainingSpace = bounds.size.height - totalFixedAndMinHeight;
         flexibleHeight = (remainingSpace > 0) ? (remainingSpace / expandableSpaces) : 0;
+        totalHeight = totalFixedAndMinHeight + (flexibleHeight * expandableSpaces);
+    }
+    else
+    {
+        totalHeight = totalFixedAndMinHeight;
     }
 
-    var currentY = 0;
+
+    var currentY = (bounds.size.height - totalHeight) / 2.0;
 
     // Second pass: Set the frames.
     for (var i = 0; i < count; i++)

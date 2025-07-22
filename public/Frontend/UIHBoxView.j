@@ -38,27 +38,58 @@
     if (count === 0) return;
 
     var bounds = [self bounds];
-    var totalWidth = 0;
+    var totalFixedWidth = 0;
+    var expandableSpaces = 0;
 
+    // First pass: Calculate total width of fixed elements and count expandable ones.
     for (var i = 0; i < count; i++)
-        totalWidth += [[subviews objectAtIndex:i] frame].size.width;
+    {
+        var subview = subviews[i];
+        if ([subview isKindOfClass:[UIHSpaceView class]])
+        {
+            if ([[subview dataObject] valueForKey:@"size"] === "min")
+                totalFixedWidth += [[subview dataObject] valueForKey:@"width"];
+            else
+                expandableSpaces++;
+        }
+        else // This is a regular view
+        {
+            totalFixedWidth += [subview frame].size.width;
+        }
+    }
 
-    var currentX = (bounds.size.width - totalWidth) / 2.0;
+    var flexibleWidth = 0;
+    if (expandableSpaces > 0) {
+        var remainingSpace = bounds.size.width - totalFixedWidth;
+        flexibleWidth = (remainingSpace > 0) ? (remainingSpace / expandableSpaces) : 0;
+    }
 
-    // A simple layout that respects the width of each subview.
+    var currentX = 0;
+
+    // Second pass: Set the frames.
     for (var i = 0; i < count; i++)
     {
         var subview = subviews[i];
         var frame = [subview frame];
-        var frameWidth = frame.size.width;
         var frameHeight = frame.size.height;
+        var frameWidth = 0;
+
+        if ([subview isKindOfClass:[UIHSpaceView class]])
+        {
+            if ([[subview dataObject] valueForKey:@"size"] === "min")
+                frameWidth = [[subview dataObject] valueForKey:@"width"];
+            else
+                frameWidth = flexibleWidth;
+        }
+        else // Regular view
+        {
+            frameWidth = [subview frame].size.width;
+        }
 
         // Center vertically
         var y = (bounds.size.height - frameHeight) / 2.0;
 
-        // Set the origin, but keep the width and height from the subview itself.
-        [subview setFrameOrigin:CGPointMake(currentX, y)];
-
+        [subview setFrame:CGRectMake(currentX, y, frameWidth, frameHeight)];
         currentX += frameWidth;
     }
 }

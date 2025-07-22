@@ -129,6 +129,7 @@ var _classMap = [CPMutableDictionary dictionary];
 - (id)initWithFrame:(CGRect)frame
 {
     self = [super initWithFrame:frame];
+
     if (self)
     {
         // console.log("UIElementView initWithFrame: for", [self class], "- self.window:", [self window]);
@@ -146,6 +147,7 @@ var _classMap = [CPMutableDictionary dictionary];
         _isContainer = NO;
         _isConnecting = NO;
     }
+
     return self;
 }
 

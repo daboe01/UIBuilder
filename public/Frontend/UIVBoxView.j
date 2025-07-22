@@ -60,19 +60,18 @@
         }
     }
 
-    var flexibleHeight = 0;
-    if (expandableSpaces > 0) {
+    var currentY = 0;
+    if (expandableSpaces > 0)
+    {
         var remainingSpace = bounds.size.height - totalFixedAndMinHeight;
         flexibleHeight = (remainingSpace > 0) ? (remainingSpace / expandableSpaces) : 0;
-        totalHeight = totalFixedAndMinHeight + (flexibleHeight * expandableSpaces);
     }
     else
     {
+        // If no views are expandable, center the whole block.
         totalHeight = totalFixedAndMinHeight;
+        currentY = (bounds.size.height - totalHeight) / 2.0;
     }
-
-
-    var currentY = (bounds.size.height - totalHeight) / 2.0;
 
     // Second pass: Set the frames.
     for (var i = 0; i < count; i++)

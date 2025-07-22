@@ -20,9 +20,16 @@
 + (CPDictionary)propertyTypes
 {
     var types = [super propertyTypes];
-    [types setObject:UIBString forKey:@"size"];
+    [types setObject:UIBEnumeration forKey:@"size"];
     [types setObject:UIBNumber forKey:@"width"];
     return types;
+}
+
++ (CPDictionary)propertyEnumerations
+{
+    return {
+        size: ["min", "expand"]
+    };
 }
 
 - (id)init

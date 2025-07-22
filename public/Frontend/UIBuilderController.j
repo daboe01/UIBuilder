@@ -319,6 +319,9 @@
     {
         [_elementsController insertObject:newElementData atArrangedObjectIndex:insertionIndex];
     }
+    else
+        [_elementsController insertObject:newElementData];
+
 
     // If we just created a new top-level window, ensure it has a VBox by default.
     if (elementType === "window" && !containerData) {

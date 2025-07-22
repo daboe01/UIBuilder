@@ -538,22 +538,22 @@ var _classMap = [CPMutableDictionary dictionary];
 
                 if ([parent isKindOfClass:[UIHBoxView class]])
                 {
-                    var viewToTheLeft = [[parent subviews] indexOfObject:viewIndex ? viewIndex - 1 : 0];
-
-                    if ([viewToTheLeft isKindOfClass:[UIHSpaceView class]])
-                        view = viewToTheLeft;
-
+                    var precedingView = (viewIndex > 0) ? [[parent subviews] objectAtIndex:viewIndex - 1] : nil;
+                    
                     if ([view isKindOfClass:[UIHSpaceView class]])
+                        precedingView = view;
+
+                    if (precedingView && [precedingView isKindOfClass:[UIHSpaceView class]])
                     {
-                        var currentWidth = [[view dataObject] valueForKey:@"width"];
+                        var currentWidth = [[precedingView dataObject] valueForKey:@"width"];
                         var newWidth = currentWidth + deltaX;
-                        [[view dataObject] setValue:MAX(0, newWidth) forKey:@"width"];
+                        [[precedingView dataObject] setValue:MAX(0, newWidth) forKey:@"width"];
                     }
                     else
                     {
                         var spacer = [appController addNewElementOfType:@"hspace" atPoint:CGPointMake(0,0)
                                                                inParent:[parent dataObject]
-                                                                atIndex:viewIndex ? viewIndex - 1 : 0];
+                                                                atIndex:viewIndex];
                         [[spacer dataObject] setValue:MAX(0, deltaX) forKey:@"width"];
                     }
                 }

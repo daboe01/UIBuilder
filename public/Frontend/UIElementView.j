@@ -539,41 +539,37 @@ var _classMap = [CPMutableDictionary dictionary];
                 if ([parent isKindOfClass:[UIHBoxView class]])
                 {
                     var precedingView = (viewIndex > 0) ? [[parent subviews] objectAtIndex:viewIndex - 1] : nil;
-                    
+
                     if ([view isKindOfClass:[UIHSpaceView class]])
                     {
                         precedingView = view;
                     }
 
-                    if (precedingView && [precedingView isKindOfClass:[UIHSpaceView class]])
+                    if (!precedingView || ![precedingView isKindOfClass:[UIHSpaceView class]])
                     {
-                        var currentWidth = [[precedingView dataObject] valueForKey:@"width"];
-                        var newWidth = currentWidth + deltaX;
-                        [[precedingView dataObject] setValue:MAX(0, newWidth) forKey:@"width"];
-                    }
-                    else
-                    {
-                        var spacer = [appController addNewElementOfType:@"hspace" atPoint:CGPointMake(0,0)
+                        precedingView = [appController addNewElementOfType:@"hspace" atPoint:CGPointMake(0,0)
                                                                inParent:[parent dataObject]
                                                                 atIndex:viewIndex];
-                        [[spacer dataObject] setValue:MAX(0, deltaX) forKey:@"width"];
+                        [[precedingView dataObject] setValue:0 forKey:@"width"];
                     }
+                    
+                    var currentWidth = [[precedingView dataObject] valueForKey:@"width"];
+                    var newWidth = currentWidth + deltaX;
+                    [[precedingView dataObject] setValue:MAX(0, newWidth) forKey:@"width"];
                 }
                 else // It's a UIVBoxView
                 {
                     var precedingView = (viewIndex > 0) ? [[parent subviews] objectAtIndex:viewIndex - 1] : nil;
 
-                    if (precedingView && [precedingView isKindOfClass:[UIVSpaceView class]])
+                    if (!precedingView || ![precedingView isKindOfClass:[UIVSpaceView class]])
                     {
-                        var currentHeight = [[precedingView dataObject] valueForKey:@"height"];
-                        var newHeight = currentHeight + deltaY;
-                        [[precedingView dataObject] setValue:MAX(0, newHeight) forKey:@"height"];
+                        precedingView = [appController addNewElementOfType:@"vspace" atPoint:CGPointMake(0,0) inParent:[parent dataObject] atIndex:viewIndex];
+                        [[precedingView dataObject] setValue:0 forKey:@"height"];
                     }
-                    else
-                    {
-                        var spacer = [appController addNewElementOfType:@"vspace" atPoint:CGPointMake(0,0) inParent:[parent dataObject] atIndex:viewIndex];
-                        [[spacer dataObject] setValue:MAX(0, deltaY) forKey:@"height"];
-                    }
+
+                    var currentHeight = [[precedingView dataObject] valueForKey:@"height"];
+                    var newHeight = currentHeight + deltaY;
+                    [[precedingView dataObject] setValue:MAX(0, newHeight) forKey:@"height"];
                 }
                 [parent setNeedsLayout:YES];
                 [processedContainers addObject:parent];

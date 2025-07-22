@@ -261,11 +261,11 @@
         [newElementData setValue:100 forKey:@"width"];
         [newElementData setValue:20 forKey:@"height"];
     } else if (elementType === "hspace") {
-        [newElementData setValue:50 forKey:@"width"];
-        [newElementData setValue:20 forKey:@"height"];
+        [newElementData setValue:0 forKey:@"width"];
+        [newElementData setValue:1 forKey:@"height"];
     } else if (elementType === "vspace") {
-        [newElementData setValue:20 forKey:@"width"];
-        [newElementData setValue:50 forKey:@"height"];
+        [newElementData setValue:1 forKey:@"width"];
+        [newElementData setValue:0 forKey:@"height"];
     } else { // textfield
         [newElementData setValue:150 forKey:@"width"];
         [newElementData setValue:22 forKey:@"height"];

@@ -226,6 +226,7 @@
 
             // Add the new element inside the newly created HBox.
             [self addNewElementOfType:elementType atPoint:CGPointMake(0, 0) inParent:newHBoxData atIndex:index];
+            // perform initial layout
             [[canvas viewForElementWithID:[newHBoxData valueForKey:@"id"]] layoutSubviews];
             return;
         }

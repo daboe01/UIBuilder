@@ -849,7 +849,7 @@ var _selectedConnectionsObservationContext = 1095;
     return YES;
 }
 
-/*
+
 - (BOOL)validateMenuItem:(CPMenuItem)aMenuItem
 {
     var action = [aMenuItem action];
@@ -883,7 +883,7 @@ var _selectedConnectionsObservationContext = 1095;
 
     return [super validateMenuItem:aMenuItem];
 }
-*/
+
 
 - (void)keyDown:(CPEvent)theEvent
 {

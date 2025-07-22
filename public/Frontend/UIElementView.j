@@ -541,7 +541,9 @@ var _classMap = [CPMutableDictionary dictionary];
                     var precedingView = (viewIndex > 0) ? [[parent subviews] objectAtIndex:viewIndex - 1] : nil;
                     
                     if ([view isKindOfClass:[UIHSpaceView class]])
+                    {
                         precedingView = view;
+                    }
 
                     if (precedingView && [precedingView isKindOfClass:[UIHSpaceView class]])
                     {

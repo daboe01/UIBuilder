@@ -38,17 +38,26 @@
     if (count === 0) return;
 
     var bounds = [self bounds];
-    var currentX = 0;
+    var totalWidth = 0;
+
+    for (var i = 0; i < count; i++)
+        totalWidth += [[subviews objectAtIndex:i] frame].size.width;
+
+    var currentX = (bounds.size.width - totalWidth) / 2.0;
 
     // A simple layout that respects the width of each subview.
     for (var i = 0; i < count; i++)
     {
         var subview = subviews[i];
-        var frameWidth = [subview frame].size.width;
+        var frame = [subview frame];
+        var frameWidth = frame.size.width;
+        var frameHeight = frame.size.height;
+
+        // Center vertically
+        var y = (bounds.size.height - frameHeight) / 2.0;
 
         // Set the origin, but keep the width and height from the subview itself.
-        [subview setFrameOrigin:CGPointMake(currentX, 0)];
-        subview._frame.size.height = [self bounds].size.height;
+        [subview setFrameOrigin:CGPointMake(currentX, y)];
 
         currentX += frameWidth;
     }

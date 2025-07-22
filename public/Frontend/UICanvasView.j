@@ -1067,11 +1067,43 @@ var _selectedConnectionsObservationContext = 1095;
             console.log("-> No container view found at drop point.");
         }
 
-        if (containerData) {
-            // Dropped inside a container
-            console.log("--> Calling addNewElementOfType:atPoint:inParent:");
-            if ([_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:inParent:)]) {
-                [_delegate addNewElementOfType:elementType atPoint:dropPoint inParent:containerData];
+        if (containerData)
+        {
+            var index = -1;
+            var localPoint = [containerView convertPoint:dropPoint fromView:self];
+
+            if ([containerView isKindOfClass:[UIHBoxView class]])
+            {
+                var subviews = [containerView subviews];
+                for (var i = 0; i < [subviews count]; i++)
+                {
+                    var subview = subviews[i];
+                    if (localPoint.x < CGRectGetMidX([subview frame]))
+                    {
+                        index = i;
+                        break;
+                    }
+                }
+            }
+            else if ([containerView isKindOfClass:[UIVBoxView class]])
+            {
+                var subviews = [containerView subviews];
+                for (var i = 0; i < [subviews count]; i++)
+                {
+                    var subview = subviews[i];
+                    if (localPoint.y < CGRectGetMidY([subview frame]))
+                    {
+                        index = i;
+                        break;
+                    }
+                }
+            }
+
+            console.log("--> Calling addNewElementOfType:atPoint:inParent:atIndex:", index);
+            if ([_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:inParent:atIndex:)])
+            {
+                [_delegate addNewElementOfType:elementType atPoint:dropPoint inParent:containerData atIndex:index];
+                [containerView setNeedsLayout:YES];
                 [self setNeedsDisplay:YES];
                 return YES;
             }

@@ -71,6 +71,8 @@
     for (var i = 0; i < count; i++)
     {
         var subview = subviews[i];
+        var frame = [subview frame];
+        var frameWidth = frame.size.width;
         var frameHeight = 0;
 
         if ([subview isKindOfClass:[UIVSpaceView class]])
@@ -85,7 +87,10 @@
             frameHeight = [subview frame].size.height; // Use its own height
         }
 
-        [subview setFrame:CGRectMake(0, currentY, bounds.size.width, frameHeight)];
+        // Center horizontally
+        var x = (bounds.size.width - frameWidth) / 2.0;
+
+        [subview setFrame:CGRectMake(x, currentY, frameWidth, frameHeight)];
         currentY += frameHeight;
     }
 }

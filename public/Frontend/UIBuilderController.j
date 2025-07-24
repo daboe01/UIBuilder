@@ -341,9 +341,34 @@
     var selectedObjects = [[_elementsController selectedObjects] copy];
     if ([selectedObjects count] === 0) return;
 
-    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] addObjects:selectedObjects];
+    var elementsToDelete = [CPMutableArray array];
+
+    // Function to recursively find all children
+    var findChildrenRecursive = function(parent) {
+        var children = [parent valueForKey:@"children"];
+        if (children && [children count] > 0) {
+            for (var i = 0; i < [children count]; i++) {
+                var child = children[i];
+                [elementsToDelete addObject:child];
+                findChildrenRecursive(child);
+            }
+        }
+    };
+
+    // Add selected objects and all their children to the deletion list
+    for (var i = 0; i < [selectedObjects count]; i++)
+    {
+        var selectedObject = selectedObjects[i];
+        if (![elementsToDelete containsObject:selectedObject])
+        {
+            [elementsToDelete addObject:selectedObject];
+            findChildrenRecursive(selectedObject);
+        }
+    }
+
+    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] addObjects:elementsToDelete];
     [[[CPApp keyWindow] undoManager] setActionName:actionName];
-    [_elementsController removeObjects:selectedObjects];
+    [_elementsController removeObjects:elementsToDelete];
 }
 
 - (void)removeSelectedElements
@@ -364,6 +389,40 @@
 {
     [self copy:sender];
     [self removeSelectedElementsWithActionName:@"Cut"];
+}
+
+- (void)deleteElement:(CPDictionary)elementData
+{
+    if (!elementData) return;
+
+    var elementsToDelete = [CPMutableArray arrayWithObject:elementData];
+
+    // Function to recursively find all children
+    var findChildrenRecursive = function(parent) {
+        var children = [parent valueForKey:@"children"];
+        if (children && [children count] > 0) {
+            for (var i = 0; i < [children count]; i++) {
+                var child = children[i];
+                [elementsToDelete addObject:child];
+                findChildrenRecursive(child);
+            }
+        }
+    };
+
+    findChildrenRecursive(elementData);
+
+    // Setup Undo
+    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] addObjects:elementsToDelete];
+    [[[CPApp keyWindow] undoManager] setActionName:@"Delete"];
+
+    // Remove from parent's children array
+    var parent = [self parentOfElement:elementData];
+    if (parent) {
+        [[parent mutableArrayValueForKey:@"children"] removeObject:elementData];
+    }
+
+    // Remove all elements from the main controller
+    [_elementsController removeObjects:elementsToDelete];
 }
 
 #pragma mark - 

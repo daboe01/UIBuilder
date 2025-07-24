@@ -723,4 +723,9 @@ var CGSizeZero = CGSizeMake(0, 0);
     [_builderController addNewElementOfType:elementType atPoint:aPoint inParent:parent atIndex:index];
 }
 
+- (void)deleteElement:(UIElementView)elementView
+{
+    [_builderController deleteElement:[elementView dataObject]];
+}
+
 @end

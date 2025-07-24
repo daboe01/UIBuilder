@@ -229,17 +229,6 @@ var _classMap = [CPMutableDictionary dictionary];
     return YES;
 }
 
-- (void)removeFromSuperview
-{
-    // This is the correct place to clean up view-related resources.
-    // When the view is removed from its superview, we no longer need to track
-    // mouse events within its bounds.
-    [self removeTrackingArea:_trackingArea];
-
-    // It's crucial to call the superclass's implementation at the end.
-    [super removeFromSuperview];
-}
-
 #pragma mark -
 #pragma mark *** Geometry Accessors (for KVC Binding) ***
 
@@ -520,63 +509,82 @@ var _classMap = [CPMutableDictionary dictionary];
     }
     else
     {
-        // New, improved move logic
+        // Move logic
         [[CPCursor closedHandCursor] set];
         var deltaX = mouseLoc.x - _lastMouseLoc.x;
         var deltaY = mouseLoc.y - _lastMouseLoc.y;
 
         var selectedViews = [canvas selectedSubViews];
-        var processedContainers = [CPSet set];
+        var processedHBoxes = [CPSet set];
+        var processedVBoxes = [CPSet set];
 
         for (var i = 0; i < [selectedViews count]; i++)
         {
             var view = selectedViews[i];
-            var parent = [view superview];
+            var appController = [CPApp delegate];
+            var isFreeForm = YES;
 
-            if (([parent isKindOfClass:[UIHBoxView class]] || [parent isKindOfClass:[UIVBoxView class]]) && ![processedContainers containsObject:parent])
+            // --- Handle Horizontal Drag (within an HBox) ---
+            var hBoxParent = [view superview];
+            if ([hBoxParent isKindOfClass:[UIHBoxView class]] && ![processedHBoxes containsObject:hBoxParent])
             {
-                var viewIndex = [[parent subviews] indexOfObject:view];
-                var appController = [CPApp delegate];
+                isFreeForm = NO;
+                var viewIndex = [[hBoxParent subviews] indexOfObject:view];
+                var precedingView = (viewIndex > 0) ? [[hBoxParent subviews] objectAtIndex:viewIndex - 1] : nil;
 
-                if ([parent isKindOfClass:[UIHBoxView class]])
-                {
-                    var precedingView = (viewIndex > 0) ? [[parent subviews] objectAtIndex:viewIndex - 1] : nil;
-
-                    if ([view isKindOfClass:[UIHSpaceView class]])
-                    {
-                        precedingView = view;
-                    }
-
-                    if (!precedingView || ![precedingView isKindOfClass:[UIHSpaceView class]])
-                    {
-                        precedingView = [appController addNewElementOfType:@"hspace" atPoint:CGPointMake(0,0)
-                                                               inParent:[parent dataObject]
-                                                                atIndex:viewIndex];
-                        [[precedingView dataObject] setValue:0 forKey:@"width"];
-                    }
-                    
-                    var currentWidth = [[precedingView dataObject] valueForKey:@"width"];
-                    var newWidth = currentWidth + deltaX;
-                    [[precedingView dataObject] setValue:MAX(0, newWidth) forKey:@"width"];
+                if ([view isKindOfClass:[UIHSpaceView class]]) {
+                    precedingView = view;
                 }
-                else // It's a UIVBoxView
-                {
-                    var precedingView = (viewIndex > 0) ? [[parent subviews] objectAtIndex:viewIndex - 1] : nil;
 
-                    if (!precedingView || ![precedingView isKindOfClass:[UIVSpaceView class]])
-                    {
-                        precedingView = [appController addNewElementOfType:@"vspace" atPoint:CGPointMake(0,0) inParent:[parent dataObject] atIndex:viewIndex];
+                if (!precedingView || ![precedingView isKindOfClass:[UIHSpaceView class]]) {
+                    precedingView = [appController addNewElementOfType:@"hspace" atPoint:CGPointMake(0,0)
+                                                           inParent:[hBoxParent dataObject]
+                                                            atIndex:viewIndex];
+                    [[precedingView dataObject] setValue:0 forKey:@"width"];
+                }
+                
+                var currentWidth = [[precedingView dataObject] valueForKey:@"width"];
+                var newWidth = currentWidth + deltaX;
+                [[precedingView dataObject] setValue:MAX(0, newWidth) forKey:@"width"];
+                
+                [hBoxParent setNeedsLayout:YES];
+                [processedHBoxes addObject:hBoxParent];
+            }
+
+            // --- Handle Vertical Drag (of an HBox or VSpace within a VBox) ---
+            var itemInVBox = hBoxParent; // The item being dragged vertically is the HBox containing the view
+            if ([view isKindOfClass:[UIVSpaceView class]]) { // Or if we are dragging a VSpace directly
+                itemInVBox = view;
+            }
+
+            if (itemInVBox) {
+                var vBoxParent = [itemInVBox superview];
+                if ([vBoxParent isKindOfClass:[UIVBoxView class]] && ![processedVBoxes containsObject:vBoxParent])
+                {
+                    isFreeForm = NO;
+                    var viewIndex = [[vBoxParent subviews] indexOfObject:itemInVBox];
+                    var precedingView = (viewIndex > 0) ? [[vBoxParent subviews] objectAtIndex:viewIndex - 1] : nil;
+
+                    if ([itemInVBox isKindOfClass:[UIVSpaceView class]]) {
+                        precedingView = itemInVBox;
+                    }
+
+                    if (!precedingView || ![precedingView isKindOfClass:[UIVSpaceView class]]) {
+                        precedingView = [appController addNewElementOfType:@"vspace" atPoint:CGPointMake(0,0) inParent:[vBoxParent dataObject] atIndex:viewIndex];
                         [[precedingView dataObject] setValue:0 forKey:@"height"];
                     }
 
                     var currentHeight = [[precedingView dataObject] valueForKey:@"height"];
                     var newHeight = currentHeight + deltaY;
                     [[precedingView dataObject] setValue:MAX(0, newHeight) forKey:@"height"];
+                    
+                    [vBoxParent setNeedsLayout:YES];
+                    [processedVBoxes addObject:vBoxParent];
                 }
-                [parent setNeedsLayout:YES];
-                [processedContainers addObject:parent];
             }
-            else if (![parent isKindOfClass:[UIHBoxView class]] && ![parent isKindOfClass:[UIVBoxView class]])
+
+            // --- Handle Free-form Drag ---
+            if (isFreeForm)
             {
                 var newOrigin = CGPointMake([view frame].origin.x + deltaX, [view frame].origin.y + deltaY);
                 var superview = [view superview];
@@ -600,27 +608,6 @@ var _classMap = [CPMutableDictionary dictionary];
 {
     var canvas = [self canvas];
     var mouseLoc = [canvas convertPoint:[theEvent locationInWindow] fromView:nil];
-
-    // Reset spacer creation flag for all containers that were part of the drag
-    var selectedViews = [canvas selectedSubViews];
-    for (var i = 0;  i < [selectedViews count]; i++)
-    {
-        var view = selectedViews[i];
-        var parentView = [view superview];
-        if ([parentView isKindOfClass:[UIHBoxView class]] || [parentView isKindOfClass:[UIVBoxView class]])
-        {
-            var subviews = [parentView subviews];
-            for (var j = [subviews count] - 1; j >= 0; j--)
-            {
-                var subview = subviews[j];
-                if (([subview isKindOfClass:[UIHSpaceView class]] && [[subview dataObject] valueForKey:@"width"] <= 0) ||
-                    ([subview isKindOfClass:[UIVSpaceView class]] && [[subview dataObject] valueForKey:@"height"] <= 0))
-                {
-                    [[CPApp delegate] deleteElement:subview];
-                }
-            }
-        }
-    }
 
     if (_isConnecting)
     {
@@ -660,7 +647,7 @@ var _classMap = [CPMutableDictionary dictionary];
         // Handle mouse up for resize
         [[CPCursor arrowCursor] set];
         _activeHandle = kUIElementNoHandle;
-        _lastMouseLoc = null;
+        _lastMouseLoc = nil;
         [canvas setNeedsDisplay:YES];
         [canvas elementDidResize:self];
     }
@@ -668,7 +655,7 @@ var _classMap = [CPMutableDictionary dictionary];
     {
         // Handle mouse up for move
         [[CPCursor openHandCursor] set];
-        _lastMouseLoc = null;
+        _lastMouseLoc = nil;
         [canvas setNeedsDisplay:YES];
         [canvas elementDidMove:self];
     }

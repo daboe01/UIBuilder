@@ -552,10 +552,9 @@ var _classMap = [CPMutableDictionary dictionary];
             }
 
             // --- Handle Vertical Drag (of an HBox or VSpace within a VBox) ---
-            var itemInVBox = hBoxParent; // The item being dragged vertically is the HBox containing the view
-            if ([view isKindOfClass:[UIVSpaceView class]]) { // Or if we are dragging a VSpace directly
-                itemInVBox = view;
-            }
+            var itemInVBox = view;
+            if ([hBoxParent isKindOfClass:[UIHBoxView class]])
+                itemInVBox = hBoxParent;
 
             if (itemInVBox) {
                 var vBoxParent = [itemInVBox superview];

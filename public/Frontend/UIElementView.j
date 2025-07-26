@@ -546,7 +546,7 @@ var _classMap = [CPMutableDictionary dictionary];
                 var currentWidth = [[precedingView dataObject] valueForKey:@"width"];
                 var newWidth = currentWidth + deltaX;
                 [[precedingView dataObject] setValue:MAX(0, newWidth) forKey:@"width"];
-                
+
                 [hBoxParent setNeedsLayout:YES];
                 [processedHBoxes addObject:hBoxParent];
             }
@@ -556,7 +556,8 @@ var _classMap = [CPMutableDictionary dictionary];
             if ([hBoxParent isKindOfClass:[UIHBoxView class]])
                 itemInVBox = hBoxParent;
 
-            if (itemInVBox) {
+            if (itemInVBox)
+            {
                 var vBoxParent = [itemInVBox superview];
                 if ([vBoxParent isKindOfClass:[UIVBoxView class]] && ![processedVBoxes containsObject:vBoxParent])
                 {

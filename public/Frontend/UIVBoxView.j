@@ -88,6 +88,12 @@
             frameHeight = [subview frame].size.height; // Use its own height
         }
 
+        var halign = [[subview dataObject] valueForKey:@"halign"];
+        if (halign === "expand")
+        {
+            frameWidth = bounds.size.width;
+        }
+        
         // Center horizontally
         var x = (bounds.size.width - frameWidth) / 2.0;
 

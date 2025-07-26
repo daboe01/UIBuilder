@@ -924,9 +924,7 @@ var _selectedConnectionsObservationContext = 1095;
 {
     var dropPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
     var viewAtDrop = [self viewAtPoint:dropPoint];
-    console.log("--- Dragging Update ---");
-    console.log("Drop Point:", dropPoint, "View at Drop:", viewAtDrop ? [viewAtDrop class] : "nil");
-
+    
     // Always reset indicators
     [_insertionIndicatorView setHidden:YES];
     if (_highlightedHBox) {
@@ -946,7 +944,6 @@ var _selectedConnectionsObservationContext = 1095;
         while(currentView && currentView != self) {
             if ([currentView isKindOfClass:[UIVBoxView class]]) {
                 targetVBox = currentView;
-                console.log("Found targetVBox:", targetVBox);
                 break;
             }
             currentView = [currentView superview];
@@ -954,7 +951,10 @@ var _selectedConnectionsObservationContext = 1095;
     }
 
     if (!targetVBox) {
-        console.log("No VBox found. Exiting.");
+        if (viewAtDrop && [viewAtDrop isKindOfClass:[UIWindowView class]]) {
+            [viewAtDrop setAsDropTarget:YES];
+            _highlightedVBox = viewAtDrop;
+        }
         return CPDragOperationCopy;
     }
 
@@ -967,19 +967,16 @@ var _selectedConnectionsObservationContext = 1095;
         var subview = vboxSubviews[i];
         if ([subview isKindOfClass:[UIHBoxView class]] && CGRectContainsPoint([subview frame], localPointInVBox)) {
             targetHBox = subview;
-            console.log("Found targetHBox inside VBox:", targetHBox);
             break;
         }
     }
 
     // 3. Apply highlighting logic
     if (targetHBox) {
-        console.log("Highlighting HBox:", targetHBox);
         _highlightedHBox = targetHBox;
         [_highlightedHBox setAsDropTarget:YES];
     } else {
         // No HBox hit, so highlight the VBox itself
-        console.log("Highlighting VBox:", targetVBox);
         _highlightedVBox = targetVBox;
         [_highlightedVBox setAsDropTarget:YES];
     }

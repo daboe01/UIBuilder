@@ -12,7 +12,13 @@
 
 + (CPDictionary)defaultValues
 {
-    return {value: "Button", outlets: "target, delegate", actions: "takeValueFrom:"};
+    return {
+        value: "Button",
+        outlets: "target, delegate",
+        actions: "takeValueFrom:",
+        halign: "min",
+        valign: "min"
+    };
 }
 
 + (CPDictionary)propertyTypes

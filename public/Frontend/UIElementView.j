@@ -103,22 +103,33 @@ var _classMap = [CPMutableDictionary dictionary];
 
 + (CPArray)persistentProperties
 {
-    return ["value"];
+    return ["value", "halign", "valign"];
 }
 
 + (CPDictionary)defaultValues
 {
-    return {value: "Element"};
+    return @{
+        value: "Element",
+        halign: "expand",
+        valign: "expand"
+    };
 }
 
 + (CPDictionary)propertyTypes
 {
-    return [CPDictionary dictionaryWithObjects:[UIBString] forKeys:["value"]];
+    return @{
+                UIBString: "value",
+                UIBEnumeration: "halign",
+                UIBEnumeration: "valign",
+             };
 }
 
 + (CPDictionary)propertyEnumerations
 {
-    return [CPDictionary dictionary];
+    return {
+        halign: ["expand", "min"],
+        valign: ["expand", "min"]
+    };
 }
 
 + (CPMutableDictionary)classMap
@@ -245,7 +256,10 @@ var _classMap = [CPMutableDictionary dictionary];
         var frame = [self frame];
         frame.origin.x = aFloat;
         [self setFrame:frame];
-        [[self superview] setNeedsLayout:YES];
+        if (![self isKindOfClass:[UIWindowView class]])
+        {
+            [[self superview] setNeedsLayout:YES];
+        }
     }
 }
 
@@ -261,7 +275,10 @@ var _classMap = [CPMutableDictionary dictionary];
         var frame = [self frame];
         frame.origin.y = aFloat;
         [self setFrame:frame];
-        [[self superview] setNeedsLayout:YES];
+        if (![self isKindOfClass:[UIWindowView class]])
+        {
+            [[self superview] setNeedsLayout:YES];
+        }
     }
 }
 

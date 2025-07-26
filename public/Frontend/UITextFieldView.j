@@ -12,7 +12,13 @@
 
 + (CPDictionary)defaultValues
 {
-    return {value: "Text Field", outlets: "target, delegate", actions: "takeStringValueFrom:, takeIntegerValueFrom:"};
+    return {
+        value: "Text Field",
+        outlets: "target, delegate",
+        actions: "takeStringValueFrom:, takeIntegerValueFrom:",
+        halign: "expand",
+        valign: "min"
+    };
 }
 
 + (CPDictionary)propertyTypes

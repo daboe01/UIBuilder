@@ -15,7 +15,7 @@ var _windowChildrenObservationContext = 1094;
 
 + (CPDictionary)propertyTypes
 {
-    var types = [super propertyTypes];
+    var types = [[super propertyTypes] copy];
     [types setObject:UIBBoolean forKey:@"CPHUDBackgroundWindowMask"];
     [types setObject:UIBBoolean forKey:@"CPTitledWindowMask"];
     [types setObject:UIBBoolean forKey:@"CPClosableWindowMask"];

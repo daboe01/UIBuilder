@@ -85,6 +85,12 @@
         {
             frameWidth = [subview frame].size.width;
         }
+        
+        var valign = [[subview dataObject] valueForKey:@"valign"];
+        if (valign === "expand")
+        {
+            frameHeight = bounds.size.height;
+        }
 
         // Center vertically
         var y = (bounds.size.height - frameHeight) / 2.0;

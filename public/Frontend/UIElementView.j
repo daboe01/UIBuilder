@@ -118,18 +118,18 @@ var _classMap = [CPMutableDictionary dictionary];
 + (CPDictionary)propertyTypes
 {
     return @{
-                UIBString: "value",
-                UIBEnumeration: "halign",
-                UIBEnumeration: "valign",
+                "value": UIBString,
+                "halign": UIBEnumeration,
+                "valign": UIBEnumeration
              };
 }
 
 + (CPDictionary)propertyEnumerations
 {
-    return {
-        halign: ["expand", "min"],
-        valign: ["expand", "min"]
-    };
+    return @{
+                "halign": ["expand", "min"],
+                "valign": ["expand", "min"]
+            }
 }
 
 + (CPMutableDictionary)classMap

@@ -23,7 +23,9 @@
 
 + (CPDictionary)propertyTypes
 {
-    return [super propertyTypes].copy({value: UIBString});
+    var types = [super propertyTypes];
+    [types setObject:UIBString forKey:@"value"];
+    return types;
 }
 - (id)initWithFrame:(CGRect)aRect
 {

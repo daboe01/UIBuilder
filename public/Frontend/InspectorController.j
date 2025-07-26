@@ -27,6 +27,11 @@
 {
     if (!value) return nil;
 
+    var index = [_enumerationValues indexOfObject:value];
+    if (index != CPNotFound) {
+        return [CPNumber numberWithInt:index];
+    }
+
     // If the model value is already a number, assume it's the index.
     // This fixes the case for numeric enums like textAlignment.
     if ([value isKindOfClass:[CPNumber class]])
@@ -34,9 +39,7 @@
         return value;
     }
 
-    // Otherwise, assume it's a string/object that we need to find the index of.
-    var index = [_enumerationValues indexOfObject:value];
-    return (index != CPNotFound) ? [CPNumber numberWithInt:index] : nil;
+    return nil;
 }
 
 /**
@@ -47,11 +50,12 @@
 {
     if (!value || ![value isKindOfClass:[CPNumber class]]) return nil;
 
-    // For properties like textAlignment, the model expects a number, not a string.
-    // By returning the number (the index/tag), we fix the binding.
-    // This establishes a consistent convention that all UIBEnumeration properties
-    // on the model are stored as numbers.
-    return value;
+    var index = [value intValue];
+    if (index >= 0 && index < [_enumerationValues count]) {
+        return _enumerationValues[index];
+    }
+
+    return nil;
 }
 
 @end
@@ -199,7 +203,12 @@
     // Clear existing views from properties tab
     var subviews = [propertiesView subviews];
     for (var i = [subviews count] - 1; i >= 0; i--) {
-        [subviews[i] removeFromSuperview];
+        var subview = subviews[i];
+        if ([subview isKindOfClass:[CPControl class]]) {
+            [subview unbind:@"value"];
+            [subview unbind:@"selectedIndex"];
+        }
+        [subview removeFromSuperview];
     }
 
     if ([selectedObjects count] === 1)
@@ -241,20 +250,27 @@
                 [textField setBezeled:YES];
                 [textField setEditable:YES];
                 [propertiesView addSubview:textField];
-            } else if (propertyType === UIBEnumeration) {
+            }
+            else if (propertyType === UIBEnumeration)
+            {
                 var popUpButton = [[CPPopUpButton alloc] initWithFrame:CGRectMake(120, yPos, 150, 27)];
                 var enumerations = [viewClass propertyEnumerations];
-                var values = enumerations[propertyName];
-                if (values) {
-                    for (var j = 0; j < [values count]; j++) {
-                        var title = values[j];
-                        var menuItem = [popUpButton addItemWithTitle:title];
-                        [menuItem setTag:j]; // Set the tag to the numeric index
+
+               
+                var values = [enumerations objectForKey:propertyName];
+
+                if (values)
+                {
+                    for (var j = 0; j < [values count]; j++)
+                    {
+                        [popUpButton addItemWithTitle:values[j]];
+                        [[popUpButton lastItem] setTag:j]; // Set the tag to the numeric index
                     }
                 }
                 // Bind selectedTag using the generic enumeration value transformer
                 [popUpButton bind:@"selectedIndex" toObject:selectedObject withKeyPath:propertyName options:@{CPValueTransformerBindingOption: [[CPEnumerationValueTransformer alloc] initWithEnumerationValues:values]}];
                 [propertiesView addSubview:popUpButton];
+
             } else { // Fallback for unknown types
                 var textField = [[CPTextField alloc] initWithFrame:CGRectMake(120, yPos, 150, 25)];
                 [textField bind:@"value" toObject:selectedObject withKeyPath:propertyName options:nil];

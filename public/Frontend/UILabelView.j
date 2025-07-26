@@ -27,7 +27,7 @@
 
 + (CPDictionary)propertyTypes
 {
-    var types = [super propertyTypes];
+    var types = [[super propertyTypes] copy];
     [types setObject:UIBString forKey:@"value"];
     [types setObject:UIBEnumeration forKey:@"textAlign"];
     return types;
@@ -35,10 +35,12 @@
 
 + (CPDictionary)propertyEnumerations
 {
-    return {
-        textAlign: ["left", "center", "right"]
-    };
+    var enums = [[super propertyEnumerations] copy];
+    [enums setObject:["left", "center", "right"] forKey:@"textAlign"];
+
+    return enums;
 }
+
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];

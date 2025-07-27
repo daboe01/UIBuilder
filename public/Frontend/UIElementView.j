@@ -582,16 +582,11 @@ var _classMap = [CPMutableDictionary dictionary];
                 var viewIndex = [[hBoxParent subviews] indexOfObject:view];
                 var precedingView = (viewIndex > 0) ? [[hBoxParent subviews] objectAtIndex:viewIndex - 1] : nil;
 
-                if ([view isKindOfClass:[UIHSpaceView class]]) {
+                if ([view isKindOfClass:[UIHSpaceView class]])
                     precedingView = view;
-                }
 
-                if (!precedingView || ![precedingView isKindOfClass:[UIHSpaceView class]]) {
-                    precedingView = [appController addNewElementOfType:@"hspace" atPoint:CGPointMake(0,0)
-                                                           inParent:[hBoxParent dataObject]
-                                                            atIndex:viewIndex];
-                    [[precedingView dataObject] setValue:0 forKey:@"width"];
-                }
+                else if (!precedingView || ![precedingView isKindOfClass:[UIHSpaceView class]])
+                    precedingView = [appController addNewElementOfType:@"hspace" atPoint:CGPointMake(0,0) inParent:[hBoxParent dataObject] atIndex:viewIndex];
                 
                 var currentWidth = [[precedingView dataObject] valueForKey:@"width"];
                 var newWidth = currentWidth + deltaX;

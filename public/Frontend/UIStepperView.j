@@ -10,6 +10,18 @@
     }
 }
 
++ (JSObject)defaultValues
+{
+    return @{
+        "value": 0,
+        "minValue": 0,
+        "maxValue": 100,
+        "increment": 1,
+        "outlets": "delegate",
+        "actions": "takeDoubleValueFrom:"
+    };
+}
+
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];

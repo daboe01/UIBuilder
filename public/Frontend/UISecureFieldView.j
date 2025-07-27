@@ -10,6 +10,15 @@
     }
 }
 
++ (JSObject)defaultValues
+{
+    return @{
+        "value": "Password",
+        "outlets": "delegate",
+        "actions": "takeStringValueFrom:"
+    };
+}
+
 - (void)drawSkeleton:(CGRect)rect
 {
     [super drawSkeleton:rect];

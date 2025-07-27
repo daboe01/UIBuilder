@@ -10,6 +10,15 @@
     }
 }
 
++ (JSObject)defaultValues
+{
+    return @{
+        "value": "url/to/image.png",
+        "outlets": "delegate",
+        "actions": "takeImageFrom:"
+    };
+}
+
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];

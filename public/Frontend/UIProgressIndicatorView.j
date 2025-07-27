@@ -10,6 +10,18 @@
     }
 }
 
++ (JSObject)defaultValues
+{
+    return @{
+        "value": 50,
+        "maxValue": 100,
+        "isIndeterminate": false,
+        "style": "Bar",
+        "outlets": "delegate",
+        "actions": "takeDoubleValueFrom:"
+    };
+}
+
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];

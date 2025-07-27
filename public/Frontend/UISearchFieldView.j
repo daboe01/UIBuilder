@@ -14,7 +14,9 @@
 {
     return @{
         "value": "Search",
-        "recentsAutosaveName": ""
+        "recentsAutosaveName": "",
+        "outlets": "delegate",
+        "actions": "takeStringValueFrom:"
     };
 }
 

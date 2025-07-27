@@ -10,6 +10,15 @@
     }
 }
 
++ (JSObject)defaultValues
+{
+    return @{
+        "vertical": false,
+        "dividerStyle": "thin",
+        "outlets": "delegate"
+    };
+}
+
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];

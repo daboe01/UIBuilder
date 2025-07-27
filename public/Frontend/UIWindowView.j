@@ -267,8 +267,11 @@ var _windowChildrenObservationContext = 1094;
     for (var i = 0; i < [subviews count]; i++)
     {
         var subview = subviews[i];
-        var nativeSubview = [subview nativeUIElementWithMap:aMap];
-        [contentView addSubview:nativeSubview];
+        if ([subview isKindOfClass:[UIElementView class]])
+        {
+            var nativeSubview = [subview nativeUIElementWithMap:aMap];
+            [contentView addSubview:nativeSubview];
+        }
     }
 
     return theNewWindow;

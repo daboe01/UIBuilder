@@ -10,6 +10,17 @@
     }
 }
 
++ (JSObject)defaultValues
+{
+    return @{
+        "value": "ComboBox",
+        "items": "Item 1, Item 2, Item 3",
+        "isEditable": true,
+        "outlets": "delegate, dataSource",
+        "actions": "takeStringValueFrom:"
+    };
+}
+
 - (void)drawSkeleton:(CGRect)rect
 {
     [super drawSkeleton:rect];

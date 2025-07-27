@@ -10,6 +10,16 @@
     }
 }
 
++ (JSObject)defaultValues
+{
+    return @{
+        "value": "PopUp",
+        "items": "Item 1, Item 2, Item 3",
+        "outlets": "delegate",
+        "actions": "takeSelectedItemFrom:"
+    };
+}
+
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];

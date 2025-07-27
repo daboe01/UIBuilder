@@ -10,6 +10,15 @@
     }
 }
 
++ (JSObject)defaultValues
+{
+    return @{
+        "value": "now",
+        "outlets": "delegate",
+        "actions": "takeDateValueFrom:"
+    };
+}
+
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];

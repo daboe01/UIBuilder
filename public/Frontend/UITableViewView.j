@@ -10,6 +10,15 @@
     }
 }
 
++ (JSObject)defaultValues
+{
+    return @{
+        "columns": "Column 1, Column 2",
+        "outlets": "delegate, dataSource",
+        "actions": "reloadData"
+    };
+}
+
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];

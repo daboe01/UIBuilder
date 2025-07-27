@@ -667,6 +667,7 @@ var CGSizeZero = CGSizeMake(0, 0);
         var view = [canvasSubviews objectAtIndex:i];
         if ([view isKindOfClass:[UIElementView class]])
         {
+            console.log("Run: Processing element: " + [[view dataObject] valueForKey:@"id"]);
             // This will now recursively build the map
             [view nativeUIElementWithMap:nativeElementMap];
         }

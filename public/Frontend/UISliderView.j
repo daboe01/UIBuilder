@@ -14,8 +14,9 @@
 {
     var defaults = [[super defaultValues] copy];
     [defaults setValue:0.5 forKey:@"value"];
-    [defaults setValue:"target, delegate" forKey:@"outlets"];
-    [defaults setValue:"takeFloatValueFrom:, takeIntegerValueFrom:" forKey:@"actions"];
+    [defaults setValue:@"target, delegate" forKey:@"outlets"];
+    [defaults setValue:@"takeFloatValueFrom:, takeIntegerValueFrom:" forKey:@"actions"];
+    return defaults;
 }
 
 + (CPDictionary)propertyTypes

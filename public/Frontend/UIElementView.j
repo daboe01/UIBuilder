@@ -111,7 +111,9 @@ var _classMap = [CPMutableDictionary dictionary];
     return @{
         "value": "Element",
         "halign": "min",
-        "valign": "min"
+        "valign": "min",
+        "outlets": "",
+        "actions": ""
     };
 }
 

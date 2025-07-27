@@ -24,7 +24,7 @@
     [defaults setValue:@"left" forKey:@"textAlign"];
     [defaults setValue:@"min" forKey:@"halign"];
     [defaults setValue:@"min" forKey:@"valign"];
-
+    [defaults setValue:@"takeStringValueFrom:, takeIntegerValueFrom:" forKey:@"actions"];
     return defaults;
 }
 

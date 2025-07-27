@@ -52,15 +52,20 @@
     return self;
 }
 
+- (void)sizeToFit
+{
+    var value = [self value] || @"";
+    var valueSize = [value sizeWithFont:[CPFont boldSystemFontOfSize:12]];
+    var newSize = CGSizeMake(valueSize.width + 10, valueSize.height + 10);
+    [self setFrameSize:newSize];
+}
+
 - (void)drawSkeleton:(CGRect)rect
 {
-    console.log("UILabelView drawSkeleton: for " + [self class]);
     var bounds = [self bounds];
     var data = [self dataObject];
     var value = [data valueForKey:@"value"];
     var textAlign = [data valueForKey:@"textAlign"] || "left";
-
-    console.log("UILabelView drawSkeleton: value is " + value);
 
     if (value) {
         var valueSize = [value sizeWithAttributes:_stringAttributes];

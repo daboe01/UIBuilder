@@ -154,8 +154,8 @@ var _classMap = [CPMutableDictionary dictionary];
 
         if (![self isKindOfClass:[UIHBoxView class]] && ![self isKindOfClass:[UIVBoxView class]])
         {
-            if ([self frame].size.width < 50 || [self frame].size.height < 20)
-                [self setFrameSize:CGSizeMake(MAX(50, [self frame].size.width), MAX(20, [self frame].size.height))];
+            if ([self frame].size.width < 1 || [self frame].size.height < 1)
+                [self setFrameSize:CGSizeMake(MAX(1, [self frame].size.width), MAX(1, [self frame].size.height))];
         }
 
         [self setNeedsDisplay:YES];
@@ -233,7 +233,9 @@ var _classMap = [CPMutableDictionary dictionary];
         if ([keyPath isEqualToString:@"halign"] || [keyPath isEqualToString:@"valign"])
         {
             if ([self superview])
+            {
                 [[self superview] setNeedsLayout:YES];
+            }
         }
         else
         {
@@ -344,10 +346,7 @@ var _classMap = [CPMutableDictionary dictionary];
 
 - (void)sizeToFit
 {
-    var value = [self value] || @"";
-    var valueSize = [value sizeWithFont:[CPFont boldSystemFontOfSize:12]];
-    var newSize = CGSizeMake(valueSize.width + 10, valueSize.height + 10); // 5px padding
-    [self setFrameSize:newSize];
+    //subview responsibility
 }
 
 // You will need a way to get a reference to the canvas.

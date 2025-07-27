@@ -60,15 +60,15 @@
     [buttonPath stroke];
     
     // Draw value
-    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
-    [[self value] drawAtPoint:CGPointMake((bounds.size.width - valueSize.width) / 2.0 + 1, (bounds.size.height - valueSize.height) / 2.0 - 2) withAttributes:_stringAttributes];
+    var valueSize = [[self value] sizeWithFont:[_stringAttributes objectForKey:CPFontAttributeName]];
+    [[self value] drawAtPoint:CGPointMake((bounds.size.width - valueSize.width) / 2.0 + 1, (bounds.size.height - valueSize.height) / 2.0 - 0) withAttributes:_stringAttributes];
 }
 
 - (void)sizeToFit
 {
-    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
+    var valueSize = [[self value] sizeWithFont:[_stringAttributes objectForKey:CPFontAttributeName]];
     var newWidth = valueSize.width + 20; // 10px padding on each side
-    [self setFrameSize:CGSizeMake(newWidth, 24)]; // Keep standard height
+    [self setFrameSize:CGSizeMake(newWidth, 22)]; // Keep standard height
 }
 
 - (id)nativeUIElementWithMap:(CPMutableDictionary)aMap

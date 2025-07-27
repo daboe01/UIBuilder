@@ -56,7 +56,6 @@
 
 - (void)drawRect:(CGRect)aRect
 {
-    console.log("UIHSpaceView drawRect:");
     if ([self isSelected])
     {
         [super drawRect:aRect];

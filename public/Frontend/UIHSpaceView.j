@@ -4,76 +4,54 @@
 {
 }
 
-+ (CPArray)persistentProperties
-{
-    return [super persistentProperties].concat(["size", "width"]);
-}
 
 + (CPDictionary)defaultValues
 {
     return @{
-        "size": "min",
-        "width": 10
+        "halign": "min",
+        "valign": "min"
     };
 }
 
 + (CPDictionary)propertyTypes
 {
-    var types = [[super propertyTypes] copy];
-    [types setObject:UIBEnumeration forKey:@"size"];
-    [types setObject:UIBNumber forKey:@"width"];
-    return types;
+    return @{
+        "halign": UIBEnumeration,
+        "valign": UIBEnumeration,
+    };
 }
 
 + (CPDictionary)propertyEnumerations
 {
     return @{
-        "size": ["min", "expand"]
+        "halign": ["min", "expand"],
+        "valign": ["min", "expand"]
     };
-}
-
-- (id)init
-{
-    self = [super initWithFrame:CPMakeRect(0,0,0,0)];
-    if (self) {
-        console.log("UIHSpaceView init");
-        [self setBackgroundColor:[CPColor clearColor]];
-        [self setClipsToBounds:NO];
-    }
-    return self;
 }
 
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];
-    if (self) {
-        console.log("UIHSpaceView initWithFrame:");
+
+    if (self)
+    {
         [self setBackgroundColor:[CPColor clearColor]];
         [self setClipsToBounds:NO];
     }
+
     return self;
 }
 
-- (void)drawRect:(CGRect)aRect
+- (void)drawRect:(CGRect)rect
 {
+    // Don't call super, we want a completely custom look.
+    [self drawSkeleton:rect];
+
+    // We still want to see selection handles if it's selected.
     if ([self isSelected])
     {
-        [super drawRect:aRect];
-        return;
+        [self drawHandles];
     }
-
-    var bounds = [self bounds];
-    var path = [CPBezierPath bezierPath];
-    var y = bounds.size.height / 2.0;
-
-    [path moveToPoint:CGPointMake(bounds.origin.x, y)];
-    [path lineToPoint:CGPointMake(bounds.origin.x + bounds.size.width, y)];
-
-    [[CPColor blackColor] set];
-    var dashes = [2.0, 2.0];
-    [path setLineDash:dashes count:2 phase:0.0];
-    [path setLineWidth:1.0];
-    [path stroke];
 }
 
 - (void)drawSkeleton:(CGRect)rect

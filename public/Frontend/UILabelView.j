@@ -46,9 +46,12 @@
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];
-    if (self) {
+
+    if (self)
+    {
         [self sizeToFit];
     }
+    
     return self;
 }
 

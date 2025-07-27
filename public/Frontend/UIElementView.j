@@ -230,11 +230,18 @@ var _classMap = [CPMutableDictionary dictionary];
 {
     if (context == self)
     {
+        console.log("UIElementView: Observed change in", [self class], "for keyPath:", keyPath);
         if ([keyPath isEqualToString:@"halign"] || [keyPath isEqualToString:@"valign"])
         {
-            if ([self superview])
+            var superview = [self superview];
+            if (superview)
             {
-                [[self superview] setNeedsLayout:YES];
+                console.log("  -> Superview is", [superview class], ", calling setNeedsLayout:YES");
+                [superview setNeedsLayout:YES];
+            }
+            else
+            {
+                console.log("  -> Superview is nil, cannot call setNeedsLayout:YES");
             }
         }
         else

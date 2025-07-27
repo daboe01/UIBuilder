@@ -4,32 +4,36 @@
 {
 }
 
-+ (CPArray)persistentProperties
-{
-    return [super persistentProperties].concat(["size", "height"]);
-}
-
 + (CPDictionary)defaultValues
 {
     return @{
-        "size": "min",
-        "height": 10
+        "halign": "min",
+        "valign": "min"
     };
 }
 
 + (CPDictionary)propertyTypes
 {
-    var types = [super propertyTypes];
-    [types setObject:UIBEnumeration forKey:@"size"];
-    [types setObject:UIBNumber forKey:@"height"];
-    return types;
+    return @{
+        "halign": UIBEnumeration,
+        "valign": UIBEnumeration,
+    };
 }
 
 + (CPDictionary)propertyEnumerations
 {
     return @{
-        "size": ["min", "expand"]
+        "halign": ["min", "expand"],
+        "valign": ["min", "expand"]
     };
+}
+
++ (CPDictionary)propertyEnumerations
+{
+    return @{
+                "halign": ["min", "expand"],
+                "valign": ["min", "expand"]
+            };
 }
 
 - (id)initWithFrame:(CGRect)aRect

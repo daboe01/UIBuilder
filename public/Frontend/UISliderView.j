@@ -12,12 +12,17 @@
 
 + (CPDictionary)defaultValues
 {
-    return {value: 0.5, outlets: "target, delegate", actions: "takeFloatValueFrom:, takeIntegerValueFrom:"};
+    var defaults = [[super defaultValues] copy];
+    [defaults setValue:0.5 forKey:@"value"];
+    [defaults setValue:"target, delegate" forKey:@"outlets"];
+    [defaults setValue:"takeFloatValueFrom:, takeIntegerValueFrom:" forKey:@"actions"];
 }
 
 + (CPDictionary)propertyTypes
 {
-    return [super propertyTypes].copy({value: UIBNumber});
+    var types = [[super propertyTypes] copy];
+    [types setObject:UIBNumber forKey:@"value"];
+    return types;
 }
 - (id)initWithFrame:(CGRect)aRect
 {

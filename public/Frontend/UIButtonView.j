@@ -12,18 +12,18 @@
 
 + (CPDictionary)defaultValues
 {
-    return {
-        value: "Button",
-        outlets: "target, delegate",
-        actions: "takeValueFrom:",
-        halign: "min",
-        valign: "min"
+    return @{
+        "value": "Button",
+        "outlets": "target, delegate",
+        "actions": "takeValueFrom:",
+        "halign": "min",
+        "valign": "min"
     };
 }
 
 + (CPDictionary)propertyTypes
 {
-    var types = [super propertyTypes];
+    var types = [[super propertyTypes] copy];
     [types setObject:UIBString forKey:@"value"];
     return types;
 }

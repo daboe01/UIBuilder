@@ -72,6 +72,41 @@ function treshold(value, limit)
     UIElementView   _connectionSource;
     UIElementView   _connectionTarget;
     BOOL            _connectionMade;
+
+    // Drag cancellation state
+    UIElementView   _draggedElement;
+    CPArray         _originalFrames;
+    BOOL            _isCancelingDrag;
+}
+
+- (BOOL)isCancelingDrag
+{
+    return _isCancelingDrag;
+}
+
+- (void)dragDidStart:(UIElementView)anElement
+{
+    _draggedElement = anElement;
+    _isCancelingDrag = NO;
+
+    if (![_draggedElement isConnecting])
+    {
+        var selectedViews = [self selectedSubViews];
+        var frames = [CPMutableArray array];
+        for (var i = 0; i < [selectedViews count]; i++)
+        {
+            var view = selectedViews[i];
+            [frames addObject:{view: view, frame: [view frame]}];
+        }
+        _originalFrames = frames;
+    }
+}
+
+- (void)dragDidEnd
+{
+    _draggedElement = nil;
+    _originalFrames = nil;
+    _isCancelingDrag = NO;
 }
 
 -(BOOL)acceptsFirstMouse:(CPEvent)aEvent
@@ -893,12 +928,18 @@ var _selectedConnectionsObservationContext = 1095;
     var delegate = [self delegate];
     var handled = NO;
 
-    if (selectors && delegate)
+    if (selectors)
     {
         for (var i = 0; i < [selectors count]; i++)
         {
             var selectorName = selectors[i];
-            if ([delegate respondsToSelector:selectorName])
+            if ([self respondsToSelector:selectorName])
+            {
+                [self performSelector:selectorName withObject:self];
+                handled = YES;
+                break;
+            }
+            else if (delegate && [delegate respondsToSelector:selectorName])
             {
                 [delegate performSelector:selectorName withObject:self];
                 handled = YES;
@@ -909,6 +950,40 @@ var _selectedConnectionsObservationContext = 1095;
 
     if (!handled)
         [super keyDown:theEvent];
+}
+
+- (void)cancelOperation:(id)sender
+{
+    if (_draggedElement)
+    {
+        _isCancelingDrag = YES;
+
+        if ([_draggedElement isConnecting])
+        {
+            [self clearConnection];
+            // Any view that was a drop target needs to be un-highlighted
+            var subviews = [self subviews];
+            for (var i = 0; i < [subviews count]; i++)
+            {
+                if ([subviews[i] isKindOfClass:[UIElementView class]])
+                    [subviews[i] setAsDropTarget:NO];
+            }
+        }
+        else if (_originalFrames)
+        {
+            // Restore frames for move/resize
+            for (var i = 0; i < [_originalFrames count]; i++)
+            {
+                var info = _originalFrames[i];
+                [info.view setFrame:info.frame];
+            }
+        }
+
+        // Tell the element to stop its drag loop/state
+        [_draggedElement mouseUp:nil];
+
+        [self setNeedsDisplay:YES];
+    }
 }
 
 #pragma mark - Drag and Drop Destination

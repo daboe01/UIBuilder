@@ -17,16 +17,16 @@
 
 + (CPDictionary)defaultValues
 {
-    return {
-        hasHorizontalScroller: YES,
-        hasVerticalScroller: YES,
-        borderType: "bezel"
+    return @{
+        "hasHorizontalScroller": YES,
+        "hasVerticalScroller": YES,
+        "borderType": "bezel"
     };
 }
 
 + (CPDictionary)propertyTypes
 {
-    var types = [super propertyTypes];
+    var types = [[super propertyTypes] copy];
     [types setObject:UIBBoolean forKey:@"hasHorizontalScroller"];
     [types setObject:UIBBoolean forKey:@"hasVerticalScroller"];
     [types setObject:UIBString forKey:@"borderType"];

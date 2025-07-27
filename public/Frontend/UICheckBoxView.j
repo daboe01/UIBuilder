@@ -17,14 +17,14 @@
 
 + (CPDictionary)defaultValues
 {
-    return {
-        title: "Checkbox"
+    return @{
+        "title": "Checkbox"
     };
 }
 
 + (CPDictionary)propertyTypes
 {
-    var types = [super propertyTypes];
+    var types = [[super propertyTypes] copy];
     [types setObject:UIBString forKey:@"title"];
     return types;
 }

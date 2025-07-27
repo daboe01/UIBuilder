@@ -12,9 +12,9 @@
 
 + (CPDictionary)defaultValues
 {
-    return {
-        value: "Search",
-        recentsAutosaveName: ""
+    return @{
+        "value": "Search",
+        "recentsAutosaveName": ""
     };
 }
 

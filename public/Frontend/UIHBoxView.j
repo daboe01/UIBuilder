@@ -7,8 +7,8 @@
 
 + (CPDictionary)defaultValues
 {
-    return {
-        value: "HBox"
+    return @{
+        "value": "HBox"
     };
 }
 

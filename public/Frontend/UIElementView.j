@@ -445,6 +445,11 @@ var _classMap = [CPMutableDictionary dictionary];
     return kUIElementNoHandle;
 }
 
+- (BOOL)isConnecting
+{
+    return _isConnecting;
+}
+
 - (void)rightMouseDown:(CPEvent)theEvent
 {
     [self mouseDown:theEvent];
@@ -457,6 +462,8 @@ var _classMap = [CPMutableDictionary dictionary];
 - (void)mouseDown:(CPEvent)theEvent
 {
     var canvas = [self canvas];
+    [[self canvas] dragDidStart:self];
+
     var localPoint = [self convertPoint:[theEvent locationInWindow] fromView:nil];
 
     _lastMouseLoc = [[self canvas] convertPoint:[theEvent locationInWindow] fromView:nil];
@@ -631,6 +638,21 @@ var _classMap = [CPMutableDictionary dictionary];
 - (void)mouseUp:(CPEvent)theEvent
 {
     var canvas = [self canvas];
+    var wasCanceling = [canvas isCancelingDrag];
+
+    // Critical: Signal drag end before any logic that might trigger a new state.
+    [canvas dragDidEnd];
+
+    if (wasCanceling)
+    {
+        // Reset local state and prevent any commit actions.
+        _isConnecting = NO;
+        _activeHandle = kUIElementNoHandle;
+        _lastMouseLoc = nil;
+        [[CPCursor arrowCursor] set];
+        return;
+    }
+
     var mouseLoc = [canvas convertPoint:[theEvent locationInWindow] fromView:nil];
 
     if (_isConnecting)

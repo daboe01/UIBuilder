@@ -11,9 +11,9 @@
 
 + (CPDictionary)defaultValues
 {
-    return {
-        size: "min",
-        height: 10
+    return @{
+        "size": "min",
+        "height": 10
     };
 }
 
@@ -27,8 +27,8 @@
 
 + (CPDictionary)propertyEnumerations
 {
-    return {
-        size: ["min", "expand"]
+    return @{
+        "size": ["min", "expand"]
     };
 }
 

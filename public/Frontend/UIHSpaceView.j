@@ -11,15 +11,15 @@
 
 + (CPDictionary)defaultValues
 {
-    return {
-        size: "min",
-        width: 10
+    return @{
+        "size": "min",
+        "width": 10
     };
 }
 
 + (CPDictionary)propertyTypes
 {
-    var types = [super propertyTypes];
+    var types = [[super propertyTypes] copy];
     [types setObject:UIBEnumeration forKey:@"size"];
     [types setObject:UIBNumber forKey:@"width"];
     return types;
@@ -27,8 +27,8 @@
 
 + (CPDictionary)propertyEnumerations
 {
-    return {
-        size: ["min", "expand"]
+    return @{
+        "size": ["min", "expand"]
     };
 }
 

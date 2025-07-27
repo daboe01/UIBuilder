@@ -17,15 +17,15 @@
 
 + (CPDictionary)defaultValues
 {
-    return {
-        title: "Box",
-        hasBorder: YES
+    return @{
+        "title": "Box",
+        "hasBorder": YES
     };
 }
 
 + (CPDictionary)propertyTypes
 {
-    var types = [super propertyTypes];
+    var types = [[super propertyTypes] copy];
     [types setObject:UIBString forKey:@"title"];
     [types setObject:UIBBoolean forKey:@"hasBorder"];
     return types;

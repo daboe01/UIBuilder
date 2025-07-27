@@ -19,11 +19,12 @@
 
 + (CPDictionary)defaultValues
 {
-    var defaults = [[super defaultValues] mutableCopy];
+    var defaults = [[super defaultValues] copy];
     [defaults setValue:@"Label" forKey:@"value"];
     [defaults setValue:@"left" forKey:@"textAlign"];
     [defaults setValue:@"min" forKey:@"halign"];
     [defaults setValue:@"min" forKey:@"valign"];
+
     return defaults;
 }
 

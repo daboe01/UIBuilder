@@ -19,16 +19,17 @@
 
 + (CPDictionary)defaultValues
 {
-    return {
-        value: "Label",
-        textAlign: "left"
-    };
+    var defaults = [[super defaultValues] mutableCopy];
+    [defaults setValue:@"Label" forKey:@"value"];
+    [defaults setValue:@"left" forKey:@"textAlign"];
+    [defaults setValue:@"min" forKey:@"halign"];
+    [defaults setValue:@"min" forKey:@"valign"];
+    return defaults;
 }
 
 + (CPDictionary)propertyTypes
 {
     var types = [[super propertyTypes] copy];
-    [types setObject:UIBString forKey:@"value"];
     [types setObject:UIBEnumeration forKey:@"textAlign"];
     return types;
 }

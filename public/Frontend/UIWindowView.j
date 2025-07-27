@@ -29,13 +29,13 @@ var _windowChildrenObservationContext = 1094;
 
 + (JSObject)defaultValues
 {
-    return {
-        value: "Untitled Window",
-        CPHUDBackgroundWindowMask: true,
-        CPTitledWindowMask: true,
-        CPClosableWindowMask: true,
-        outlets: "delegate",
-        actions: "makeKeyAndOrderFront:, orderOut:"
+    return @{
+        "value": "Untitled Window",
+        "CPHUDBackgroundWindowMask": true,
+        "CPTitledWindowMask": true,
+        "CPClosableWindowMask": true,
+        "outlets": "delegate",
+        "actions": "makeKeyAndOrderFront:, orderOut:"
     };
 }
 

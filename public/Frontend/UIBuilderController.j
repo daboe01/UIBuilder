@@ -242,8 +242,10 @@
 
     // Set default values from the view class
     var defaultValues = [viewClass defaultValues];
-    for (var key in defaultValues) {
-        [newElementData setValue:defaultValues[key] forKey:key];
+    var keys = [defaultValues allKeys];
+    for (var i = 0; i < [keys count]; i++) {
+        var key = keys[i];
+        [newElementData setValue:[defaultValues objectForKey:key] forKey:key];
     }
 
     // Set default sizes
@@ -257,16 +259,13 @@
     } else if (elementType === "slider") {
         [newElementData setValue:150 forKey:@"width"];
         [newElementData setValue:20 forKey:@"height"];
-    } else if (elementType === "label") {
-        [newElementData setValue:100 forKey:@"width"];
-        [newElementData setValue:20 forKey:@"height"];
     } else if (elementType === "hspace") {
         [newElementData setValue:0 forKey:@"width"];
         [newElementData setValue:1 forKey:@"height"];
     } else if (elementType === "vspace") {
         [newElementData setValue:1 forKey:@"width"];
         [newElementData setValue:0 forKey:@"height"];
-    } else { // textfield
+    } else { // textfield, label, etc.
         [newElementData setValue:150 forKey:@"width"];
         [newElementData setValue:22 forKey:@"height"];
     }
@@ -623,7 +622,7 @@
     [windowData setValue:[] forKey:@"children"];
 
     var defaultWindowValues = [windowClass defaultValues];
-    for (var key in defaultWindowValues) {
+    for (var key in [defaultWindowValues allKeys]) {
         [windowData setValue:defaultWindowValues[key] forKey:key];
     }
 
@@ -642,8 +641,9 @@
     [vboxData setValue:@"vbox" forKey:@"type"];
     [vboxData setValue:@"id_" + _elementCounter++ forKey:@"id"];
     [vboxData setValue:[windowData valueForKey:@"id"] forKey:@"parentID"];
+
     var defaultVBoxValues = [vboxClass defaultValues];
-    for (var key in defaultVBoxValues) {
+    for (var key in [defaultVBoxValues allKeys]) {
         [vboxData setValue:defaultVBoxValues[key] forKey:key];
     }
     // Make the vbox fill the window's content area
@@ -675,7 +675,8 @@
     [hboxData setValue:@"id_" + _elementCounter++ forKey:@"id"];
     [hboxData setValue:[parentData valueForKey:@"id"] forKey:@"parentID"];
     var defaultHBoxValues = [hboxClass defaultValues];
-    for (var key in defaultHBoxValues) {
+
+    for (var key in [defaultHBoxValues allKeys]) {
         [hboxData setValue:defaultHBoxValues[key] forKey:key];
     }
     [hboxData setValue:0 forKey:@"originX"];

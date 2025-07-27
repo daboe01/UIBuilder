@@ -58,6 +58,13 @@
     [[self value] drawAtPoint:CGPointMake((bounds.size.width - valueSize.width) / 2.0 + 1, (bounds.size.height - valueSize.height) / 2.0 - 2) withAttributes:_stringAttributes];
 }
 
+- (void)sizeToFit
+{
+    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
+    var newWidth = valueSize.width + 20; // 10px padding on each side
+    [self setFrameSize:CGSizeMake(newWidth, 24)]; // Keep standard height
+}
+
 - (id)nativeUIElementWithMap:(CPMutableDictionary)aMap
 {
     var button = [[CPButton alloc] initWithFrame:[self frame]];

@@ -109,9 +109,9 @@ var _classMap = [CPMutableDictionary dictionary];
 + (CPDictionary)defaultValues
 {
     return @{
-        value: "Element",
-        halign: "expand",
-        valign: "expand"
+        "value": "Element",
+        "halign": "min",
+        "valign": "min"
     };
 }
 
@@ -322,6 +322,13 @@ var _classMap = [CPMutableDictionary dictionary];
 - (id)value
 {
     return ([self dataObject] == nil) ? @"" : [[self dataObject] valueForKey:@"value"];
+}
+
+- (void)sizeToFit
+{
+    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
+    var newSize = CGSizeMake(valueSize.width + 10, valueSize.height + 10); // 5px padding
+    [self setFrameSize:newSize];
 }
 
 // You will need a way to get a reference to the canvas.

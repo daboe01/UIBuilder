@@ -73,7 +73,7 @@
     {
         var subview = subviews[i];
         var frame = [subview frame];
-        var frameWidth = frame.size.width;
+        var frameWidth;
         var frameHeight = 0;
 
         if ([subview isKindOfClass:[UIVSpaceView class]])
@@ -89,7 +89,13 @@
         }
 
         var halign = [[subview dataObject] valueForKey:@"halign"];
-        if (halign === "expand")
+        if (halign === "min")
+        {
+            if ([subview respondsToSelector:@selector(sizeToFit)])
+                [subview sizeToFit];
+            frameWidth = [subview frame].size.width;
+        }
+        else // "expand"
         {
             frameWidth = bounds.size.width;
         }

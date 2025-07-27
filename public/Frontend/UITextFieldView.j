@@ -59,6 +59,13 @@
     [[self value] drawAtPoint:CGPointMake(5, (bounds.size.height - valueSize.height) / 2.0 - 2) withAttributes:_stringAttributes];
 }
 
+- (void)sizeToFit
+{
+    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
+    var newWidth = valueSize.width + 10; // padding
+    [self setFrameSize:CGSizeMake(newWidth, 22)]; // standard height
+}
+
 - (id)nativeUIElementWithMap:(CPMutableDictionary)aMap
 {
     var textField = [[CPTextField alloc] initWithFrame:[self frame]];

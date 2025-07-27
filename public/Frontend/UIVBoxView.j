@@ -38,35 +38,33 @@
     if (count === 0) return;
 
     var bounds = [self bounds];
-    var totalFixedAndMinHeight = 0;
-    var expandableSpaces = 0;
-    var totalHeight = 0;
+    var totalFixedHeight = 0;
+    var expandableChildren = 0;
 
     // First pass: Calculate total height of fixed elements and count expandable ones.
     for (var i = 0; i < count; i++)
     {
         var subview = subviews[i];
-        if ([subview isKindOfClass:[UIVSpaceView class]])
+        var valign = [[subview dataObject] valueForKey:@"valign"];
+
+        if (valign === "expand")
         {
-            if ([[subview dataObject] valueForKey:@"size"] === "min")
-                totalFixedAndMinHeight += [[subview dataObject] valueForKey:@"height"];
-            else
-                expandableSpaces++;
+            expandableChildren++;
         }
-        else // This is a regular view like an HBox
+        else // "min"
         {
-            // Treat its current height as fixed.
-            totalFixedAndMinHeight += [subview frame].size.height;
+            totalFixedHeight += [subview frame].size.height;
         }
+    }
+
+    var flexibleHeight = 0;
+    if (expandableChildren > 0)
+    {
+        var remainingSpace = bounds.size.height - totalFixedHeight;
+        flexibleHeight = (remainingSpace > 0) ? (remainingSpace / expandableChildren) : 0;
     }
 
     var currentY = 0;
-
-    if (expandableSpaces > 0)
-    {
-        var remainingSpace = bounds.size.height - totalFixedAndMinHeight;
-        flexibleHeight = (remainingSpace > 0) ? (remainingSpace / expandableSpaces) : 0;
-    }
 
     // Second pass: Set the frames.
     for (var i = 0; i < count; i++)
@@ -75,25 +73,29 @@
         var frame = [subview frame];
         var frameWidth;
         var frameHeight = 0;
+        var valign = [[subview dataObject] valueForKey:@"valign"];
 
-        if ([subview isKindOfClass:[UIVSpaceView class]])
+        if (valign === "expand")
         {
-            if ([[subview dataObject] valueForKey:@"size"] === "min")
-                frameHeight = [[subview dataObject] valueForKey:@"height"];
-            else
-                frameHeight = flexibleHeight;
+            frameHeight = flexibleHeight;
         }
-        else // Regular view (HBox)
+        else // "min"
         {
-            frameHeight = [subview frame].size.height; // Use its own height
+            frameHeight = [subview frame].size.height;
         }
 
         var halign = [[subview dataObject] valueForKey:@"halign"];
         if (halign === "min")
         {
             if ([subview respondsToSelector:@selector(sizeToFit)])
+            {
                 [subview sizeToFit];
-            frameWidth = [subview frame].size.width;
+                frameWidth = [subview frame].size.width;
+            }
+            else
+            {
+                frameWidth = [subview frame].size.width;
+            }
         }
         else // "expand"
         {

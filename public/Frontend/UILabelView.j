@@ -47,9 +47,7 @@
 {
     self = [super initWithFrame:aRect];
     if (self) {
-        if (CGRectIsEmpty(aRect)) {
-            [self setFrameSize:CGSizeMake(100, 20)];
-        }
+        [self sizeToFit];
     }
     return self;
 }

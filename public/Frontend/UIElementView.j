@@ -227,8 +227,15 @@ var _classMap = [CPMutableDictionary dictionary];
 {
     if (context == self)
     {
-        // When a property on the dataObject changes, simply tell the view to redraw itself.
-        [self setNeedsDisplay:YES];
+        if ([keyPath isEqualToString:@"halign"] || [keyPath isEqualToString:@"valign"])
+        {
+            if ([self superview])
+                [[self superview] setNeedsLayout:YES];
+        }
+        else
+        {
+            [self setNeedsDisplay:YES];
+        }
     }
     else
     {
@@ -328,7 +335,8 @@ var _classMap = [CPMutableDictionary dictionary];
 
 - (void)sizeToFit
 {
-    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
+    var value = [self value] || @"";
+    var valueSize = [value sizeWithFont:[CPFont boldSystemFontOfSize:12]];
     var newSize = CGSizeMake(valueSize.width + 10, valueSize.height + 10); // 5px padding
     [self setFrameSize:newSize];
 }

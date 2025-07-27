@@ -7,9 +7,10 @@
 
 + (CPDictionary)defaultValues
 {
-    return @{
-        "value": "HBox"
-    };
+    var defaults = [[super defaultValues] copy];
+    [defaults setValue:@"HBox" forKey:@"value"];
+    [defaults setValue:@"expand" forKey:@"halign"];
+    return defaults;
 }
 
 - (id)initWithFrame:(CGRect)aRect
@@ -39,29 +40,28 @@
 
     var bounds = [self bounds];
     var totalFixedWidth = 0;
-    var expandableSpaces = 0;
+    var expandableChildren = 0;
 
     // First pass: Calculate total width of fixed elements and count expandable ones.
     for (var i = 0; i < count; i++)
     {
         var subview = subviews[i];
-        if ([subview isKindOfClass:[UIHSpaceView class]])
+        var halign = [[subview dataObject] valueForKey:@"halign"];
+
+        if (halign === "expand")
         {
-            if ([[subview dataObject] valueForKey:@"size"] === "min")
-                totalFixedWidth += [[subview dataObject] valueForKey:@"width"];
-            else
-                expandableSpaces++;
+            expandableChildren++;
         }
-        else // This is a regular view
+        else // "min"
         {
             totalFixedWidth += [subview frame].size.width;
         }
     }
 
     var flexibleWidth = 0;
-    if (expandableSpaces > 0) {
+    if (expandableChildren > 0) {
         var remainingSpace = bounds.size.width - totalFixedWidth;
-        flexibleWidth = (remainingSpace > 0) ? (remainingSpace / expandableSpaces) : 0;
+        flexibleWidth = (remainingSpace > 0) ? (remainingSpace / expandableChildren) : 0;
     }
 
     var currentX = 0;
@@ -73,15 +73,13 @@
         var frame = [subview frame];
         var frameHeight = frame.size.height;
         var frameWidth = 0;
+        var halign = [[subview dataObject] valueForKey:@"halign"];
 
-        if ([subview isKindOfClass:[UIHSpaceView class]])
+        if (halign === "expand")
         {
-            if ([[subview dataObject] valueForKey:@"size"] === "min")
-                frameWidth = [[subview dataObject] valueForKey:@"width"];
-            else
-                frameWidth = flexibleWidth;
+            frameWidth = flexibleWidth;
         }
-        else // Regular view
+        else // "min"
         {
             frameWidth = [subview frame].size.width;
         }

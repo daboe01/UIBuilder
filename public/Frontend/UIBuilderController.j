@@ -248,27 +248,26 @@
         [newElementData setValue:[defaultValues objectForKey:key] forKey:key];
     }
 
-    // Set default sizes
-    if (elementType === "window") {
-        [newElementData setValue:250 forKey:@"width"];
-        [newElementData setValue:200 forKey:@"height"];
-        [newElementData setValue:[] forKey:@"children"];
-    } else if (elementType === "button") {
-        [newElementData setValue:100 forKey:@"width"];
-        [newElementData setValue:24 forKey:@"height"];
-    } else if (elementType === "slider") {
-        [newElementData setValue:150 forKey:@"width"];
-        [newElementData setValue:20 forKey:@"height"];
-    } else if (elementType === "hspace") {
-        [newElementData setValue:0 forKey:@"width"];
-        [newElementData setValue:1 forKey:@"height"];
-    } else if (elementType === "vspace") {
-        [newElementData setValue:1 forKey:@"width"];
-        [newElementData setValue:0 forKey:@"height"];
-    } else { // textfield, label, etc.
-        [newElementData setValue:150 forKey:@"width"];
-        [newElementData setValue:22 forKey:@"height"];
+    // Set default sizes by creating a temporary view and giving it the default data
+    var tempView = [[viewClass alloc] initWithFrame:CGRectMakeZero()];
+    [tempView setDataObject:newElementData]; // Provide data to the temp view
+
+    if ([tempView respondsToSelector:@selector(sizeToFit)])
+    {
+        [tempView sizeToFit];
     }
+    
+    var initialSize = [tempView frame].size;
+
+    // For windows, we still want a larger default size.
+    if (elementType === "window")
+    {
+        initialSize = CGSizeMake(250, 200);
+        [newElementData setValue:[] forKey:@"children"];
+    }
+
+    [newElementData setValue:initialSize.width forKey:@"width"];
+    [newElementData setValue:initialSize.height forKey:@"height"];
 
     // Calculate centered position
     var elementWidth = [newElementData valueForKey:@"width"];

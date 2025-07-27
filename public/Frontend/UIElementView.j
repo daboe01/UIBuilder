@@ -152,8 +152,11 @@ var _classMap = [CPMutableDictionary dictionary];
 
         _activeHandle = kUIElementNoHandle;
 
-        if ([self frame].size.width < 50 || [self frame].size.height < 20)
-            [self setFrameSize:CGSizeMake(MAX(50, [self frame].size.width), MAX(20, [self frame].size.height))];
+        if (![self isKindOfClass:[UIHBoxView class]] && ![self isKindOfClass:[UIVBoxView class]])
+        {
+            if ([self frame].size.width < 50 || [self frame].size.height < 20)
+                [self setFrameSize:CGSizeMake(MAX(50, [self frame].size.width), MAX(20, [self frame].size.height))];
+        }
 
         [self setNeedsDisplay:YES];
 
@@ -301,8 +304,11 @@ var _classMap = [CPMutableDictionary dictionary];
     if (aFloat !== [self width])
     {
         var frame = [self frame];
-        // Enforce a minimum width to prevent rendering issues.
-        frame.size.width = MAX(aFloat, 20.0);
+        var minWidth = 0.0;
+        if ([self isKindOfClass:[UIHBoxView class]] || [self isKindOfClass:[UIVBoxView class]] || [self isKindOfClass:[UIHSpaceView class]] || [self isKindOfClass:[UIVSpaceView class]])
+            minWidth = 0;
+        
+        frame.size.width = MAX(aFloat, minWidth);
         [self setFrame:frame];
         [[self superview] setNeedsLayout:YES];
     }
@@ -318,8 +324,11 @@ var _classMap = [CPMutableDictionary dictionary];
     if (aFloat !== [self height])
     {
         var frame = [self frame];
-        // Enforce a minimum height.
-        frame.size.height = MAX(aFloat, 20.0);
+        var minHeight = 0.0;
+        if ([self isKindOfClass:[UIHBoxView class]] || [self isKindOfClass:[UIVBoxView class]] || [self isKindOfClass:[UIHSpaceView class]] || [self isKindOfClass:[UIVSpaceView class]])
+            minHeight = 0;
+
+        frame.size.height = MAX(aFloat, minHeight);
         [self setFrame:frame];
         [[self superview] setNeedsLayout:YES];
     }

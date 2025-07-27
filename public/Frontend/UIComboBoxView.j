@@ -10,7 +10,7 @@
     }
 }
 
-+ (JSObject)defaultValues
++ (CPDictionary)defaultValues
 {
     return @{
         "value": "ComboBox",
@@ -19,6 +19,11 @@
         "outlets": "delegate, dataSource",
         "actions": "takeStringValueFrom:"
     };
+}
+
++ (CPArray)persistentProperties
+{
+    return [super persistentProperties].concat(["items", "isEditable", "outlets", "actions"]);
 }
 
 - (void)drawSkeleton:(CGRect)rect

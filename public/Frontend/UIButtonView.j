@@ -27,6 +27,12 @@
     [types setObject:UIBString forKey:@"value"];
     return types;
 }
+
++ (CPArray)persistentProperties
+{
+    return [super persistentProperties].concat(["outlets", "actions"]);
+}
+
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];

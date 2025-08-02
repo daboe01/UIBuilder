@@ -4,10 +4,17 @@
 {
 }
 
++ (CPArray)persistentProperties
+{
+    return [[super persistentProperties] arrayByAddingObjectsFromArray:
+            [@"height", @"valign"]
+            ];
+}
+
 + (CPDictionary)defaultValues
 {
     return @{
-        "halign": "min",
+        "height": 100,
         "valign": "min"
     };
 }
@@ -15,15 +22,14 @@
 + (CPDictionary)propertyTypes
 {
     return @{
-        "halign": UIBEnumeration,
-        "valign": UIBEnumeration,
+        "height": UIBNumber,
+        "valign": UIBEnumeration
     };
 }
 
 + (CPDictionary)propertyEnumerations
 {
     return @{
-        "halign": ["min", "expand"],
         "valign": ["min", "expand"]
     };
 }
@@ -58,6 +64,7 @@
     }
 }
 
+
 - (void)drawSkeleton:(CGRect)rect
 {
     var bounds = [self bounds];
@@ -73,5 +80,31 @@
     [path setLineDash:[2,2] count:2 phase:0];
     [path stroke];
 }
+
+- (void)observeValueForKeyPath:(CPString)keyPath ofObject:(id)object change:(CPDictionary)change context:(id)context
+{
+    if ([keyPath isEqualToString:@"height"])
+    {
+        var frame = [self frame];
+        frame.size.height = [[change objectForKey:CPKeyValueChangeNewKey] floatValue];
+        [self setFrame:frame];
+    }
+    else
+    {
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+    }
+}
+
+
+- (void)setHeight:(float)aFloat
+{
+    if (aFloat !== [self height])
+    {
+        [super setHeight:aFloat];
+        [[self dataObject] setValue:aFloat forKey:@"height"];
+    }
+}
+
+
 
 @end

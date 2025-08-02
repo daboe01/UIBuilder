@@ -5,27 +5,33 @@
 }
 
 
++ (CPArray)persistentProperties
+{
+    return [[super persistentProperties] arrayByAddingObjectsFromArray:
+            [@"width", @"halign"]
+            ];
+}
+
 + (CPDictionary)defaultValues
 {
     return @{
-        "halign": "min",
-        "valign": "min"
+        "width": 100,
+        "halign": "min"
     };
 }
 
 + (CPDictionary)propertyTypes
 {
     return @{
-        "halign": UIBEnumeration,
-        "valign": UIBEnumeration,
+        "width": UIBNumber,
+        "halign": UIBEnumeration
     };
 }
 
 + (CPDictionary)propertyEnumerations
 {
     return @{
-        "halign": ["min", "expand"],
-        "valign": ["min", "expand"]
+        "halign": ["min", "expand"]
     };
 }
 
@@ -54,6 +60,7 @@
     }
 }
 
+
 - (void)drawSkeleton:(CGRect)rect
 {
     var bounds = [self bounds];
@@ -69,5 +76,31 @@
     [path setLineDash:[2,2] count:2 phase:0];
     [path stroke];
 }
+
+- (void)observeValueForKeyPath:(CPString)keyPath ofObject:(id)object change:(CPDictionary)change context:(id)context
+{
+    if ([keyPath isEqualToString:@"width"])
+    {
+        var frame = [self frame];
+        frame.size.width = [[change objectForKey:CPKeyValueChangeNewKey] floatValue];
+        [self setFrame:frame];
+    }
+    else
+    {
+        [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
+    }
+}
+
+
+- (void)setWidth:(float)aFloat
+{
+    if (aFloat !== [self width])
+    {
+        [super setWidth:aFloat];
+        [[self dataObject] setValue:aFloat forKey:@"width"];
+    }
+}
+
+
 
 @end

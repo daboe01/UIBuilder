@@ -15,7 +15,7 @@ EspressoUI is guided by a simple yet powerful philosophy:
 
 *   **Native-Like Experience:** The builder itself should feel like a fluid, responsive desktop application, showcasing the power of the Cappuccino framework.
 *   **Pure Cappuccino:** No external UI library dependencies. This project is a testament to what can be achieved with Cappuccino alone.
-*   **Layout First:** Place the emphasis on building robust, responsive interfaces using a visual representation of Cappuccino's layout primitives.
+*   **Layout First:** Place the emphasis on building robust, responsive interfaces using a visual representation of Cappusance's layout primitives.
 
 ---
 

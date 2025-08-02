@@ -5,7 +5,7 @@
 ## About The Project
 
 
-**EspressoUI Builder** is a WYSIWYG interface builder, built *in* Cappuccino, *for* Cappuccino. Inspired by modern tools like Xcode's Interface Builder, Espresso provides a visual, drag-and-drop canvas to graphically construct your application's UI. Its primary focus is to give you a hands-on, intuitive way to harness the full power of Cappuccino's auto-layout engine.
+**EspressoUI Builder** is a WYSIWYG interface builder, built *in* Cappuccino, *for* Cappuccino. Inspired by modern tools like Xcode's Interface Builder, Espresso provides a visual, drag-and-drop canvas to graphically construct your application's UI. Its primary focus is to give you a hands-on, intuitive way to harness the full power of Cappusances's auto-layout engine.
 
 Our vision is to bridge the gap between visual design and clean, maintainable code, enabling you to build beautiful and responsive Cappuccino apps faster than ever before.
 

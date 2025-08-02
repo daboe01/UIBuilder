@@ -12,12 +12,12 @@
 
 + (CPDictionary)defaultValues
 {
-    return {
-        value: "Text Field",
-        outlets: "target, delegate",
-        actions: "takeStringValueFrom:, takeIntegerValueFrom:",
-        halign: "expand",
-        valign: "min"
+    return @{
+        "value": "Text Field",
+        "outlets": "target, delegate",
+        "actions": "takeStringValueFrom:, takeIntegerValueFrom:",
+        "halign": "expand",
+        "valign": "min"
     };
 }
 
@@ -56,12 +56,12 @@
     
     // Draw placeholder value
     var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
-    [[self value] drawAtPoint:CGPointMake(5, (bounds.size.height - valueSize.height) / 2.0 - 2) withAttributes:_stringAttributes];
+    [[self value] drawAtPoint:CGPointMake(5, (bounds.size.height - valueSize.height) / 2.0 - 1) withAttributes:_stringAttributes];
 }
 
 - (void)sizeToFit
 {
-    var valueSize = [[self value] sizeWithAttributes:_stringAttributes];
+    var valueSize = [[self value] sizeWithFont:[_stringAttributes objectForKey:CPFontAttributeName]];
     var newWidth = valueSize.width + 10; // padding
     [self setFrameSize:CGSizeMake(newWidth, 22)]; // standard height
 }

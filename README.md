@@ -4,7 +4,7 @@
 
 ## About The Project
 
-Building rich, responsive user interfaces is a cornerstone of the Cappuccino framework. While Cappuccino includes a powerful auto-layout system based on stacks and boxes, defining these complex view hierarchies directly in Objective-J code can be time-consuming and abstract.
+Building rich, responsive user interfaces is a cornerstone of the Cappuccino framework. While Cappuccino includes a powerful auto-layout system based on Struts and Springs, defining complex view hierarchies can be time-consuming.
 
 **EspressoUI Builder** revolutionizes this process.
 

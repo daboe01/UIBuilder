@@ -1,16 +1,16 @@
 # EspressoUI Builder ☕️
 
-> The WYSIWYG Interface Builder for the Modern Cappuccino Application.
-
-
+> The Visual UI Builder for Cappuccino's Powerful Auto-Layout System
 
 ## About The Project
 
-Building rich, native-like user interfaces is at the heart of the Cappuccino framework. However, crafting complex layouts directly in Objective-J code can be a slow and iterative process. **Espresso UI Builder** is here to change that.
+Building rich, responsive user interfaces is a cornerstone of the Cappuccino framework. While Cappuccino includes a powerful auto-layout system based on stacks and boxes, defining these complex view hierarchies directly in Objective-J code can be time-consuming and abstract.
 
-Born out of the desire for a modern, web-based equivalent of Xcode's Interface Builder, Espresso is a visual design tool built *in* Cappuccino, *for* Cappuccino. It allows developers and designers to drag, drop, and visually compose application interfaces in real-time, dramatically accelerating the development workflow.
+**EspressoUI Builder** revolutionizes this process.
 
-Our vision is to provide a seamless bridge between visual design and clean, maintainable code, empowering you to build beautiful Cappuccino apps faster than ever before.
+It's a WYSIWYG interface builder, built *in* Cappuccino, *for* Cappuccino. Inspired by modern tools like Xcode's Interface Builder, Espresso provides a visual, drag-and-drop canvas to graphically construct your application's UI. Its primary focus is to give you a hands-on, intuitive way to harness the full power of Cappuccino's auto-layout engine.
+
+Our vision is to bridge the gap between visual design and clean, maintainable code, enabling you to build beautiful and responsive Cappuccino apps faster than ever before.
 
 ### Vision & Philosophy
 
@@ -18,41 +18,59 @@ EspressoUI is guided by a simple yet powerful philosophy:
 
 *   **Native-Like Experience:** The builder itself should feel like a fluid, responsive desktop application, showcasing the power of the Cappuccino framework.
 *   **Pure Cappuccino:** No external UI library dependencies. This project is a testament to what can be achieved with Cappuccino alone.
+*   **Layout First:** Place the emphasis on building robust, responsive interfaces using a visual representation of Cappuccino's layout primitives.
 
 ---
 
-## Current Features
+## 🚀 Current Features
 
-EspressoUI is in its exciting early stages, with a solid foundation already in place.
+EspressoUI is well underway, with a robust set of features that already streamline UI development.
 
-*   **Full-Window Canvas:** A limitless, scrollable canvas for designing your application windows.
-*   **Floating Component Palette:** A simple, intuitive palette with symbols for common UI elements.
-*   **Drag & Drop Instantiation:** Drag elements like windows, buttons, sliders, and text fields from the palette directly onto the canvas.
-*   **Visual Manipulation:**
-    *   Move elements freely around the canvas.
-    *   Resize elements with intuitive "dimple" handles on selection.
-*   **Container Logic:** Drag and drop elements into container views (like a `CPWindow`), with visual hints for valid drop targets.
+*   **Full-Window Canvas:** A limitless, scrollable canvas for designing your application windows and views. Standard features like element selection, multi-selection (rubber-banding), and visual resizing are all implemented.
+
+*   **Extensive Component Palette:** A floating palette provides a rich library of standard Cappuccino controls, neatly organized and ready to be dragged onto the canvas.
+    *   **Containers:** `Window`, `Box`, `Scroll View`, `Split View`, `Table View`
+    *   **Auto-Layout:** `HBox`, `VBox`, `HSpace`, `VSpace`
+    *   **Text & Fields:** `Label`, `Text Field`, `Search Field`, `Secure Field`, `Text View`, `Combo Box`
+    *   **Buttons & Controls:** `Button`, `Check Box`, `Pop Up Button`, `Stepper`, `Slider`, `Date Picker`
+    *   **Visuals:** `Image View`, `Progress Indicator`
+
+*   **Visual Auto-Layout Engine:** This is the core of EspressoUI.
+    *   Drag and drop layout primitives like `HBox` and `VBox` onto the canvas to create horizontal or vertical stacks.
+    *   Drop other UI elements *inside* these boxes to have them automatically arrange themselves according to the layout rules.
+    *   Visually create flexible and rigid spacing to build complex, responsive designs that adapt gracefully.
+
+*   **Contextual Inspector:** An inspector panel that displays the properties of the currently selected UI element(s).
+
+*   **Live Application Preview:** With a single click ("Run"), EspressoUI will:
+    1.  Instantiate real, native Cappuccino UI elements from your visual design.
+    2.  Build the complete view hierarchy, correctly nesting views within their containers.
+    3.  Connect targets and actions between elements.
+    4.  Launch the final, interactive UI in a new window, exactly as a user would see it.
 
 ---
 
-## 🚀 The Roadmap: A Bright Future
+## 🎯 The Roadmap: A Bright Future
 
-This is just the beginning. Our roadmap is ambitious, aiming to make Espresso an indispensable tool for every Cappuccino developer.
+This is just the beginning. Our roadmap is focused on making Espresso an indispensable tool for every Cappuccino developer.
 
-### 🎯 Phase 1: The Foundation (Complete)
+### ✔️ Phase 1: The Foundation (Complete)
 - [x] Core drawing engine for skeleton UI elements.
-- [x] Data model managed by `CPArrayController`.
+- [x] Data model managed by `CPArrayController` for robust state management.
 - [x] Canvas with selection, multi-selection, and rubber-banding.
-- [x] Basic drag-and-drop from a component palette.
-- [x] Move, resize, and container-drop functionality.
+- [x] Drag-and-drop instantiation from the component palette.
+- [x] Visual manipulation (move, resize).
+- [x] Container logic for dropping elements into parent views.
+- [x] Visual support for the **Auto-Layout** engine (`HBox`, `VBox`, etc.).
 
-### 🔬 Phase 2: The Inspector & Properties
-- [x] **Property Inspector Panel:** A context-aware panel to view and edit the properties of selected elements.
-- [ ] **Live Property Editing:** Change an element's title, color, or state and see it update instantly on the canvas.
-- [ ] **Geometry & Sizing:** Precise numeric input for an element's position (x, y) and size (width, height).
-- [ ] **Binding Support:** Visually bind element properties (like a slider's value) to controller keys.
+### ⚙️ Phase 2: The Inspector Deep-Dive (In Progress)
+- [x] Context-aware **Property Inspector Panel** to view element properties.
+- [x] **Live Preview Mode** to generate and run the native UI.
+- [ ] **Live Property Editing:** Change an element's title, color, or state in the inspector and see it update instantly on the canvas.
+- [ ] **Geometry & Sizing:** Precise numeric input for an element's position and size.
+- [ ] **Binding Support:** Visually bind element properties (like a slider's value) to controller keys directly from the UI.
 
-### ⚙️ Phase 3: Persistency & Integration
-- [ ] **Outlet & Action Generation:** Visually connect elements to file's owner to automatically generate outlet and action stubs.
-- [ ] **Live Preview Mode:** Toggle between design mode and a "live" interactive preview of your UI.
-- [ ] **Persistency:** Database backend?
+### 💾 Phase 3: Persistency & Code Generation
+- [ ] **Project Persistency:** Save and load your visual UI designs to and from a file (`.xib` or `.cib` equivalent).
+- [ ] **Outlet & Action Generation:** Visually connect elements to "File's Owner" to automatically generate Objective-J outlet and action stubs in your controller files.
+- [ ] **Advanced Undo/Redo:** Full undo stack support for all actions (creation, deletion, moves, property changes).

@@ -1,6 +1,6 @@
 # EspressoUI Builder ☕️
 
-> The Visual UI Builder for Cappuccino's Powerful Auto-Layout System
+> The Visual UI Builder for Cappusances's Powerful Auto-Layout System
 
 ## About The Project
 

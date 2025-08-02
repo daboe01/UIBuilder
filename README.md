@@ -63,8 +63,8 @@ This is just the beginning. Our roadmap is focused on making Espresso an indispe
 ### ⚙️ Phase 2: The Inspector Deep-Dive (In Progress)
 - [x] Context-aware **Property Inspector Panel** to view element properties.
 - [x] **Live Preview Mode** to generate and run the native UI.
-- [ ] **Live Property Editing:** Change an element's title, color, or state in the inspector and see it update instantly on the canvas.
-- [ ] **Geometry & Sizing:** Precise numeric input for an element's position and size.
+- [x] **Live Property Editing:** Change an element's title, color, or state in the inspector and see it update instantly on the canvas.
+- [x] **Geometry & Sizing:** Precise numeric input for an element's position and size.
 - [ ] **Binding Support:** Visually bind element properties (like a slider's value) to controller keys directly from the UI.
 
 ### 💾 Phase 3: Persistency & Code Generation

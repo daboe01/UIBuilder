@@ -7,45 +7,106 @@
 //  - It correctly instantiates different UIElementView subclasses based on the data model.
 //
 
+
 @import "UIBuilderConstants.j";
 @import "UIElementView.j";
 @import "ConnectionView.j";
-@import "UIBuilderConstants.j";
+
+// Import all the new view classes
+@import "UIWindowView.j";
+@import "UIButtonView.j";
+@import "UISliderView.j";
+@import "UITextFieldView.j";
+@import "UICheckBoxView.j";
+@import "UILabelView.j";
+@import "UISearchFieldView.j";
+@import "UISecureFieldView.j";
+@import "UITextViewView.j";
+@import "UIScrollViewView.j";
+@import "UITableViewView.j";
+@import "UISplitViewView.j";
+@import "UIImageViewView.j";
+@import "UIPopUpButtonView.j";
+@import "UIComboBoxView.j";
+@import "UIStepperView.j";
+@import "UIDatePickerView.j";
+@import "UIProgressIndicatorView.j";
+@import "UIBoxView.j";
+@import "UIHBoxView.j";
+@import "UIVBoxView.j";
+
 
 function treshold(value, limit)
 {
     return value > 0 ? Math.min(value, limit) : Math.max(value, -limit);
 }
 
-@implementation UICanvasView : CPView <CPMenuDelegate>
+@implementation UICanvasView : CPView
 {
-    // Data binding ivars
-    id                  _dataObjectsContainer;
-    CPString            _dataObjectsKeyPath;
-    id                  _selectionIndexesContainer;
-    CPString            _selectionIndexesKeyPath;
-    CPArray             _oldDataObjects;
+    CPPoint         _dragPoint;
+    BOOL            _didDrag;
+    CPArray         _selection;
+    CPView          _rubberband;
+    CPPoint         _rubberbandStartPoint;
 
-    // Connections ivars
-    id                  _connectionsContainer;
-    CPString            _connectionsKeyPath;
-    CPArray             _oldConnections;
-    id                  _selectedConnectionsContainer;
-    CPString            _selectedConnectionsKeyPath;
+    UIHSpaceView    _draggedHSpace;
+    BOOL            _isManipulatingHSpace;
+    BOOL            _isRubbing;
+    CGPoint         _rubberStart;
+    CGPoint         _rubberEnd;
+    UIHBoxView      _highlightedHBox;
+    UIVBoxView      _highlightedVBox;
+    ConnectionView  _connectionView;
+    CPView          _insertionIndicatorView;
+    id              _delegate;
+    id              _connectionsContainer;
+    CPString        _connectionsKeyPath;
+    CPArray         _oldConnections;
+    id              _selectedConnectionsContainer;
+    CPString        _selectedConnectionsKeyPath;
+    id              _dataObjectsContainer;
+    CPString        _dataObjectsKeyPath;
+    CPArray         _oldDataObjects;
+    id              _selectionIndexesContainer;
+    CPString        _selectionIndexesKeyPath;
+    UIElementView   _connectionSource;
+    UIElementView   _connectionTarget;
+    BOOL            _connectionMade;
 
-    // Rubber-band selection ivars
-    CGPoint             _rubberStart;
-    CGPoint             _rubberEnd;
-    BOOL                _isRubbing;
-    
-    ConnectionView      _connectionView;
-    
-    id                  _delegate;
+    // Drag cancellation state
+    UIElementView   _draggedElement;
+    CPArray         _originalFrames;
+    BOOL            _isCancelingDrag;
+}
 
-    // Connection Menu ivars
-    UIElementView       _connectionSource;
-    UIElementView       _connectionTarget;
-    BOOL                _connectionMade;
+- (BOOL)isCancelingDrag
+{
+    return _isCancelingDrag;
+}
+
+- (void)dragDidStart:(UIElementView)anElement
+{
+    _draggedElement = anElement;
+    _isCancelingDrag = NO;
+
+    if (![_draggedElement isConnecting])
+    {
+        var selectedViews = [self selectedSubViews];
+        var frames = [CPMutableArray array];
+        for (var i = 0; i < [selectedViews count]; i++)
+        {
+            var view = selectedViews[i];
+            [frames addObject:{view: view, frame: [view frame]}];
+        }
+        _originalFrames = frames;
+    }
+}
+
+- (void)dragDidEnd
+{
+    _draggedElement = nil;
+    _originalFrames = nil;
+    _isCancelingDrag = NO;
 }
 
 -(BOOL)acceptsFirstMouse:(CPEvent)aEvent
@@ -71,12 +132,38 @@ var _selectedConnectionsObservationContext = 1095;
             UIWindowDragType,
             UIButtonDragType,
             UISliderDragType,
-            UITextFieldDragType
+            UITextFieldDragType,
+            UICheckBoxDragType,
+            UILabelDragType,
+            UISearchFieldDragType,
+            UISecureFieldDragType,
+            UITextViewDragType,
+            UIScrollViewDragType,
+            UITableViewDragType,
+            UISplitViewDragType,
+            UIImageViewDragType,
+            UIPopUpButtonDragType,
+            UIComboBoxDragType,
+            UIStepperDragType,
+            UIDatePickerDragType,
+            UIProgressIndicatorDragType,
+            UIBoxDragType,
+            UIHBoxDragType,
+            UIVBoxDragType,
+            UIHSpaceDragType,
+            UIVSpaceDragType
         ]];
 
         _connectionView = [[ConnectionView alloc] initWithFrame:[self bounds]];
         [_connectionView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
         [self addSubview:_connectionView];
+
+        _insertionIndicatorView = [[CPView alloc] initWithFrame:CGRectMakeZero()];
+        [_insertionIndicatorView setBackgroundColor:[[CPColor yellowColor] colorWithAlphaComponent:0.5]];
+        [[_insertionIndicatorView layer] setBorderColor:[[CPColor yellowColor] CGColor]];
+        [[_insertionIndicatorView layer] setBorderWidth:1.0];
+        [_insertionIndicatorView setHidden:YES];
+        [self addSubview:_insertionIndicatorView];
     }
     return self;
 }
@@ -85,6 +172,7 @@ var _selectedConnectionsObservationContext = 1095;
 
 + (void)initialize
 {
+    [UIElementView registerViewClass:self forElementType:@"canvas"];
     [self exposeBinding:"dataObjects"];
     [self exposeBinding:@"selectionIndexes"];
     [self exposeBinding:@"connections"];
@@ -174,66 +262,106 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (void)startObservingDataObjects:(CPArray)dataObjects
 {
-    if (!dataObjects || dataObjects == [CPNull null])
+    if (!dataObjects || dataObjects == [CPNull null] || [dataObjects count] === 0)
         return;
 
-    for (var i = 0;  i < [dataObjects count]; i++)
-    {
-        var newDataObject =  dataObjects[i];
-        // Only create views for top-level objects. Children are handled by their parents.
-        if (![newDataObject valueForKey:@"parentID"])
-            [self _createViewForDataObject:newDataObject superview:self];
+    console.log("UICanvasView: startObservingDataObjects with:", dataObjects);
+    var canvasWindow = [self window];
+    if (!canvasWindow) {
+        console.error("FATAL: Canvas has no window. Cannot create views.");
+        return;
+    }
+
+    var objectsToProcess = [dataObjects mutableCopy];
+    var successfullyAdded;
+    var lastCount = 0;
+
+    while ([objectsToProcess count] > 0 && [objectsToProcess count] != lastCount) {
+        lastCount = [objectsToProcess count];
+        successfullyAdded = [CPMutableArray array];
+
+        for (var i = 0; i < [objectsToProcess count]; i++) {
+            var newDataObject = objectsToProcess[i];
+            var parentID = [newDataObject valueForKey:@"parentID"];
+            var parentView = nil;
+
+            if (parentID) {
+                parentView = [self viewForElementWithID:parentID];
+            }
+
+            if (!parentID || parentView) {
+                var superview = parentView || self;
+                console.log("-> Creating view for:", [newDataObject valueForKey:@"id"], "in superview:", superview);
+                [self _createViewForDataObject:newDataObject superview:superview window:canvasWindow];
+                [successfullyAdded addObject:newDataObject];
+            }
+        }
+
+        [objectsToProcess removeObjectsInArray:successfullyAdded];
+    }
+
+    if ([objectsToProcess count] > 0) {
+        for (var i = 0; i < [objectsToProcess count]; i++) {
+            console.error("UICanvasView: Could not create view for object during initial load:", objectsToProcess[i], ". Parent view not found.");
+        }
     }
 }
 
-- (void)_createViewForDataObject:(CPDictionary)dataObject superview:(CPView)superview
+- (void)_createViewForDataObject:(CPDictionary)dataObject superview:(CPView)superview window:(CPWindow)aWindow atIndex:(int)index
 {
+    console.log("START _createViewForDataObject id:", [dataObject valueForKey:@"id"], "superview:", [superview class], "atIndex:", index);
+    
     var type = [dataObject valueForKey:@"type"];
-    var newView;
+    var viewClass = [[UIElementView classMap] objectForKey:type] || UIElementView;
+    var newView = [[viewClass alloc] init];
+    console.log("did create newView");
 
-    // Instantiate the correct view based on the data model's 'type'
-    if (type === "window")
-        newView = [[UIWindowView alloc] init];
-    else if (type === "button")
-        newView = [[UIButtonView alloc] init];
-    else if (type === "slider")
-        newView = [[UISliderView alloc] init];
-    else if (type === "textfield")
-        newView = [[UITextFieldView alloc] init];
+    [newView setIsNewlyCreated:YES];
+    [CPTimer scheduledTimerWithTimeInterval:0.1 target:newView selector:@selector(setIsNewlyCreated:) userInfo:NO repeats:NO];
+
+    if (!newView) {
+        console.error("FATAL: Failed to init view for class", viewClass);
+        return;
+    }
+
+    if (index >= 0 && [superview respondsToSelector:@selector(_insertSubview:atIndex:)])
+        [superview _insertSubview:newView atIndex:index];
     else
-        newView = [[UIElementView alloc] init]; // Fallback
-
+        [superview addSubview:newView];
+        
     [newView setDataObject:dataObject];
 
-    // Bind view properties to the data model
+    // Bind common properties
     [newView bind:@"originX" toObject:dataObject withKeyPath:@"originX" options:nil];
     [newView bind:@"originY" toObject:dataObject withKeyPath:@"originY" options:nil];
     [newView bind:@"width" toObject:dataObject withKeyPath:@"width" options:nil];
     [newView bind:@"height" toObject:dataObject withKeyPath:@"height" options:nil];
+    console.log("did create bindings");
 
-    if (type === "window")
-    {
-        var children = [dataObject valueForKey:@"children"];
-        for (var j = 0; j < [children count]; j++)
-        {
-            [self _createViewForDataObject:children[j] superview:newView];
-        }
-    }
-
-    [superview addSubview:newView];
-    // i have no idea why this is needed, but it is to make the initial click work
-    [CPApp._delegate._window makeKeyAndOrderFront:self];
+    // The iterative KVO observer is now responsible for creating children.
+    // This recursive logic is no longer needed and causes conflicts.
+    
+    console.log("END _createViewForDataObject id:", [dataObject valueForKey:@"id"]);
 }
+
+// Keep a simple version for external calls if needed, though the main logic uses the windowed one.
+- (void)_createViewForDataObject:(CPDictionary)dataObject superview:(CPView)superview
+{
+    [self _createViewForDataObject:dataObject superview:superview window:[self window] atIndex:-1];
+}
+
 
 - (void)stopObservingDataObjects:(CPArray)dataObjects
 {
     if (!dataObjects || dataObjects == [CPNull null]) return;
+    console.log("UICanvasView: stopObservingDataObjects:", dataObjects);
 
     var viewsToRemove = [CPMutableArray array];
     [self _findViewsForDataObjects:dataObjects inView:self foundViews:viewsToRemove];
     
     for (var i = 0; i < [viewsToRemove count]; i++) {
         var viewToRemove = viewsToRemove[i];
+        console.log("-> Removing view:", viewToRemove, "for dataObject:", [viewToRemove dataObject]);
         [self _removeViewAndChildren:viewToRemove];
     }
 }
@@ -260,12 +388,56 @@ var _selectedConnectionsObservationContext = 1095;
 {
     if (context == _dataObjectsObservationContext)
     {
+        console.log("UICanvasView: KVO _dataObjectsObservationContext triggered. Change:", change);
         var newDataObjects = [object valueForKeyPath:_dataObjectsKeyPath];
         var oldDataObjects = _oldDataObjects;
 
         var added = [newDataObjects mutableCopy];
         [added removeObjectsInArray:oldDataObjects];
-        [self startObservingDataObjects:added];
+
+        if ([added count] > 0)
+        {
+            var successfullyAdded;
+            var lastCount = 0;
+
+            while ([added count] > 0 && [added count] != lastCount) {
+                lastCount = [added count];
+                successfullyAdded = [CPMutableArray array];
+
+                for (var i = 0; i < [added count]; i++) {
+                    var newDataObject = added[i];
+                    var parentID = [newDataObject valueForKey:@"parentID"];
+                    var parentView = nil;
+
+                    if (parentID) {
+                        parentView = [self viewForElementWithID:parentID];
+                    }
+
+                    if (!parentID || parentView) {
+                        var superview = parentView || self;
+                        var index = -1;
+                        if (parentView)
+                        {
+                            var parentData = [parentView dataObject];
+                            var siblingData = [parentData valueForKey:@"children"];
+                            index = [siblingData indexOfObject:newDataObject];
+                        }
+                        
+                        console.log("-> Creating view for:", [newDataObject valueForKey:@"id"], "in superview:", superview);
+                        [self _createViewForDataObject:newDataObject superview:superview window:[self window] atIndex:index];
+                        [successfullyAdded addObject:newDataObject];
+                    }
+                }
+
+                [added removeObjectsInArray:successfullyAdded];
+            }
+
+            if ([added count] > 0) {
+                for (var i = 0; i < [added count]; i++) {
+                    console.error("UICanvasView: Could not create view for object:", added[i], ". Parent view not found.");
+                }
+            }
+        }
 
         var removed = [oldDataObjects mutableCopy];
         [removed removeObjectsInArray:newDataObjects];
@@ -573,37 +745,50 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (UIElementView)viewAtPoint:(CGPoint)aPoint
 {
+    // Start the search from the top-level canvas view.
     return [self _findDeepestUIElementViewAtPoint:aPoint inView:self];
 }
 
 - (UIElementView)_findDeepestUIElementViewAtPoint:(CGPoint)aPoint inView:(CPView)currentView
 {
-    // Iterate through subviews in reverse order to get the topmost view
+    // Iterate backwards to check top-most views first
     for (var i = [[currentView subviews] count] - 1; i >= 0; i--)
     {
         var subview = [[currentView subviews] objectAtIndex:i];
-        
-        // Convert the point to the subview's coordinate system
-        var localPoint = [subview convertPoint:aPoint fromView:currentView];
 
-        if ([subview isKindOfClass:[UIElementView class]])
+        // We only care about UIElementView subclasses that are visible
+        if (![subview isKindOfClass:[UIElementView class]] || [subview isHidden])
+            continue;
+
+        var localPoint = [currentView convertPoint:aPoint toView:subview];
+
+        // If the point is inside the subview's bounds, it's a candidate.
+        if (CGRectContainsPoint([subview bounds], localPoint))
         {
-            if (CGRectContainsPoint([subview bounds], localPoint))
+            // If this subview is a container, recursively search its children.
+            // This is the crucial step to find the *deepest* view.
+            if (subview._isContainer && [[subview subviews] count] > 0)
             {
-                // If this is a container view, recursively search its subviews
-                if (subview._isContainer)
+                var deeperView = [self _findDeepestUIElementViewAtPoint:localPoint inView:subview];
+                if (deeperView)
                 {
-                    var deepestView = [self _findDeepestUIElementViewAtPoint:localPoint inView:subview];
-
-                    if (deepestView)
-                        return deepestView;
+                    return deeperView; // Found a more specific view inside.
                 }
-                // If not a container, or no deeper view found, return this view
-                return subview;
             }
+
+            // If no deeper view was found, or if this isn't a container,
+            // this is the deepest view at this point in the hierarchy.
+            return subview;
         }
     }
 
+    // If no subview at this level contains the point, check if the current view itself is a candidate
+    if ([currentView isKindOfClass:[UIElementView class]] && CGRectContainsPoint([currentView bounds], aPoint)) {
+        return currentView;
+    }
+
+
+    // If no subview at this level contains the point, return nil.
     return nil;
 }
 
@@ -699,7 +884,7 @@ var _selectedConnectionsObservationContext = 1095;
     return YES;
 }
 
-/*
+
 - (BOOL)validateMenuItem:(CPMenuItem)aMenuItem
 {
     var action = [aMenuItem action];
@@ -733,7 +918,7 @@ var _selectedConnectionsObservationContext = 1095;
 
     return [super validateMenuItem:aMenuItem];
 }
-*/
+
 
 - (void)keyDown:(CPEvent)theEvent
 {
@@ -743,12 +928,18 @@ var _selectedConnectionsObservationContext = 1095;
     var delegate = [self delegate];
     var handled = NO;
 
-    if (selectors && delegate)
+    if (selectors)
     {
         for (var i = 0; i < [selectors count]; i++)
         {
             var selectorName = selectors[i];
-            if ([delegate respondsToSelector:selectorName])
+            if ([self respondsToSelector:selectorName])
+            {
+                [self performSelector:selectorName withObject:self];
+                handled = YES;
+                break;
+            }
+            else if (delegate && [delegate respondsToSelector:selectorName])
             {
                 [delegate performSelector:selectorName withObject:self];
                 handled = YES;
@@ -761,47 +952,276 @@ var _selectedConnectionsObservationContext = 1095;
         [super keyDown:theEvent];
 }
 
+- (void)cancelOperation:(id)sender
+{
+    if (_draggedElement)
+    {
+        _isCancelingDrag = YES;
+
+        if ([_draggedElement isConnecting])
+        {
+            [self clearConnection];
+            // Any view that was a drop target needs to be un-highlighted
+            var subviews = [self subviews];
+            for (var i = 0; i < [subviews count]; i++)
+            {
+                if ([subviews[i] isKindOfClass:[UIElementView class]])
+                    [subviews[i] setAsDropTarget:NO];
+            }
+        }
+        else if (_originalFrames)
+        {
+            // Restore frames for move/resize
+            for (var i = 0; i < [_originalFrames count]; i++)
+            {
+                var info = _originalFrames[i];
+                [info.view setFrame:info.frame];
+            }
+        }
+
+        // Tell the element to stop its drag loop/state
+        [_draggedElement mouseUp:nil];
+
+        [self setNeedsDisplay:YES];
+    }
+}
+
 #pragma mark - Drag and Drop Destination
 
 - (CPDragOperation)draggingEntered:(CPDraggingInfo)sender
 {
+    console.log("draggingEntered:", [sender draggingPasteboard]);
     // We accept any of the registered types
     return CPDragOperationCopy;
 }
 
-- (BOOL)performDragOperation:(CPDraggingInfo)sender
+- (CPDragOperation)draggingUpdated:(CPDraggingInfo)sender
 {
     var dropPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
-    var pasteboard = [sender draggingPasteboard];
-    var types = [pasteboard types];
-    var draggedType = types[0]; // Assuming only one type is being dragged
-    var elementType;
+    var viewAtDrop = [self viewAtPoint:dropPoint];
+    
+    // Always reset indicators
+    [_insertionIndicatorView setHidden:YES];
+    if (_highlightedHBox) {
+        [_highlightedHBox setAsDropTarget:NO];
+        _highlightedHBox = nil;
+    }
+    if (_highlightedVBox) {
+        [_highlightedVBox setAsDropTarget:NO];
+        _highlightedVBox = nil;
+    }
 
-    if      (draggedType === UIWindowDragType) elementType = "window";
-    else if (draggedType === UIButtonDragType) elementType = "button";
-    else if (draggedType === UISliderDragType) elementType = "slider";
-    else if (draggedType === UITextFieldDragType) elementType = "textfield";
+    var targetVBox = nil;
 
-    if (elementType && _delegate)
-    {
-        if (elementType === "window") {
-            if ([_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:)])
-            {
-                [_delegate addNewElementOfType:elementType atPoint:dropPoint];
-                [self setNeedsDisplay:YES];
-                return YES;
+    // 1. Find the parent VBox
+    if (viewAtDrop) {
+        var currentView = viewAtDrop;
+        while(currentView && currentView != self) {
+            if ([currentView isKindOfClass:[UIVBoxView class]]) {
+                targetVBox = currentView;
+                break;
             }
-        } else {
-            if ([_delegate respondsToSelector:@selector(addNewElementOfType:inNewWindowAtPoint:)])
-            {
-                [_delegate addNewElementOfType:elementType inNewWindowAtPoint:dropPoint];
-                [self setNeedsDisplay:YES];
-                return YES;
+            currentView = [currentView superview];
+        }
+    }
+
+    if (!targetVBox) {
+        if (viewAtDrop && [viewAtDrop isKindOfClass:[UIWindowView class]]) {
+            [viewAtDrop setAsDropTarget:YES];
+            _highlightedVBox = viewAtDrop;
+        }
+        return CPDragOperationCopy;
+    }
+
+    // 2. We have a VBox. Now check for HBoxes inside it.
+    var targetHBox = nil;
+    var localPointInVBox = [self convertPoint:dropPoint toView:targetVBox];
+    var vboxSubviews = [targetVBox subviews];
+    var lastHBox = null;
+
+    for (var i = 0; i < [vboxSubviews count]; i++) {
+        var subview = vboxSubviews[i];
+        if ([subview isKindOfClass:[UIHBoxView class]]) {
+            lastHBox = subview;
+            if (CGRectContainsPoint([subview frame], localPointInVBox)) {
+                targetHBox = subview;
+                break;
             }
         }
     }
 
+    // 3. Apply highlighting logic
+    if (targetHBox) {
+        _highlightedHBox = targetHBox;
+        [_highlightedHBox setAsDropTarget:YES];
+    } else if (lastHBox && localPointInVBox.y > CGRectGetMaxY([lastHBox frame])) {
+        // No HBox hit, but we are below the last one. Show insertion indicator.
+        var indicatorFrame = CGRectMake(
+            [lastHBox frame].origin.x,
+            CGRectGetMaxY([lastHBox frame]),
+            [lastHBox frame].size.width,
+            20 // Height of the indicator
+        );
+        [_insertionIndicatorView setFrame:indicatorFrame];
+        [_insertionIndicatorView setHidden:NO];
+    }
+    else {
+        // No HBox hit, so highlight the VBox itself
+        _highlightedVBox = targetVBox;
+        [_highlightedVBox setAsDropTarget:YES];
+    }
+    
+    return CPDragOperationCopy;
+}
+
+- (void)draggingExited:(CPDraggingInfo)sender
+{
+    if (_highlightedHBox) {
+        [_highlightedHBox setAsDropTarget:NO];
+        _highlightedHBox = nil;
+    }
+    if (_highlightedVBox) {
+        [_highlightedVBox setAsDropTarget:NO];
+        _highlightedVBox = nil;
+    }
+    [_insertionIndicatorView setHidden:YES];
+}
+
+- (BOOL)prepareForDragOperation:(CPDraggingInfo)sender
+{
+    return YES;
+}
+
+- (BOOL)performDragOperation:(CPDraggingInfo)sender
+{
+    if (_highlightedHBox) {
+        [_highlightedHBox setAsDropTarget:NO];
+        _highlightedHBox = nil;
+    }
+    if (_highlightedVBox) {
+        [_highlightedVBox setAsDropTarget:NO];
+        _highlightedVBox = nil;
+    }
+    [_insertionIndicatorView setHidden:YES];
+
+    var dropPoint = [self convertPoint:[sender draggingLocation] fromView:nil];
+    var pasteboard = [sender draggingPasteboard];
+    var types = [pasteboard types];
+    var elementType = nil;
+
+    console.log("UICanvasView: performDragOperation at point:", dropPoint);
+
+    // Find the first registered drag type on the pasteboard
+    var registeredTypes = [self registeredDraggedTypes];
+    for (var i = 0; i < [types count]; i++) {
+        var type = types[i];
+        if ([registeredTypes containsObject:type]) {
+            var temp = [type stringByReplacingOccurrencesOfString:@"DragType" withString:@""];
+            if ([temp hasPrefix:@"UI"])
+                temp = [temp substringFromIndex:2];
+            elementType = [temp lowercaseString];
+            break;
+        }
+    }
+
+    if (elementType && _delegate)
+    {
+        console.log("-> Determined element type:", elementType);
+        var viewAtDropPoint = [self viewAtPoint:dropPoint];
+        var containerView = nil;
+
+        if (viewAtDropPoint) {
+            if (viewAtDropPoint._isContainer) {
+                containerView = viewAtDropPoint;
+            } else {
+                // Dropped on a non-container, find its containing view
+                var parent = [viewAtDropPoint superview];
+                while (parent && parent != self) {
+                    if ([parent isKindOfClass:[UIElementView class]] && parent._isContainer) {
+                        containerView = parent;
+                        break;
+                    }
+                    parent = [parent superview];
+                }
+            }
+        }
+
+        var containerData = nil;
+        if (containerView) {
+            containerData = [containerView dataObject];
+            console.log("-> Found container view:", containerView, "with data:", containerData);
+        } else {
+            console.log("-> No container view found at drop point.");
+        }
+
+        if (containerData)
+        {
+            var index = -1;
+            var localPoint = [containerView convertPoint:dropPoint fromView:self];
+
+            if ([containerView isKindOfClass:[UIHBoxView class]])
+            {
+                var subviews = [containerView subviews];
+                for (var i = 0; i < [subviews count]; i++)
+                {
+                    var subview = subviews[i];
+                    if (localPoint.x < CGRectGetMidX([subview frame]))
+                    {
+                        index = i;
+                        break;
+                    }
+                }
+            }
+            else if ([containerView isKindOfClass:[UIVBoxView class]])
+            {
+                var subviews = [containerView subviews];
+                for (var i = 0; i < [subviews count]; i++)
+                {
+                    var subview = subviews[i];
+                    if (localPoint.y < CGRectGetMidY([subview frame]))
+                    {
+                        index = i;
+                        break;
+                    }
+                }
+            }
+
+            console.log("--> Calling addNewElementOfType:atPoint:inParent:atIndex:", index);
+            if ([_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:inParent:atIndex:)])
+            {
+                [_delegate addNewElementOfType:elementType atPoint:dropPoint inParent:containerData atIndex:index];
+                [containerView setNeedsLayout:YES];
+                [self setNeedsDisplay:YES];
+                return YES;
+            }
+        } else {
+            // Dropped on the canvas background
+            if (elementType === "window") {
+                console.log("--> It's a window, calling addNewElementOfType:atPoint:inParent: with nil parent.");
+                if ([_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:inParent:)]) {
+                    [_delegate addNewElementOfType:elementType atPoint:dropPoint inParent:nil];
+                    [self setNeedsDisplay:YES];
+                    return YES;
+                }
+            } else {
+                console.log("--> Not a window, calling addNewElementOfType:inNewWindowAtPoint:");
+                if ([_delegate respondsToSelector:@selector(addNewElementOfType:inNewWindowAtPoint:)]) {
+                    [_delegate addNewElementOfType:elementType inNewWindowAtPoint:dropPoint];
+                    [self setNeedsDisplay:YES];
+                    return YES;
+                }
+            }
+        }
+    }
+
+    console.log("-> performDragOperation failed or was not handled.");
     return NO;
+}
+
+- (void)concludeDragOperation:(CPDraggingInfo)sender
+{
+    // This is called after the drag is complete.
+    // We don't need to do anything here, but the method must exist.
 }
 
 #pragma mark - Delegate & Selection Management

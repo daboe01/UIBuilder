@@ -443,10 +443,24 @@ var _classMap = [CPMutableDictionary dictionary];
 
 - (void)drawHandles
 {
+    var halign = [[self dataObject] valueForKey:@"halign"] || @"expand";
+    var valign = [[self dataObject] valueForKey:@"valign"] || @"expand";
+
     [[CPColor controlDarkShadowColor] setFill];
+
     for (var i = 1; i <= 8; i++)
     {
-        [CPBezierPath fillRect:[self rectForHandle:i]];
+        var shouldDraw = YES;
+        // Horizontal handles
+        if (halign === @"expand" && (i === kUIElementTopLeftHandle || i === kUIElementMiddleLeftHandle || i === kUIElementBottomLeftHandle || i === kUIElementTopRightHandle || i === kUIElementMiddleRightHandle || i === kUIElementBottomRightHandle))
+            shouldDraw = NO;
+
+        // Vertical handles
+        if (valign === @"expand" && (i === kUIElementTopLeftHandle || i === kUIElementTopMiddleHandle || i === kUIElementTopRightHandle || i === kUIElementBottomLeftHandle || i === kUIElementBottomMiddleHandle || i === kUIElementBottomRightHandle))
+            shouldDraw = NO;
+
+        if (shouldDraw)
+            [CPBezierPath fillRect:[self rectForHandle:i]];
     }
 }
 
@@ -462,9 +476,21 @@ var _classMap = [CPMutableDictionary dictionary];
 {
     if (![self isSelected]) return kUIElementNoHandle;
 
+    var halign = [[self dataObject] valueForKey:@"halign"];
+    var valign = [[self dataObject] valueForKey:@"valign"];
+
     for (var i = 1; i <= 8; i++)
     {
-        if (CGRectContainsPoint([self rectForHandle:i], aPoint))
+        var shouldCheck = YES;
+        // Horizontal handles
+        if (halign === @"expand" && (i === kUIElementTopLeftHandle || i === kUIElementMiddleLeftHandle || i === kUIElementBottomLeftHandle || i === kUIElementTopRightHandle || i === kUIElementMiddleRightHandle || i === kUIElementBottomRightHandle))
+            shouldCheck = NO;
+
+        // Vertical handles
+        if (valign === @"expand" && (i === kUIElementTopLeftHandle || i === kUIElementTopMiddleHandle || i === kUIElementTopRightHandle || i === kUIElementBottomLeftHandle || i === kUIElementBottomMiddleHandle || i === kUIElementBottomRightHandle))
+            shouldCheck = NO;
+
+        if (shouldCheck && CGRectContainsPoint([self rectForHandle:i], aPoint))
             return i;
     }
     return kUIElementNoHandle;

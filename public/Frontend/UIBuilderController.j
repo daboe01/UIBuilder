@@ -174,8 +174,6 @@
 
 - (void)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint inParent:(CPDictionary)parentData atIndex:(int)index
 {
-    console.log("UIBuilderController: addNewElementOfType:", elementType, "atPoint:", aPoint, "inParent:", parentData);
-debugger
     if (parentData)
         console.log("-> Parent data type is: '" + [parentData valueForKey:@"type"] + "'");
 

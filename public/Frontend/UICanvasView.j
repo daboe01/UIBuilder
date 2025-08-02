@@ -1037,12 +1037,16 @@ var _selectedConnectionsObservationContext = 1095;
     var targetHBox = nil;
     var localPointInVBox = [self convertPoint:dropPoint toView:targetVBox];
     var vboxSubviews = [targetVBox subviews];
+    var lastHBox = null;
 
     for (var i = 0; i < [vboxSubviews count]; i++) {
         var subview = vboxSubviews[i];
-        if ([subview isKindOfClass:[UIHBoxView class]] && CGRectContainsPoint([subview frame], localPointInVBox)) {
-            targetHBox = subview;
-            break;
+        if ([subview isKindOfClass:[UIHBoxView class]]) {
+            lastHBox = subview;
+            if (CGRectContainsPoint([subview frame], localPointInVBox)) {
+                targetHBox = subview;
+                break;
+            }
         }
     }
 
@@ -1050,7 +1054,18 @@ var _selectedConnectionsObservationContext = 1095;
     if (targetHBox) {
         _highlightedHBox = targetHBox;
         [_highlightedHBox setAsDropTarget:YES];
-    } else {
+    } else if (lastHBox && localPointInVBox.y > CGRectGetMaxY([lastHBox frame])) {
+        // No HBox hit, but we are below the last one. Show insertion indicator.
+        var indicatorFrame = CGRectMake(
+            [lastHBox frame].origin.x,
+            CGRectGetMaxY([lastHBox frame]),
+            [lastHBox frame].size.width,
+            20 // Height of the indicator
+        );
+        [_insertionIndicatorView setFrame:indicatorFrame];
+        [_insertionIndicatorView setHidden:NO];
+    }
+    else {
         // No HBox hit, so highlight the VBox itself
         _highlightedVBox = targetVBox;
         [_highlightedVBox setAsDropTarget:YES];

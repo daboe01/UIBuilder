@@ -7,9 +7,7 @@
 
 + (CPArray)persistentProperties
 {
-    return [[super persistentProperties] arrayByAddingObjectsFromArray:
-            [@"width", @"halign"]
-            ];
+    return [super persistentProperties].filter(p => p !== 'value' && p !== 'valign').concat(["width"]);
 }
 
 + (CPDictionary)defaultValues

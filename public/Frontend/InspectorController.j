@@ -69,6 +69,10 @@
 
 - (void)awakeFromMarkup
 {
+    var frame = [_panel frame];
+    frame.size.height = 550;
+    [_panel setFrame:frame display:YES];
+
     [_builderController addObserver:self forKeyPath:@"elementsController.selectionIndexes" options:CPKeyValueObservingOptionNew context:nil];
 
     // Create Tab View

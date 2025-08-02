@@ -6,9 +6,7 @@
 
 + (CPArray)persistentProperties
 {
-    return [[super persistentProperties] arrayByAddingObjectsFromArray:
-            [@"height", @"valign"]
-            ];
+    return [super persistentProperties].filter(p => p !== 'value' && p !== 'halign').concat(["height"]);
 }
 
 + (CPDictionary)defaultValues
@@ -37,9 +35,8 @@
 + (CPDictionary)propertyEnumerations
 {
     return @{
-                "halign": ["min", "expand"],
-                "valign": ["min", "expand"]
-            };
+        "valign": ["min", "expand"]
+    };
 }
 
 - (id)initWithFrame:(CGRect)aRect

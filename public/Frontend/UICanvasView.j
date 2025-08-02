@@ -1056,14 +1056,16 @@ var _selectedConnectionsObservationContext = 1095;
         [_highlightedHBox setAsDropTarget:YES];
     } else if (lastHBox && localPointInVBox.y > CGRectGetMaxY([lastHBox frame])) {
         // No HBox hit, but we are below the last one. Show insertion indicator.
-        var indicatorFrame = CGRectMake(
+        var indicatorFrameInVBox = CGRectMake(
             [lastHBox frame].origin.x,
             CGRectGetMaxY([lastHBox frame]),
             [lastHBox frame].size.width,
             20 // Height of the indicator
         );
-        [_insertionIndicatorView setFrame:indicatorFrame];
+        var indicatorFrameInCanvas = [targetVBox convertRect:indicatorFrameInVBox toView:self];
+        [_insertionIndicatorView setFrame:indicatorFrameInCanvas];
         [_insertionIndicatorView setHidden:NO];
+        [self addSubview:_insertionIndicatorView];
     }
     else {
         // No HBox hit, so highlight the VBox itself

@@ -231,7 +231,7 @@ var _classMap = [CPMutableDictionary dictionary];
     if (context == self)
     {
         console.log("UIElementView: Observed change in", [self class], "for keyPath:", keyPath);
-        if ([keyPath isEqualToString:@"halign"] || [keyPath isEqualToString:@"valign"])
+        if ([keyPath isEqualToString:@"halign"] || [keyPath isEqualToString:@"valign"] || [keyPath isEqualToString:@"value"])
         {
             var superview = [self superview];
             if (superview)
@@ -757,60 +757,46 @@ var _classMap = [CPMutableDictionary dictionary];
 {
     var sView = [self superview];
     var canvas = [self canvas];
-    var mouseLoc;
+    var mouseLoc = [canvas convertPoint:[theEvent locationInWindow] fromView:nil];
+    var deltaX = mouseLoc.x - _lastMouseLoc.x;
+    var deltaY = mouseLoc.y - _lastMouseLoc.y;
 
-    switch ([theEvent type])
-    {
-        case CPLeftMouseDragged:
-            [[CPCursor crosshairCursor] set]; // A generic resize cursor
-            mouseLoc = [sView convertPoint:[theEvent locationInWindow] fromView:nil];
-            var deltaX = mouseLoc.x - _lastMouseLoc.x;
-            var deltaY = mouseLoc.y - _lastMouseLoc.y;
+    var frame = [self frame];
+    var minSize = CGSizeMake(2 * kUIElementHandleSize, 2 * kUIElementHandleSize);
+    var data = [self dataObject];
 
-            var frame = [self frame];
-            var minSize = CGSizeMake(2 * kUIElementHandleSize, 2 * kUIElementHandleSize);
-
-            // Left handles
-            if (_activeHandle === kUIElementTopLeftHandle || _activeHandle === kUIElementMiddleLeftHandle || _activeHandle === kUIElementBottomLeftHandle) {
-                if (frame.size.width - deltaX > minSize.width) {
-                    frame.origin.x += deltaX;
-                    frame.size.width -= deltaX;
-                }
-            }
-            // Right handles
-            if (_activeHandle === kUIElementTopRightHandle || _activeHandle === kUIElementMiddleRightHandle || _activeHandle === kUIElementBottomRightHandle) {
-                if (frame.size.width + deltaX > minSize.width) {
-                    frame.size.width += deltaX;
-                }
-            }
-            // Top handles
-            if (_activeHandle === kUIElementTopLeftHandle || _activeHandle === kUIElementTopMiddleHandle || _activeHandle === kUIElementTopRightHandle) {
-                if (frame.size.height - deltaY > minSize.height) {
-                    frame.origin.y += deltaY;
-                    frame.size.height -= deltaY;
-                }
-            }
-            // Bottom handles
-            if (_activeHandle === kUIElementBottomLeftHandle || _activeHandle === kUIElementBottomMiddleHandle || _activeHandle === kUIElementBottomRightHandle) {
-                if (frame.size.height + deltaY > minSize.height) {
-                    frame.size.height += deltaY;
-                }
-            }
-
-            [self setFrame:frame];
-
-            _lastMouseLoc = mouseLoc;
-            [canvas setNeedsDisplay:YES];
-            [CPApp setTarget:self selector:@selector(_resizeWithEvent:) forNextEventMatchingMask:CPLeftMouseDraggedMask | CPLeftMouseUpMask untilDate:nil inMode:nil dequeue:YES];
-            break;
-        case CPLeftMouseUp:
-            [[CPCursor arrowCursor] set];
-            _activeHandle = kUIElementNoHandle;
-            _lastMouseLoc = null;
-            [canvas setNeedsDisplay:YES];
-            [canvas elementDidResize:self];
-            break;
+    // Left handles
+    if (_activeHandle === kUIElementTopLeftHandle || _activeHandle === kUIElementMiddleLeftHandle || _activeHandle === kUIElementBottomLeftHandle) {
+        var newWidth = frame.size.width - deltaX;
+        if (newWidth > minSize.width) {
+            [data setValue:newWidth forKey:@"width"];
+            // We don't change origin here as layout manager handles it
+        }
     }
+    // Right handles
+    if (_activeHandle === kUIElementTopRightHandle || _activeHandle === kUIElementMiddleRightHandle || _activeHandle === kUIElementBottomRightHandle) {
+        var newWidth = frame.size.width + deltaX;
+        if (newWidth > minSize.width) {
+            [data setValue:newWidth forKey:@"width"];
+        }
+    }
+    // Top handles
+    if (_activeHandle === kUIElementTopLeftHandle || _activeHandle === kUIElementTopMiddleHandle || _activeHandle === kUIElementTopRightHandle) {
+        var newHeight = frame.size.height - deltaY;
+        if (newHeight > minSize.height) {
+            [data setValue:newHeight forKey:@"height"];
+        }
+    }
+    // Bottom handles
+    if (_activeHandle === kUIElementBottomLeftHandle || _activeHandle === kUIElementBottomMiddleHandle || _activeHandle === kUIElementBottomRightHandle) {
+        var newHeight = frame.size.height + deltaY;
+        if (newHeight > minSize.height) {
+            [data setValue:newHeight forKey:@"height"];
+        }
+    }
+
+    // The KVO on the data object will trigger setNeedsLayout on the superview.
+    _lastMouseLoc = mouseLoc;
 }
 
 - (void)setAsDropTarget:(BOOL)isTarget

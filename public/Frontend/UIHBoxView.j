@@ -112,7 +112,7 @@
         }
         else // "min"
         {
-            frameWidth = [subview frame].size.width;
+            frameWidth = [[subview dataObject] valueForKey:@"width"];
         }
         
         var valign = [[subview dataObject] valueForKey:@"valign"];

@@ -84,7 +84,7 @@
         }
         else // "min"
         {
-            frameHeight = [subview frame].size.height;
+            frameHeight = [[subview dataObject] valueForKey:@"height"];
         }
 
         var halign = [[subview dataObject] valueForKey:@"halign"];

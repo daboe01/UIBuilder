@@ -59,6 +59,8 @@ This is just the beginning. Our roadmap is focused on making Espresso an indispe
 - [x] Visual manipulation (move, resize).
 - [x] Container logic for dropping elements into parent views.
 - [x] Visual support for the **Auto-Layout** engine (`HBox`, `VBox`, etc.).
+- [x] **Advanced Undo/Redo:** Full undo stack support for all actions (creation, deletion, moves, property changes).
+
 
 ### ⚙️ Phase 2: The Inspector Deep-Dive (In Progress)
 - [x] Context-aware **Property Inspector Panel** to view element properties.
@@ -70,4 +72,3 @@ This is just the beginning. Our roadmap is focused on making Espresso an indispe
 ### 💾 Phase 3: Persistency & Code Generation
 - [ ] **Project Persistency:** Save and load your visual UI designs to and from a file (`.xib` or `.cib` equivalent).
 - [ ] **Outlet & Action Generation:** Visually connect elements to "File's Owner" to automatically generate Objective-J outlet and action stubs in your controller files.
-- [ ] **Advanced Undo/Redo:** Full undo stack support for all actions (creation, deletion, moves, property changes).

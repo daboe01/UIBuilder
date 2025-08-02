@@ -65,7 +65,7 @@ var _windowChildrenObservationContext = 1094;
 
 #pragma mark - Drag and Drop
 
-- (CPDragOperation)draggingEntered:(id <CPDraggingInfo>)sender
+- (CPDragOperation)draggingEntered:(id)sender
 {
     _isDropTarget = YES;
     [self setNeedsDisplay:YES];

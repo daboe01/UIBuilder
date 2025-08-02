@@ -158,6 +158,7 @@
     [vboxData setValue:22 forKey:@"originY"]; // Below title bar
     [vboxData setValue:windowWidth forKey:@"width"];
     [vboxData setValue:windowHeight - 22 forKey:@"height"];
+    [vboxData setValue:YES forKey:@"isRootVBox"];
     [vboxData setValue:[] forKey:@"children"];
 
     [[windowData mutableArrayValueForKey:@"children"] addObject:vboxData];
@@ -650,6 +651,7 @@
     [vboxData setValue:22 forKey:@"originY"]; // Below title bar
     [vboxData setValue:windowWidth forKey:@"width"];
     [vboxData setValue:windowHeight - 22 forKey:@"height"];
+    [vboxData setValue:YES forKey:@"isRootVBox"];
     [vboxData setValue:[] forKey:@"children"];
 
     [[windowData mutableArrayValueForKey:@"children"] addObject:vboxData];

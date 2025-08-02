@@ -3,6 +3,9 @@
 @implementation UIVBoxView : UIElementView
 {
     BOOL _isDropTarget;
+    CGPoint          _rubberStart;
+    CGPoint          _rubberEnd;
+    BOOL             _isRubbing;
 }
 
 + (CPDictionary)defaultValues
@@ -118,6 +121,16 @@
     {
         [self drawHandles];
     }
+
+    if (_isRubbing)
+    {
+        var rubber = CGRectUnion(CGRectMake(_rubberStart.x, _rubberStart.y, 0.1, 0.1), CGRectMake(_rubberEnd.x, _rubberEnd.y, 0.1, 0.1));
+        [[[[CPColor alternateSelectedControlColor] colorWithAlphaComponent:0.2] setFill]];
+        [CPBezierPath fillRect:rubber];
+        [[CPColor alternateSelectedControlColor] setStroke];
+        [CPBezierPath setDefaultLineWidth:1.0];
+        [CPBezierPath strokeRect:rubber];
+    }
 }
 
 - (void)drawSkeleton:(CGRect)rect
@@ -142,6 +155,56 @@
     {
         _isDropTarget = isDropTarget;
         [self setNeedsDisplay:YES];
+    }
+}
+
+- (void)mouseDown:(CPEvent)theEvent
+{
+    if ([[self dataObject] valueForKey:@"isRootVBox"]) {
+        // On a click into the window's content area, deselect all elements.
+        [[self canvas] deselectViews];
+
+        var localPoint = [self convertPoint:[theEvent locationInWindow] fromView:nil];
+        _rubberStart = localPoint;
+        _rubberEnd = _rubberStart;
+        _isRubbing = YES;
+        [CPApp setTarget:self selector:@selector(_dragOpenSpaceWithEvent:) forNextEventMatchingMask:CPLeftMouseDraggedMask | CPLeftMouseUpMask untilDate:nil inMode:nil dequeue:YES];
+        return;
+    }
+    [super mouseDown:theEvent];
+}
+
+- (void)_dragOpenSpaceWithEvent:(CPEvent)theEvent
+{
+    var canvas = [self canvas];
+    var mouseLoc = [self convertPoint:[theEvent locationInWindow] fromView:nil];
+    _rubberEnd = mouseLoc;
+    var rubberRect = CGRectUnion(CGRectMake(_rubberStart.x, _rubberStart.y, 1, 1), CGRectMake(_rubberEnd.x, _rubberEnd.y, 1, 1));
+
+    switch ([theEvent type])
+    {
+        case CPLeftMouseDragged:
+            var indexesToSelect = [CPMutableIndexSet indexSet];
+            var allDataObjects = [canvas dataObjects];
+
+            for (var i = 0; i < [[self subviews] count]; i++) {
+                var aView = [self subviews][i];
+                if (CGRectIntersectsRect([aView frame], rubberRect)) {
+                    var dataIndex = [allDataObjects indexOfObject:[aView dataObject]];
+                    if (dataIndex != CPNotFound) {
+                        [indexesToSelect addIndex:dataIndex];
+                    }
+                }
+            }
+            [canvas setSelectionIndexes:indexesToSelect];
+            [self setNeedsDisplay:YES];
+            [CPApp setTarget:self selector:@selector(_dragOpenSpaceWithEvent:) forNextEventMatchingMask:CPLeftMouseDraggedMask | CPLeftMouseUpMask untilDate:nil inMode:nil dequeue:YES];
+            break;
+
+        case CPLeftMouseUp:
+            _isRubbing = NO;
+            [self setNeedsDisplay:YES];
+            break;
     }
 }
 

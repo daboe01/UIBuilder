@@ -755,7 +755,6 @@ var _classMap = [CPMutableDictionary dictionary];
 
 - (void)_resizeWithEvent:(CPEvent)theEvent
 {
-    var sView = [self superview];
     var canvas = [self canvas];
     var mouseLoc = [canvas convertPoint:[theEvent locationInWindow] fromView:nil];
     var deltaX = mouseLoc.x - _lastMouseLoc.x;

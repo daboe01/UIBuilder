@@ -67,7 +67,7 @@ This is just the beginning. Our roadmap is focused on making Espresso an indispe
 - [x] **Live Preview Mode** to generate and run the native UI.
 - [x] **Live Property Editing:** Change an element's title, color, or state in the inspector and see it update instantly on the canvas.
 - [x] **Geometry & Sizing:** Precise numeric input for an element's position and size.
-- [ ] **Binding Support:** Visually bind element properties (like a slider's value) to controller keys directly from the UI.
+- [ ] **Full support for all properties:** Currently only a few properties of a few views are implemented to demonstrate the concepts.
 
 ### 💾 Phase 3: Persistency & Code Generation
 - [ ] **Project Persistency:** Save and load your visual UI designs to and from a file (`.xib` or `.cib` equivalent).

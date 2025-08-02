@@ -65,6 +65,9 @@
     UIBuilderController _builderController @accessors(property=builderController);
     CPPanel             _panel @accessors(property=panel);
     CPTableView         _connectionsTableView;
+    id                  _inspectedObject;
+    CPControl           _widthControl;
+    CPControl           _heightControl;
 }
 
 - (void)awakeFromMarkup
@@ -156,11 +159,31 @@
 
 - (void)observeValueForKeyPath:(CPString)keyPath ofObject:(id)object change:(CPDictionary)change context:(id)context
 {
-    // We only observe selection changes now.
     if (keyPath === @"elementsController.selectionIndexes")
     {
         [self updateInspector];
         [self _updateConnectionVisibility];
+    }
+    else if (keyPath === @"halign" || keyPath === @"valign")
+    {
+        [self _updateControlStates];
+    }
+}
+
+- (void)_updateControlStates
+{
+    if (_inspectedObject)
+    {
+        if (_widthControl)
+        {
+            var halign = [_inspectedObject valueForKey:@"halign"];
+            [_widthControl setEnabled:(halign === @"min")];
+        }
+        if (_heightControl)
+        {
+            var valign = [_inspectedObject valueForKey:@"valign"];
+            [_heightControl setEnabled:(valign === @"min")];
+        }
     }
 }
 
@@ -204,6 +227,27 @@
     var selectedObjects = [[_builderController elementsController] selectedObjects];
     var propertiesView = [[[_panel contentView] tabViewItemAtIndex:0] view];
 
+    // Cleanup previous observer
+    if (_inspectedObject)
+    {
+        var elementType = [_inspectedObject valueForKey:@"type"];
+        if (elementType)
+        {
+            var viewClass = [UIBuilderController classForElementType:elementType];
+            if (viewClass)
+            {
+                var properties = [viewClass persistentProperties];
+                if ([properties containsObject:@"halign"])
+                    [_inspectedObject removeObserver:self forKeyPath:@"halign"];
+                if ([properties containsObject:@"valign"])
+                    [_inspectedObject removeObserver:self forKeyPath:@"valign"];
+            }
+        }
+    }
+    _inspectedObject = nil;
+    _widthControl = nil;
+    _heightControl = nil;
+
     // Clear existing views from properties tab
     var subviews = [propertiesView subviews];
     for (var i = [subviews count] - 1; i >= 0; i--) {
@@ -217,8 +261,8 @@
 
     if ([selectedObjects count] === 1)
     {
-        var selectedObject = selectedObjects[0];
-        var elementType = [selectedObject valueForKey:@"type"];
+        _inspectedObject = selectedObjects[0];
+        var elementType = [_inspectedObject valueForKey:@"type"];
         var viewClass = [UIBuilderController classForElementType:elementType];
         var properties = [viewClass persistentProperties];
 
@@ -230,7 +274,7 @@
         for (var i = 0; i < [properties count]; i++)
         {
             var propertyName = properties[i];
-            var value = [selectedObject valueForKey:propertyName];
+            var value = [_inspectedObject valueForKey:propertyName];
             var propertyType = [[viewClass propertyTypes] valueForKey:propertyName];
 
             // Create Label
@@ -243,24 +287,23 @@
             [label setTextColor:[CPColor grayColor]];
 
             // Create Control based on property type
+            var control = nil;
             if (propertyType === UIBBoolean) {
                 var checkbox = [[CPCheckBox alloc] initWithFrame:CGRectMake(120, yPos, 100, 20)];
                 [checkbox setTitle:@""];
-                [checkbox bind:@"value" toObject:selectedObject withKeyPath:propertyName options:nil];
-                [propertiesView addSubview:checkbox];
+                [checkbox bind:@"value" toObject:_inspectedObject withKeyPath:propertyName options:nil];
+                control = checkbox;
             } else if (propertyType === UIBString || propertyType === UIBNumber) {
                 var textField = [[CPTextField alloc] initWithFrame:CGRectMake(120, yPos, 150, 27)];
-                [textField bind:@"value" toObject:selectedObject withKeyPath:propertyName options:nil];
+                [textField bind:@"value" toObject:_inspectedObject withKeyPath:propertyName options:nil];
                 [textField setBezeled:YES];
                 [textField setEditable:YES];
-                [propertiesView addSubview:textField];
+                control = textField;
             }
             else if (propertyType === UIBEnumeration)
             {
                 var popUpButton = [[CPPopUpButton alloc] initWithFrame:CGRectMake(120, yPos, 150, 27)];
                 var enumerations = [viewClass propertyEnumerations];
-
-               
                 var values = [enumerations objectForKey:propertyName];
 
                 if (values)
@@ -268,24 +311,37 @@
                     for (var j = 0; j < [values count]; j++)
                     {
                         [popUpButton addItemWithTitle:values[j]];
-                        [[popUpButton lastItem] setTag:j]; // Set the tag to the numeric index
+                        [[popUpButton lastItem] setTag:j];
                     }
                 }
-                // Bind selectedTag using the generic enumeration value transformer
-                [popUpButton bind:@"selectedIndex" toObject:selectedObject withKeyPath:propertyName options:@{CPValueTransformerBindingOption: [[CPEnumerationValueTransformer alloc] initWithEnumerationValues:values]}];
-                [propertiesView addSubview:popUpButton];
+                [popUpButton bind:@"selectedIndex" toObject:_inspectedObject withKeyPath:propertyName options:@{CPValueTransformerBindingOption: [[CPEnumerationValueTransformer alloc] initWithEnumerationValues:values]}];
+                control = popUpButton;
 
             } else { // Fallback for unknown types
                 var textField = [[CPTextField alloc] initWithFrame:CGRectMake(120, yPos, 150, 25)];
-                [textField bind:@"value" toObject:selectedObject withKeyPath:propertyName options:nil];
+                [textField bind:@"value" toObject:_inspectedObject withKeyPath:propertyName options:nil];
                 [textField setBezeled:YES];
                 [textField setEditable:YES];
-                [propertiesView addSubview:textField];
+                control = textField;
+            }
+
+            if (control)
+            {
+                [propertiesView addSubview:control];
+                if (propertyName === @"width") _widthControl = control;
+                if (propertyName === @"height") _heightControl = control;
             }
 
             yPos += 30;
         }
 
+        // Add observers for dynamic enabling/disabling
+        if ([properties containsObject:@"halign"])
+            [_inspectedObject addObserver:self forKeyPath:@"halign" options:CPKeyValueObservingOptionNew context:nil];
+        if ([properties containsObject:@"valign"])
+            [_inspectedObject addObserver:self forKeyPath:@"valign" options:CPKeyValueObservingOptionNew context:nil];
+
+        [self _updateControlStates];
         [[self panel] orderFront:self];
     }
     else
@@ -297,6 +353,14 @@
 - (void)dealloc
 {
     [_builderController removeObserver:self forKeyPath:@"elementsController.selectionIndexes"];
+    if (_inspectedObject)
+    {
+        var properties = [[_inspectedObject class] persistentProperties];
+        if ([properties containsObject:@"halign"])
+            [_inspectedObject removeObserver:self forKeyPath:@"halign"];
+        if ([properties containsObject:@"valign"])
+            [_inspectedObject removeObserver:self forKeyPath:@"valign"];
+    }
     [super dealloc];
 }
 

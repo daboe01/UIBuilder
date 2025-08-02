@@ -8,10 +8,28 @@
     BOOL             _isRubbing;
 }
 
++ (CPArray)persistentProperties
+{
+    return [super persistentProperties].filter(p => p !== 'value').concat(["width", "height"]);
+}
+
 + (CPDictionary)defaultValues
 {
     return @{
-        "value": "VBox"
+        "width": 200,
+        "height": 100,
+        "halign": "expand",
+        "valign": "expand"
+    };
+}
+
++ (CPDictionary)propertyTypes
+{
+    return @{
+        "width": UIBNumber,
+        "height": UIBNumber,
+        "halign": UIBEnumeration,
+        "valign": UIBEnumeration
     };
 }
 

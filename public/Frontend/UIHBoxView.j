@@ -5,12 +5,29 @@
     BOOL _isDropTarget;
 }
 
++ (CPArray)persistentProperties
+{
+    return [super persistentProperties].filter(p => p !== 'value').concat(["width", "height"]);
+}
+
 + (CPDictionary)defaultValues
 {
-    var defaults = [[super defaultValues] copy];
-    [defaults setValue:@"HBox" forKey:@"value"];
-    [defaults setValue:@"expand" forKey:@"halign"];
-    return defaults;
+    return @{
+        "width": 200,
+        "height": 50,
+        "halign": "expand",
+        "valign": "min"
+    };
+}
+
++ (CPDictionary)propertyTypes
+{
+    return @{
+        "width": UIBNumber,
+        "height": UIBNumber,
+        "halign": UIBEnumeration,
+        "valign": UIBEnumeration
+    };
 }
 
 - (id)initWithFrame:(CGRect)aRect

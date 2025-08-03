@@ -74,7 +74,6 @@ var GSAutoLayoutAlignMax = 4;
 {
     // This is a placeholder for the actual layout logic.
     // A real implementation would be much more complex.
-    console.log("GSAutoLayoutManager: Performing layout...");
 
     var linePartCount = [_sortedLineParts count];
     if (linePartCount === 0) return;

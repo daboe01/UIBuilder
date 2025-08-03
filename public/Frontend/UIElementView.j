@@ -190,7 +190,6 @@ var _classMap = [CPMutableDictionary dictionary];
 
 - (void)setupTrackingArea
 {
-    console.log("UIElementView setupTrackingArea: for", [self class], "- self.window:", [self window]);
     if ([self window])
     {
         if (_trackingArea)
@@ -202,13 +201,11 @@ var _classMap = [CPMutableDictionary dictionary];
                                                        owner:self
                                                     userInfo:nil];
         [self addTrackingArea:_trackingArea];
-        console.log("  - Tracking area added/updated.");
     }
     else if (_trackingArea)
     {
         [self removeTrackingArea:_trackingArea];
         _trackingArea = nil;
-        console.log("  - Tracking area removed.");
     }
 }
 
@@ -245,18 +242,12 @@ var _classMap = [CPMutableDictionary dictionary];
 {
     if (context == self)
     {
-        console.log("UIElementView: Observed change in", [self class], "for keyPath:", keyPath);
         if ([keyPath isEqualToString:@"halign"] || [keyPath isEqualToString:@"valign"] || [keyPath isEqualToString:@"value"])
         {
             var superview = [self superview];
             if (superview)
             {
-                console.log("  -> Superview is", [superview class], ", calling setNeedsLayout:YES");
                 [superview setNeedsLayout:YES];
-            }
-            else
-            {
-                console.log("  -> Superview is nil, cannot call setNeedsLayout:YES");
             }
         }
         else

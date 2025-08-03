@@ -34,7 +34,6 @@
     if (count === 0) return;
 
     var bounds = [self bounds];
-    console.log("GSAutoLayoutHBox layoutSubviews bounds: " + JSON.stringify(bounds));
     var itemWidth = bounds.size.width / count;
     var currentX = 0;
 
@@ -42,7 +41,6 @@
     {
         var subview = subviews[i];
         var frame = CGRectMake(currentX, 0, itemWidth, bounds.size.height);
-        console.log("  - Setting frame for " + [subview class] + " to " + JSON.stringify(frame));
         [subview setFrame:frame];
         currentX += itemWidth;
     }

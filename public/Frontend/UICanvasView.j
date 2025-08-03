@@ -265,7 +265,6 @@ var _selectedConnectionsObservationContext = 1095;
     if (!dataObjects || dataObjects == [CPNull null] || [dataObjects count] === 0)
         return;
 
-    console.log("UICanvasView: startObservingDataObjects with:", dataObjects);
     var canvasWindow = [self window];
     if (!canvasWindow) {
         console.error("FATAL: Canvas has no window. Cannot create views.");
@@ -291,7 +290,6 @@ var _selectedConnectionsObservationContext = 1095;
 
             if (!parentID || parentView) {
                 var superview = parentView || self;
-                console.log("-> Creating view for:", [newDataObject valueForKey:@"id"], "in superview:", superview);
                 [self _createViewForDataObject:newDataObject superview:superview window:canvasWindow];
                 [successfullyAdded addObject:newDataObject];
             }
@@ -309,12 +307,10 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (void)_createViewForDataObject:(CPDictionary)dataObject superview:(CPView)superview window:(CPWindow)aWindow atIndex:(int)index
 {
-    console.log("START _createViewForDataObject id:", [dataObject valueForKey:@"id"], "superview:", [superview class], "atIndex:", index);
-    
+
     var type = [dataObject valueForKey:@"type"];
     var viewClass = [[UIElementView classMap] objectForKey:type] || UIElementView;
     var newView = [[viewClass alloc] init];
-    console.log("did create newView");
 
     [newView setIsNewlyCreated:YES];
     [CPTimer scheduledTimerWithTimeInterval:0.1 target:newView selector:@selector(setIsNewlyCreated:) userInfo:NO repeats:NO];
@@ -336,12 +332,9 @@ var _selectedConnectionsObservationContext = 1095;
     [newView bind:@"originY" toObject:dataObject withKeyPath:@"originY" options:nil];
     [newView bind:@"width" toObject:dataObject withKeyPath:@"width" options:nil];
     [newView bind:@"height" toObject:dataObject withKeyPath:@"height" options:nil];
-    console.log("did create bindings");
 
     // The iterative KVO observer is now responsible for creating children.
     // This recursive logic is no longer needed and causes conflicts.
-    
-    console.log("END _createViewForDataObject id:", [dataObject valueForKey:@"id"]);
 }
 
 // Keep a simple version for external calls if needed, though the main logic uses the windowed one.
@@ -354,14 +347,12 @@ var _selectedConnectionsObservationContext = 1095;
 - (void)stopObservingDataObjects:(CPArray)dataObjects
 {
     if (!dataObjects || dataObjects == [CPNull null]) return;
-    console.log("UICanvasView: stopObservingDataObjects:", dataObjects);
 
     var viewsToRemove = [CPMutableArray array];
     [self _findViewsForDataObjects:dataObjects inView:self foundViews:viewsToRemove];
     
     for (var i = 0; i < [viewsToRemove count]; i++) {
         var viewToRemove = viewsToRemove[i];
-        console.log("-> Removing view:", viewToRemove, "for dataObject:", [viewToRemove dataObject]);
         [self _removeViewAndChildren:viewToRemove];
     }
 }
@@ -388,7 +379,6 @@ var _selectedConnectionsObservationContext = 1095;
 {
     if (context == _dataObjectsObservationContext)
     {
-        console.log("UICanvasView: KVO _dataObjectsObservationContext triggered. Change:", change);
         var newDataObjects = [object valueForKeyPath:_dataObjectsKeyPath];
         var oldDataObjects = _oldDataObjects;
 
@@ -423,7 +413,6 @@ var _selectedConnectionsObservationContext = 1095;
                             index = [siblingData indexOfObject:newDataObject];
                         }
                         
-                        console.log("-> Creating view for:", [newDataObject valueForKey:@"id"], "in superview:", superview);
                         [self _createViewForDataObject:newDataObject superview:superview window:[self window] atIndex:index];
                         [successfullyAdded addObject:newDataObject];
                     }
@@ -990,7 +979,6 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (CPDragOperation)draggingEntered:(CPDraggingInfo)sender
 {
-    console.log("draggingEntered:", [sender draggingPasteboard]);
     // We accept any of the registered types
     return CPDragOperationCopy;
 }
@@ -1111,8 +1099,6 @@ var _selectedConnectionsObservationContext = 1095;
     var types = [pasteboard types];
     var elementType = nil;
 
-    console.log("UICanvasView: performDragOperation at point:", dropPoint);
-
     // Find the first registered drag type on the pasteboard
     var registeredTypes = [self registeredDraggedTypes];
     for (var i = 0; i < [types count]; i++) {
@@ -1128,7 +1114,6 @@ var _selectedConnectionsObservationContext = 1095;
 
     if (elementType && _delegate)
     {
-        console.log("-> Determined element type:", elementType);
         var viewAtDropPoint = [self viewAtPoint:dropPoint];
         var containerView = nil;
 
@@ -1151,9 +1136,6 @@ var _selectedConnectionsObservationContext = 1095;
         var containerData = nil;
         if (containerView) {
             containerData = [containerView dataObject];
-            console.log("-> Found container view:", containerView, "with data:", containerData);
-        } else {
-            console.log("-> No container view found at drop point.");
         }
 
         if (containerData)
@@ -1188,7 +1170,6 @@ var _selectedConnectionsObservationContext = 1095;
                 }
             }
 
-            console.log("--> Calling addNewElementOfType:atPoint:inParent:atIndex:", index);
             if ([_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:inParent:atIndex:)])
             {
                 [_delegate addNewElementOfType:elementType atPoint:dropPoint inParent:containerData atIndex:index];
@@ -1199,14 +1180,12 @@ var _selectedConnectionsObservationContext = 1095;
         } else {
             // Dropped on the canvas background
             if (elementType === "window") {
-                console.log("--> It's a window, calling addNewElementOfType:atPoint:inParent: with nil parent.");
                 if ([_delegate respondsToSelector:@selector(addNewElementOfType:atPoint:inParent:)]) {
                     [_delegate addNewElementOfType:elementType atPoint:dropPoint inParent:nil];
                     [self setNeedsDisplay:YES];
                     return YES;
                 }
             } else {
-                console.log("--> Not a window, calling addNewElementOfType:inNewWindowAtPoint:");
                 if ([_delegate respondsToSelector:@selector(addNewElementOfType:inNewWindowAtPoint:)]) {
                     [_delegate addNewElementOfType:elementType inNewWindowAtPoint:dropPoint];
                     [self setNeedsDisplay:YES];
@@ -1216,7 +1195,7 @@ var _selectedConnectionsObservationContext = 1095;
         }
     }
 
-    console.log("-> performDragOperation failed or was not handled.");
+    
     return NO;
 }
 

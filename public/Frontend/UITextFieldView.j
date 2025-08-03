@@ -10,6 +10,11 @@
     }
 }
 
++ (CPArray)persistentProperties
+{
+    return [super persistentProperties].concat(["enabled", "selectable", "editable", "bezeled"]);
+}
+
 + (CPDictionary)defaultValues
 {
     return @{
@@ -17,7 +22,11 @@
         "outlets": "target, delegate",
         "actions": "takeStringValueFrom:, takeIntegerValueFrom:",
         "halign": "expand",
-        "valign": "min"
+        "valign": "min",
+        "enabled": YES,
+        "selectable": YES,
+        "editable": YES,
+        "bezeled": YES
     };
 }
 
@@ -25,6 +34,10 @@
 {
     var types = [super propertyTypes];
     [types setObject:UIBString forKey:@"value"];
+    [types setObject:UIBBoolean forKey:@"enabled"];
+    [types setObject:UIBBoolean forKey:@"selectable"];
+    [types setObject:UIBBoolean forKey:@"editable"];
+    [types setObject:UIBBoolean forKey:@"bezeled"];
     return types;
 }
 - (id)initWithFrame:(CGRect)aRect
@@ -70,6 +83,10 @@
 {
     var textField = [[CPTextField alloc] initWithFrame:[self frame]];
     [textField setStringValue:[self value]];
+    [textField setEnabled:[[self dataObject] valueForKey:@"enabled"]];
+    [textField setSelectable:[[self dataObject] valueForKey:@"selectable"]];
+    [textField setEditable:[[self dataObject] valueForKey:@"editable"]];
+    [textField setBezeled:[[self dataObject] valueForKey:@"bezeled"]];
 
     if (aMap)
     {

@@ -25,21 +25,21 @@
  */
 - (id)transformedValue:(id)value
 {
-    if (!value) return nil;
+    if (value === nil || value === null) return nil;
 
+    // First, try to find the value in the enumeration array (for strings).
     var index = [_enumerationValues indexOfObject:value];
     if (index != CPNotFound) {
         return [CPNumber numberWithInt:index];
     }
 
-    // If the model value is already a number, assume it's the index.
-    // This fixes the case for numeric enums like textAlignment.
+    // Handle CPNumber instances
     if ([value isKindOfClass:[CPNumber class]])
     {
         return value;
     }
 
-    return nil;
+    return nil; // Return nil if no valid transformation can be made
 }
 
 /**
@@ -48,7 +48,7 @@
  */
 - (id)reverseTransformedValue:(id)value
 {
-    if (!value || ![value isKindOfClass:[CPNumber class]]) return nil;
+    if (!typeof value === 'number' || ![value isKindOfClass:[CPNumber class]]) return nil;
 
     var index = [value intValue];
     if (index >= 0 && index < [_enumerationValues count]) {

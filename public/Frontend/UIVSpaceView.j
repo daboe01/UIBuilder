@@ -6,9 +6,9 @@
 
 + (CPArray)persistentProperties
 {
-    var properties = [CPSet setWithArray:[super persistentProperties]];
-    var propertiesToRemove = [CPSet setWithArray:['value', 'halign', 'width']];
-    return [[properties minusSet:propertiesToRemove] allObjects];
+    var properties = [CPMutableSet setWithArray:[super persistentProperties]];
+    [properties minusSet:[CPSet setWithArray:['value', 'halign', 'width']]];
+    return [properties allObjects];
 }
 
 + (CPDictionary)defaultValues

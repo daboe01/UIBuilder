@@ -18,14 +18,16 @@
 + (CPDictionary)defaultValues
 {
     return @{
-        "title": "Checkbox"
-    };
+                "value": true,
+                "title": "Checkbox"
+            };
 }
 
 + (CPDictionary)propertyTypes
 {
     var types = [[super propertyTypes] copy];
     [types setObject:UIBString forKey:@"title"];
+    [types setObject:UIBBoolean forKey:@"value"];
     return types;
 }
 
@@ -39,6 +41,7 @@
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];
+debugger
     if (self) {
         if (CGRectIsEmpty(aRect)) {
             [self setFrameSize:CGSizeMake(100, 20)];

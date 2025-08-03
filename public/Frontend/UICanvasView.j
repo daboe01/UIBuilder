@@ -1107,7 +1107,7 @@ var _selectedConnectionsObservationContext = 1095;
             var temp = [type stringByReplacingOccurrencesOfString:@"DragType" withString:@""];
             if ([temp hasPrefix:@"UI"])
                 temp = [temp substringFromIndex:2];
-            elementType = [temp lowercaseString];
+            elementType = [[temp substringToIndex:1] lowercaseString] + [temp substringFromIndex:1]; // lowercase first character
             break;
         }
     }

@@ -452,34 +452,6 @@ var CGSizeZero = CGSizeMake(0, 0);
 
 - (void)applicationDidFinishLaunching:(CPNotification)aNotification
 {
-    console.log("AppController applicationDidFinishLaunching: CPApp._delegate:", CPApp._delegate);
-
-    // Force all UIElementView subclasses to be initialized.
-    [UIWindowView class];
-    [UIButtonView class];
-    [UISliderView class];
-    [UITextFieldView class];
-    [UICheckBoxView class];
-    [UILabelView class];
-    [UISearchFieldView class];
-    [UISecureFieldView class];
-    [UITextViewView class];
-    [UIScrollViewView class];
-    [UITableViewView class];
-    [UISplitViewView class];
-    [UIImageViewView class];
-    [UIPopUpButtonView class];
-    [UIComboBoxView class];
-    [UIStepperView class];
-    [UIDatePickerView class];
-    [UIProgressIndicatorView class];
-    [UIBoxView class];
-    [UIHBoxView class];
-    [UIVBoxView class];
-    [UIHSpaceView class];
-    [UIVSpaceView class];
-    [UICanvasView class];
-
     // 1. Create the main window and canvas
     _window = [[CPWindow alloc] initWithContentRect:CGRectMakeZero() styleMask:CPBorderlessBridgeWindowMask];
     [_window setTitle:@"Cappuccino UI Builder"];

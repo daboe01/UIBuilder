@@ -169,8 +169,19 @@ var _classMap = [CPMutableDictionary dictionary];
 
         if (![self isKindOfClass:[UIHBoxView class]] && ![self isKindOfClass:[UIVBoxView class]])
         {
-            if ([self frame].size.width < 1 || [self frame].size.height < 1)
-                [self setFrameSize:CGSizeMake(MAX(1, [self frame].size.width), MAX(1, [self frame].size.height))];
+            if ([self frame].size.width < 3 || [self frame].size.height < 3)
+                [self setFrameSize:CGSizeMake(MAX(3, [self frame].size.width), MAX(3, [self frame].size.height))];
+        }
+        if ([self isKindOfClass:[UIHSpaceView class]])
+        {
+            if ([self frame].size.width < 0)
+                [self setFrameSize:CGSizeMake(MAX(0, [self frame].size.width), MAX(3, [self frame].size.height))];
+        }
+
+        if ([self isKindOfClass:[UIVSpaceView class]])
+        {
+            if ([self frame].size.height < 0)
+                [self setFrameSize:CGSizeMake(MAX(3, [self frame].size.width), MAX(0, [self frame].size.height))];
         }
 
         [self setNeedsDisplay:YES];

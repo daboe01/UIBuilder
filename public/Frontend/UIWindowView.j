@@ -36,7 +36,7 @@ var _windowChildrenObservationContext = 1094;
     return [super persistentProperties].concat(["CPHUDBackgroundWindowMask", "CPTitledWindowMask", "CPClosableWindowMask"]);
 }
 
-+ (JSObject)defaultValues
++ (CPDictionary)defaultValues
 {
     return @{
         "value": "Untitled Window",

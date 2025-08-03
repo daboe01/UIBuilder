@@ -6,7 +6,7 @@
 
 + (CPArray)persistentProperties
 {
-    return [super persistentProperties].filter(p => p !== 'value' && p !== 'halign').concat(["height"]);
+    return [super persistentProperties].filter(p => p !== 'value' && p !== 'halign' && p !== 'width');
 }
 
 + (CPDictionary)defaultValues
@@ -61,12 +61,6 @@
 {
     // Don't call super, we want a completely custom look.
     [self drawSkeleton:rect];
-
-    // We still want to see selection handles if it's selected.
-    if ([self isSelected])
-    {
-        [self drawHandles];
-    }
 }
 
 
@@ -81,7 +75,7 @@
     [path lineToPoint:CGPointMake(midX, bounds.origin.y + bounds.size.height)];
 
     [[CPColor grayColor] setStroke];
-    [path setLineWidth:1.0];
+    [path setLineWidth: [self isSelected] ? 3.0 : 1.0];
     [path setLineDash:[2,2] count:2 phase:0];
     [path stroke];
 }

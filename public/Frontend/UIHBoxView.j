@@ -7,7 +7,7 @@
 
 + (CPArray)persistentProperties
 {
-    return [super persistentProperties].filter(p => p !== 'value').concat(["width", "height"]);
+    return [super persistentProperties].filter(p => p !== 'value');
 }
 
 + (CPDictionary)defaultValues
@@ -167,7 +167,7 @@
     var bounds = [self bounds];
     var path = [CPBezierPath bezierPathWithRect:bounds];
     [[CPColor grayColor] setStroke];
-    [path setLineWidth:1.0];
+    [path setLineWidth:[self isSelected] ? 3.0 : 1.0];
     [path setLineDash:[2,2] count:2 phase:0];
     [path stroke];
 

@@ -6,7 +6,9 @@
 
 + (CPArray)persistentProperties
 {
-    return [super persistentProperties].filter(p => p !== 'value' && p !== 'halign' && p !== 'width');
+    var properties = [CPSet setWithArray:[super persistentProperties]];
+    var propertiesToRemove = [CPSet setWithArray:['value', 'halign', 'width']];
+    return [[properties minusSet:propertiesToRemove] allObjects];
 }
 
 + (CPDictionary)defaultValues

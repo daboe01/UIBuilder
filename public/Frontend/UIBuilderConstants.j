@@ -34,6 +34,7 @@ UIBString = "UIBString";
 UIBNumber = "UIBNumber";
 UIBBoolean = "UIBBoolean";
 UIBEnumeration = "UIBEnumeration";
+UIBColor = "UIBColor";
 
 // --- Inspector Tabs ---
 UIBPropertyTabProperties = 0;

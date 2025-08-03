@@ -60,6 +60,38 @@
 
 @end
 
+@implementation CPStringColorTransformer : CPValueTransformer
+{
+}
+
++ (Class)transformedValueClass
+{
+    return [CPColor class];
+}
+
++ (BOOL)allowsReverseTransformation
+{
+    return YES;
+}
+
+- (id)transformedValue:(id)value
+{
+    if (!value || ![value isKindOfClass:[CPString class]])
+        return nil;
+
+    return [CPColor colorWithHexString:[value substringFromIndex:1]];
+}
+
+- (id)reverseTransformedValue:(id)value
+{
+    if (!value || ![value isKindOfClass:[CPColor class]])
+        return nil;
+
+    return [value hexString];
+}
+
+@end
+
 @implementation InspectorController : CPViewController
 {
     UIBuilderController _builderController @accessors(property=builderController);
@@ -324,6 +356,11 @@
                 [textField setBezeled:YES];
                 [textField setEditable:YES];
                 control = textField;
+            }
+            else if (propertyType === UIBColor) {
+                var colorWell = [[CPColorWell alloc] initWithFrame:CGRectMake(120, yPos, 50, 27)];
+                [colorWell bind:@"value" toObject:_inspectedObject withKeyPath:propertyName options:@{CPValueTransformerBindingOption: [[CPStringColorTransformer alloc] init]}];
+                control = colorWell;
             }
             else if (propertyType === UIBEnumeration)
             {

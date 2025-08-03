@@ -14,7 +14,7 @@
 
 + (CPArray)persistentProperties
 {
-    return [super persistentProperties].concat(["textAlign"]);
+    return [super persistentProperties].concat(["textAlign", "color"]);
 }
 
 + (CPDictionary)defaultValues
@@ -24,6 +24,7 @@
     [defaults setValue:@"left" forKey:@"textAlign"];
     [defaults setValue:@"min" forKey:@"halign"];
     [defaults setValue:@"min" forKey:@"valign"];
+    [defaults setValue:@"#000000" forKey:@"color"];
     [defaults setValue:@"takeStringValueFrom:, takeIntegerValueFrom:" forKey:@"actions"];
     return defaults;
 }
@@ -32,6 +33,7 @@
 {
     var types = [[super propertyTypes] copy];
     [types setObject:UIBEnumeration forKey:@"textAlign"];
+    [types setObject:UIBColor forKey:@"color"];
     return types;
 }
 
@@ -76,6 +78,7 @@
     var data = [self dataObject];
     var value = [data valueForKey:@"value"];
     var textAlign = [data valueForKey:@"textAlign"] || "left";
+    var color = [data valueForKey:@"color"] || "#000000";
 
     if (value) {
         var valueSize = [value sizeWithAttributes:_stringAttributes];
@@ -88,8 +91,12 @@
         } else { // left
             x = 0;
         }
+        
+        var attributes = @{
+            CPForegroundColorAttributeName:[CPColor colorWithHexString:[color substringFromIndex:1]]
+        };
 
-        [value drawAtPoint:CGPointMake(x, (bounds.size.height - valueSize.height) / 2) withAttributes:_stringAttributes];
+        [value drawAtPoint:CGPointMake(x, (bounds.size.height - valueSize.height) / 2) withAttributes:attributes];
     }
 }
 

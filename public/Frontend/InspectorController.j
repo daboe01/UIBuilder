@@ -87,7 +87,7 @@
     if (!value || ![value isKindOfClass:[CPColor class]])
         return nil;
 
-    return [value hexString];
+    return '#' + [value hexString];
 }
 
 @end

@@ -41,7 +41,7 @@
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];
-debugger
+
     if (self) {
         if (CGRectIsEmpty(aRect)) {
             [self setFrameSize:CGSizeMake(100, 20)];

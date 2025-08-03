@@ -1101,13 +1101,15 @@ var _selectedConnectionsObservationContext = 1095;
 
     // Find the first registered drag type on the pasteboard
     var registeredTypes = [self registeredDraggedTypes];
-    for (var i = 0; i < [types count]; i++) {
+
+    for (var i = 0; i < [types count]; i++)
+    {
         var type = types[i];
         if ([registeredTypes containsObject:type]) {
             var temp = [type stringByReplacingOccurrencesOfString:@"DragType" withString:@""];
             if ([temp hasPrefix:@"UI"])
                 temp = [temp substringFromIndex:2];
-            elementType = [[temp substringToIndex:1] lowercaseString] + [temp substringFromIndex:1]; // lowercase first character
+            elementType = [[temp substringToIndex:2] lowercaseString] + [temp substringFromIndex:2]; // lowercase first two characters (HBox->hbox)
             break;
         }
     }

@@ -69,7 +69,7 @@ var _classMap = [CPMutableDictionary dictionary];
         [self registerViewClass:UIWindowView forElementType:@"window"];
         [self registerViewClass:UIButtonView forElementType:@"button"];
         [self registerViewClass:UISliderView forElementType:@"slider"];
-        [self registerViewClass:UITextFieldView forElementType:@"textfield"];
+        [self registerViewClass:UITextFieldView forElementType:@"textField"];
         [self registerViewClass:UICheckBoxView forElementType:@"checkBox"];
         [self registerViewClass:UILabelView forElementType:@"label"];
         [self registerViewClass:UISearchFieldView forElementType:@"searchField"];

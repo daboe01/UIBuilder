@@ -537,7 +537,7 @@ var CGSizeZero = CGSizeMake(0, 0);
         // Row 3: Text & Fields
         [
             {dragType: UILabelDragType, elementType: "label", label: "Label"},
-            {dragType: UITextFieldDragType, elementType: "textfield", label: "Text Field"},
+            {dragType: UITextFieldDragType, elementType: "textField", label: "Text Field"},
             {dragType: UISearchFieldDragType, elementType: "searchField", label: "Search Field"},
             {dragType: UISecureFieldDragType, elementType: "secureField", label: "Secure Field"},
             {dragType: UITextViewDragType, elementType: "textView", label: "Text View"},

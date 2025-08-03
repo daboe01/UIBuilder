@@ -6,7 +6,7 @@
 {
     if (self === [UITextFieldView class])
     {
-        [UIElementView registerViewClass:self forElementType:@"textfield"];
+        [UIElementView registerViewClass:self forElementType:@"textField"];
     }
 }
 

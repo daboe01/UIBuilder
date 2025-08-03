@@ -103,7 +103,7 @@ var _classMap = [CPMutableDictionary dictionary];
 
 + (CPArray)persistentProperties
 {
-    return ["value", "halign", "valign"];
+    return ["value", "halign", "valign", "width", "height"];
 }
 
 + (CPDictionary)defaultValues
@@ -112,6 +112,8 @@ var _classMap = [CPMutableDictionary dictionary];
         "value": "Element",
         "halign": "min",
         "valign": "min",
+        "width": 100,
+        "height": 20,
         "outlets": "",
         "actions": ""
     };
@@ -122,8 +124,21 @@ var _classMap = [CPMutableDictionary dictionary];
     return @{
                 "value": UIBString,
                 "halign": UIBEnumeration,
-                "valign": UIBEnumeration
+                "valign": UIBEnumeration,
+                "width": UIBNumber,
+                "height": UIBNumber
              };
+}
+
++ (CPDictionary)propertyGroups
+{
+    return @{
+        "value": UIBPropertyTabProperties,
+        "halign": UIBPropertyTabLayout,
+        "valign": UIBPropertyTabLayout,
+        "width": UIBPropertyTabLayout,
+        "height": UIBPropertyTabLayout
+    };
 }
 
 + (CPDictionary)propertyEnumerations

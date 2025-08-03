@@ -35,6 +35,12 @@ UIBNumber = "UIBNumber";
 UIBBoolean = "UIBBoolean";
 UIBEnumeration = "UIBEnumeration";
 
+// --- Inspector Tabs ---
+UIBPropertyTabProperties = 0;
+UIBPropertyTabLayout = 1;
+UIBPropertyTabConnections = 2;
+
+
 // --- Constants for Resizing ---
 kUIElementHandleSize = 8.0;
 kUIElementNoHandle = 0;

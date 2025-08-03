@@ -26,6 +26,26 @@
     return [super persistentProperties].concat(["items", "isEditable", "outlets", "actions"]);
 }
 
++ (CPDictionary)propertyTypes
+{
+    var types = [[super propertyTypes] copy];
+    [types setObject:UIBString forKey:@"items"];
+    [types setObject:UIBBoolean forKey:@"isEditable"];
+    [types setObject:UIBString forKey:@"outlets"];
+    [types setObject:UIBString forKey:@"actions"];
+    return types;
+}
+
++ (CPDictionary)propertyGroups
+{
+    var groups = [[super propertyGroups] copy];
+    [groups setObject:UIBPropertyTabProperties forKey:@"items"];
+    [groups setObject:UIBPropertyTabProperties forKey:@"isEditable"];
+    [groups setObject:UIBPropertyTabConnections forKey:@"outlets"];
+    [groups setObject:UIBPropertyTabConnections forKey:@"actions"];
+    return groups;
+}
+
 - (void)drawSkeleton:(CGRect)rect
 {
     [super drawSkeleton:rect];

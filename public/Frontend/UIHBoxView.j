@@ -22,12 +22,16 @@
 
 + (CPDictionary)propertyTypes
 {
-    return @{
-        "width": UIBNumber,
-        "height": UIBNumber,
-        "halign": UIBEnumeration,
-        "valign": UIBEnumeration
-    };
+    var types = [[super propertyTypes] copy];
+    [types removeObjectForKey:@"value"];
+    return types;
+}
+
++ (CPDictionary)propertyGroups
+{
+    var groups = [[super propertyGroups] copy];
+    [groups removeObjectForKey:@"value"];
+    return groups;
 }
 
 - (id)initWithFrame:(CGRect)aRect

@@ -20,10 +20,18 @@
 
 + (CPDictionary)propertyTypes
 {
-    return @{
-        "width": UIBNumber,
-        "halign": UIBEnumeration
-    };
+    var types = [[super propertyTypes] copy];
+    [types removeObjectForKey:@"value"];
+    [types removeObjectForKey:@"valign"];
+    return types;
+}
+
++ (CPDictionary)propertyGroups
+{
+    var groups = [[super propertyGroups] copy];
+    [groups removeObjectForKey:@"value"];
+    [groups removeObjectForKey:@"valign"];
+    return groups;
 }
 
 + (CPDictionary)propertyEnumerations

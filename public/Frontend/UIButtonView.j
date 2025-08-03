@@ -25,7 +25,17 @@
 {
     var types = [[super propertyTypes] copy];
     [types setObject:UIBString forKey:@"value"];
+    [types setObject:UIBString forKey:@"outlets"];
+    [types setObject:UIBString forKey:@"actions"];
     return types;
+}
+
++ (CPDictionary)propertyGroups
+{
+    var groups = [[super propertyGroups] copy];
+    [groups setObject:UIBPropertyTabConnections forKey:@"outlets"];
+    [groups setObject:UIBPropertyTabConnections forKey:@"actions"];
+    return groups;
 }
 
 + (CPArray)persistentProperties

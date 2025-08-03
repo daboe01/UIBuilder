@@ -22,6 +22,15 @@ var _windowChildrenObservationContext = 1094;
     return types;
 }
 
++ (CPDictionary)propertyGroups
+{
+    var groups = [[super propertyGroups] copy];
+    [groups setObject:UIBPropertyTabProperties forKey:@"CPHUDBackgroundWindowMask"];
+    [groups setObject:UIBPropertyTabProperties forKey:@"CPTitledWindowMask"];
+    [groups setObject:UIBPropertyTabProperties forKey:@"CPClosableWindowMask"];
+    return groups;
+}
+
 + (CPArray)persistentProperties
 {
     return [super persistentProperties].concat(["CPHUDBackgroundWindowMask", "CPTitledWindowMask", "CPClosableWindowMask"]);

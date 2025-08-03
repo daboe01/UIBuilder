@@ -33,6 +33,15 @@
     return types;
 }
 
++ (CPDictionary)propertyGroups
+{
+    var groups = [[super propertyGroups] copy];
+    [groups setObject:UIBPropertyTabProperties forKey:@"value"];
+    [groups setObject:UIBPropertyTabProperties forKey:@"editable"];
+    [groups setObject:UIBPropertyTabProperties forKey:@"richText"];
+    return groups;
+}
+
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];

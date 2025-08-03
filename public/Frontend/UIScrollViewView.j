@@ -33,6 +33,15 @@
     return types;
 }
 
++ (CPDictionary)propertyGroups
+{
+    var groups = [[super propertyGroups] copy];
+    [groups setObject:UIBPropertyTabProperties forKey:@"hasHorizontalScroller"];
+    [groups setObject:UIBPropertyTabProperties forKey:@"hasVerticalScroller"];
+    [groups setObject:UIBPropertyTabProperties forKey:@"borderType"];
+    return groups;
+}
+
 - (id)initWithFrame:(CGRect)aRect
 {
     self = [super initWithFrame:aRect];

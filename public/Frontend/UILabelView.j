@@ -35,6 +35,13 @@
     return types;
 }
 
++ (CPDictionary)propertyGroups
+{
+    var groups = [[super propertyGroups] copy];
+    [groups setObject:UIBPropertyTabProperties forKey:@"textAlign"];
+    return groups;
+}
+
 + (CPDictionary)propertyEnumerations
 {
     var enums = [[super propertyEnumerations] copy];

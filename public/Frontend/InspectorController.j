@@ -90,6 +90,13 @@
     [propertiesTabItem setView:propertiesView];
     [tabView addTabViewItem:propertiesTabItem];
 
+    // Layout Tab
+    var layoutView = [[CPView alloc] initWithFrame:CGRectMakeZero()];
+    var layoutTabItem = [[CPTabViewItem alloc] initWithIdentifier:@"layout"];
+    [layoutTabItem setLabel:@"Layout"];
+    [layoutTabItem setView:layoutView];
+    [tabView addTabViewItem:layoutTabItem];
+
     // Connections Tab
     var connectionsView = [[CPView alloc] initWithFrame:CGRectMakeZero()];
     var connectionsTabItem = [[CPTabViewItem alloc] initWithIdentifier:@"connections"];
@@ -225,7 +232,8 @@
 - (void)updateInspector
 {
     var selectedObjects = [[_builderController elementsController] selectedObjects];
-    var propertiesView = [[[_panel contentView] tabViewItemAtIndex:0] view];
+    var propertiesView = [[[_panel contentView] tabViewItemAtIndex:UIBPropertyTabProperties] view];
+    var layoutView = [[[_panel contentView] tabViewItemAtIndex:UIBPropertyTabLayout] view];
 
     // Cleanup previous observer
     if (_inspectedObject)
@@ -259,14 +267,27 @@
         [subview removeFromSuperview];
     }
 
+    // Clear existing views from layout tab
+    subviews = [layoutView subviews];
+    for (var i = [subviews count] - 1; i >= 0; i--) {
+        var subview = subviews[i];
+        if ([subview isKindOfClass:[CPControl class]]) {
+            [subview unbind:@"value"];
+            [subview unbind:@"selectedIndex"];
+        }
+        [subview removeFromSuperview];
+    }
+
     if ([selectedObjects count] === 1)
     {
         _inspectedObject = selectedObjects[0];
         var elementType = [_inspectedObject valueForKey:@"type"];
         var viewClass = [UIBuilderController classForElementType:elementType];
         var properties = [viewClass persistentProperties];
+        var propertyGroups = [viewClass propertyGroups];
 
-        var yPos = 10;
+        var yPosProperties = 10;
+        var yPosLayout = 10;
 
         // Set panel title
         [_panel setTitle:elementType];
@@ -276,6 +297,10 @@
             var propertyName = properties[i];
             var value = [_inspectedObject valueForKey:propertyName];
             var propertyType = [[viewClass propertyTypes] valueForKey:propertyName];
+            var propertyGroup = [propertyGroups valueForKey:propertyName];
+
+            var currentView = (propertyGroup === UIBPropertyTabLayout) ? layoutView : propertiesView;
+            var yPos = (propertyGroup === UIBPropertyTabLayout) ? yPosLayout : yPosProperties;
 
             // Create Label
             var label = [[CPTextField alloc] initWithFrame:CGRectMake(10, yPos + 3, 100, 20)];
@@ -283,7 +308,7 @@
             [label setBezeled:NO];
             [label setDrawsBackground:NO];
             [label setEditable:NO];
-            [propertiesView addSubview:label];
+            [currentView addSubview:label];
             [label setTextColor:[CPColor grayColor]];
 
             // Create Control based on property type
@@ -327,12 +352,15 @@
 
             if (control)
             {
-                [propertiesView addSubview:control];
+                [currentView addSubview:control];
                 if (propertyName === @"width") _widthControl = control;
                 if (propertyName === @"height") _heightControl = control;
             }
 
-            yPos += 30;
+            if (propertyGroup === UIBPropertyTabLayout)
+                yPosLayout += 30;
+            else
+                yPosProperties += 30;
         }
 
         // Add observers for dynamic enabling/disabling

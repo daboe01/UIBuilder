@@ -77,7 +77,7 @@
     [path lineToPoint:CGPointMake(midX, bounds.origin.y + bounds.size.height)];
 
     [[CPColor grayColor] setStroke];
-    [path setLineWidth: [self isSelected] ? 3.0 : 1.0];
+    [path setLineWidth:[self isSelected] ? 3.0 : 1.0];
     [path setLineDash:[2,2] count:2 phase:0];
     [path stroke];
 }

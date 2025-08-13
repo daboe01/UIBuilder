@@ -502,6 +502,13 @@ var CGSizeZero = CGSizeMake(0, 0);
 
     [mainMenuBar addItem:editMenuItem];
 
+    var arrangeMenuItem = [[CPMenuItem alloc] initWithTitle:@"Arrange" action:nil keyEquivalent:@""];
+    var arrangeMenu = [[CPMenu alloc] initWithTitle:@"Arrange"];
+    [arrangeMenu addItemWithTitle:@"Group in HBox" action:@selector(groupInHBox:) keyEquivalent:@""];
+    [arrangeMenu addItemWithTitle:@"Group in VBox" action:@selector(groupInVBox:) keyEquivalent:@""];
+    [arrangeMenuItem setSubmenu:arrangeMenu];
+    [mainMenuBar addItem:arrangeMenuItem];
+
     [CPApp setMainMenu:mainMenuBar];
     [CPMenu setMenuBarVisible:YES];
 

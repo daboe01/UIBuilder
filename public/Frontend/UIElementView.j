@@ -154,6 +154,19 @@ var _classMap = [CPMutableDictionary dictionary];
     return _classMap;
 }
 
++ (CPMenu)defaultMenu
+{
+    var menu = [[CPMenu alloc] initWithTitle:@""];
+
+    [menu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@""];
+    [menu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@""];
+    [menu addItem:[CPMenuItem separatorItem]];
+    [menu addItemWithTitle:@"Group in hbox" action:@selector(groupInHBox:) keyEquivalent:@""];
+    [menu addItemWithTitle:@"Group in vbox" action:@selector(groupInVBox:) keyEquivalent:@""];
+
+    return menu;
+}
+
 - (id)initWithFrame:(CGRect)frame
 {
     self = [super initWithFrame:frame];
@@ -948,6 +961,22 @@ var _classMap = [CPMutableDictionary dictionary];
 {
     // By default, any part of the view can be a connection target.
     return YES;
+}
+
+- (void)copy:(id)sender
+{
+    [[self canvas] copy:sender];
+}
+
+- (void)paste:(id)sender
+{
+    [[self canvas] paste:sender];
+}
+
+- (BOOL)validateMenuItem:(CPMenuItem)aMenuItem
+{
+    // Forward validation to the canvas, which is the main handler.
+    return [[self canvas] validateMenuItem:aMenuItem];
 }
 
 - (CPDragOperation)draggingUpdated:(CPDraggingInfo)sender

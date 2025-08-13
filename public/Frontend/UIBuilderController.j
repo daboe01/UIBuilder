@@ -422,7 +422,161 @@
     [_elementsController removeObjects:elementsToDelete];
 }
 
-#pragma mark - 
+#pragma mark -
+#pragma mark Grouping
+
+- (void)groupSelectionInHBox:(id)sender
+{
+    [self _groupSelectionInContainerOfType:@"hbox" withActionName:@"Group in HBox"];
+}
+
+- (void)groupSelectionInVBox:(id)sender
+{
+    [self _groupSelectionInContainerOfType:@"vbox" withActionName:@"Group in VBox"];
+}
+
+- (void)_groupSelectionInContainerOfType:(CPString)containerType withActionName:(CPString)actionName
+{
+    var selectedObjects = [[_elementsController selectedObjects] copy];
+    if ([selectedObjects count] <= 1) return;
+
+    var undoManager = [[CPApp keyWindow] undoManager];
+    var canvas = [self canvasView];
+    var commonParentData = [self parentOfElement:selectedObjects[0]];
+    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+
+    for (var i = 0; i < [selectedObjects count]; i++)
+    {
+        var obj = selectedObjects[i];
+        if ([self parentOfElement:obj] != commonParentData) {
+            CPLog.warn("Cannot group elements with different parents yet.");
+            return;
+        }
+        var view = [canvas viewForElementWithID:[obj valueForKey:@"id"]];
+        var frame = [view frame];
+        minX = Math.min(minX, frame.origin.x);
+        minY = Math.min(minY, frame.origin.y);
+        maxX = Math.max(maxX, frame.origin.x + frame.size.width);
+        maxY = Math.max(maxY, frame.origin.y + frame.size.height);
+    }
+
+    var boundingBox = CGRectMake(minX, minY, maxX - minX, maxY - minY);
+
+    var containerData = [CPConservativeDictionary dictionary];
+    var viewClass = [UIBuilderController classForElementType:containerType];
+    [containerData setValue:containerType forKey:@"type"];
+    [containerData setValue:@"id_" + _elementCounter++ forKey:@"id"];
+    var defaultValues = [viewClass defaultValues];
+    for (var key in defaultValues) [containerData setValue:defaultValues[key] forKey:key];
+    [containerData setValue:boundingBox.origin.x forKey:@"originX"];
+    [containerData setValue:boundingBox.origin.y forKey:@"originY"];
+    [containerData setValue:boundingBox.size.width forKey:@"width"];
+    [containerData setValue:boundingBox.size.height forKey:@"height"];
+    [containerData setValue:[] forKey:@"children"];
+    if (commonParentData) {
+        [containerData setValue:[commonParentData valueForKey:@"id"] forKey:@"parentID"];
+    }
+
+    // Register Undo Action
+    [[undoManager prepareWithInvocationTarget:self] _ungroupContainer:containerData andRestoreSelection:selectedObjects withActionName:actionName];
+    [undoManager setActionName:actionName];
+
+    // --- Reparenting ---
+    // 1. Remove selected objects from their original parent and the main controller
+    if (commonParentData) {
+        [[commonParentData mutableArrayValueForKey:@"children"] removeObjectsInArray:selectedObjects];
+    }
+    // We remove them from the main controller. The views will be destroyed.
+    // They will be recreated when their data objects are re-added as children of the new container.
+    [_elementsController removeObjects:selectedObjects];
+
+
+    // 2. Update children to be relative to the new container and change parentID
+    var newChildren = [containerData mutableArrayValueForKey:@"children"];
+    for (var i = 0; i < [selectedObjects count]; i++)
+    {
+        var obj = selectedObjects[i];
+        
+        // Get the frame info from the data object itself, as the view has been removed.
+        var objX = [obj valueForKey:@"originX"];
+        var objY = [obj valueForKey:@"originY"];
+
+        [obj setValue:objX - boundingBox.origin.x forKey:@"originX"];
+        [obj setValue:objY - boundingBox.origin.y forKey:@"originY"];
+        [obj setValue:[containerData valueForKey:@"id"] forKey:@"parentID"];
+        [newChildren addObject:obj];
+    }
+
+    var sortKey = (containerType === "hbox") ? @"originX" : @"originY";
+    var sortDescriptor = [CPSortDescriptor sortDescriptorWithKey:sortKey ascending:YES];
+    [newChildren sortUsingDescriptors:[CPArray arrayWithObject:sortDescriptor]];
+
+    // 3. Add the new container to the parent's children array
+    if (commonParentData) {
+        [[commonParentData mutableArrayValueForKey:@"children"] addObject:containerData];
+    }
+
+    // 4. Add container and its now-updated children back to the main controller.
+    [_elementsController addObject:containerData];
+    [_elementsController addObjects:newChildren];
+
+
+    // 5. Update selection
+    [_elementsController setSelectedObjects:[CPArray arrayWithObject:containerData]];
+
+    // 6. Trigger layout
+    var parentView = commonParentData ? [canvas viewForElementWithID:[commonParentData valueForKey:@"id"]] : canvas;
+    [parentView setNeedsLayout:YES];
+
+    // 7. Layout the new container itself
+    var newContainerView = [canvas viewForElementWithID:[containerData valueForKey:@"id"]];
+    if (newContainerView) {
+        [newContainerView layoutSubviews];
+    }
+}
+
+- (void)_ungroupContainer:(CPDictionary)containerData andRestoreSelection:(CPArray)selectionToRestore withActionName:(CPString)actionName
+{
+    var undoManager = [[CPApp keyWindow] undoManager];
+    var parentData = [self parentOfElement:containerData];
+    var childrenToUngroup = [[containerData valueForKey:@"children"] copy];
+    var containerOrigin = {x: [containerData valueForKey:@"originX"], y: [containerData valueForKey:@"originY"]};
+
+    [undoManager setActionName:actionName];
+
+    // 1. Remove container and its children from the controller
+    if (parentData) {
+        [[parentData mutableArrayValueForKey:@"children"] removeObject:containerData];
+    }
+    [_elementsController removeObject:containerData];
+    [_elementsController removeObjects:childrenToUngroup];
+
+
+    // 2. Reparent children and add them back to the controller
+    for (var i = 0; i < [childrenToUngroup count]; i++)
+    {
+        var child = childrenToUngroup[i];
+        [child setValue:parentData ? [parentData valueForKey:@"id"] : nil forKey:@"parentID"];
+        [child setValue:[child valueForKey:@"originX"] + containerOrigin.x forKey:@"originX"];
+        [child setValue:[child valueForKey:@"originY"] + containerOrigin.y forKey:@"originY"];
+
+        if (parentData) {
+            [[parentData mutableArrayValueForKey:@"children"] addObject:child];
+        }
+        [_elementsController addObject:child];
+    }
+
+    // 3. Restore selection
+    [_elementsController setSelectedObjects:selectionToRestore];
+
+    // 4. Trigger layout
+    var canvas = [self canvasView];
+    var parentView = parentData ? [canvas viewForElementWithID:[parentData valueForKey:@"id"]] : canvas;
+    [parentView setNeedsLayout:YES];
+}
+
+
+#pragma mark -
 #pragma mark Keyboard Movement
 
 - (void)moveSelectedElementsByDeltaX:(int)deltaX deltaY:(int)deltaY

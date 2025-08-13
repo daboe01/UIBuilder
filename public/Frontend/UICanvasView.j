@@ -858,6 +858,20 @@ var _selectedConnectionsObservationContext = 1095;
     }
 }
 
+- (void)groupInHBox:(id)sender
+{
+    if (_delegate && [_delegate respondsToSelector:@selector(groupSelectionInHBox:)]) {
+        [_delegate groupSelectionInHBox:sender];
+    }
+}
+
+- (void)groupInVBox:(id)sender
+{
+    if (_delegate && [_delegate respondsToSelector:@selector(groupSelectionInVBox:)]) {
+        [_delegate groupSelectionInVBox:sender];
+    }
+}
+
 - (void)viewDidMoveToWindow
 {
     [super viewDidMoveToWindow];
@@ -886,6 +900,25 @@ var _selectedConnectionsObservationContext = 1095;
     if (action == @selector(paste:))
     {
         return [[[CPPasteboard generalPasteboard] types] containsObject:UIBuilderElementPboardType];
+    }
+
+    if (action == @selector(groupInHBox:) || action == @selector(groupInVBox:))
+    {
+        var selectedObjects = [[_delegate elementsController] selectedObjects];
+        if ([selectedObjects count] <= 1)
+            return NO;
+
+        var controller = [self delegate];
+        if (!controller || ![controller respondsToSelector:@selector(parentOfElement:)])
+            return NO;
+
+        var firstParent = [controller parentOfElement:selectedObjects[0]];
+        for (var i = 1; i < [selectedObjects count]; i++)
+        {
+            if ([controller parentOfElement:selectedObjects[i]] != firstParent)
+                return NO;
+        }
+        return YES;
     }
 
     if (action == @selector(createTargetActionConnection:) || action == @selector(createOutletConnection:))

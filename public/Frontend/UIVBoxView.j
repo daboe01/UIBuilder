@@ -155,7 +155,7 @@
         }
         
         // Center horizontally
-        var x = (bounds.size.width - frameWidth) / 2.0;
+        var x = Math.max(0, (bounds.size.width - frameWidth) / 2.0);
 
         [subview setFrame:CGRectMake(x, currentY, frameWidth, frameHeight)];
         currentY += frameHeight;

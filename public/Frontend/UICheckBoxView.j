@@ -55,10 +55,17 @@
     var bounds = [self bounds];
     var boxRect = CGRectMake(0, (bounds.size.height - 16) / 2, 16, 16);
 
-    [[CPColor whiteColor] setFill];
-    [CPBezierPath fillRect:boxRect];
-    [[CPColor blackColor] setStroke];
-    [CPBezierPath strokeRect:boxRect];
+    var value = [[self dataObject] valueForKey:@"value"];
+    if (value) {
+        var checkedImage = [CPImage imageNamed:@"Frameworks/AppKit/Resources/Aristo.blend/Resources/check-box-image-selected.png" forClass:[self class]];
+        [checkedImage drawInRect:boxRect];
+    }
+    else {
+        [[CPColor whiteColor] setFill];
+        [CPBezierPath fillRect:boxRect];
+        [[CPColor blackColor] setStroke];
+        [CPBezierPath strokeRect:boxRect];
+    }
 
     var title = [[self dataObject] valueForKey:@"title"];
     if (title) {

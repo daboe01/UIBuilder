@@ -61,57 +61,53 @@
     var count = [subviews count];
     if (count === 0) return;
 
-    console.log("--- UIHBoxView layoutSubviews ---");
     var bounds = [self bounds];
-    console.log("HBox bounds:", bounds.size.width);
-    var totalFixedWidth = 0;
+    var totalMinWidth = 0;
+    var maxHeight = 0;
     var expandableChildren = 0;
-    var expandableSpacer = nil;
 
-    // First pass: Calculate total width of fixed elements and find expandable ones.
+    // First pass: Calculate total minimum width and max height.
     for (var i = 0; i < count; i++)
     {
         var subview = subviews[i];
         var data = [subview dataObject];
         var halign = [data objectForKey:@"halign"];
-        var subviewWidth = [subview frame].size.width;
-        console.log("Subview", i, [subview class], "halign:", halign, "width:", subviewWidth);
-        console.log("  -> Data object:", data);
 
-        if ([subview isKindOfClass:[UIHSpaceView class]] && halign === "expand")
+        if (halign !== "expand")
         {
-            expandableSpacer = subview;
-            console.log("  -> Found expandable spacer");
+            totalMinWidth += [[subview dataObject] valueForKey:@"width"];
         }
-        else if (halign === "expand")
+        else
         {
             expandableChildren++;
         }
-        else // "min"
-        {
-            totalFixedWidth += subviewWidth;
-        }
+        maxHeight = MAX(maxHeight, [[subview dataObject] valueForKey:@"height"]);
     }
 
-    console.log("Total fixed width:", totalFixedWidth);
-    console.log("Expandable children:", expandableChildren);
+    // Determine the container's new size.
+    var newWidth = totalMinWidth;
+    var newHeight = maxHeight;
+    var currentFrame = [self frame];
+
+    if (currentFrame.size.width > totalMinWidth)
+    {
+        newWidth = currentFrame.size.width;
+    }
+    else
+    {
+        [[self dataObject] setValue:newWidth forKey:@"width"];
+    }
+
+    if (currentFrame.size.height !== newHeight)
+    {
+        [[self dataObject] setValue:newHeight forKey:@"height"];
+    }
 
     var flexibleWidth = 0;
-    var remainingSpace = bounds.size.width - totalFixedWidth;
-    console.log("Remaining space for expansion:", remainingSpace);
-
-    if (expandableSpacer)
+    if (expandableChildren > 0)
     {
-        flexibleWidth = remainingSpace > 0 ? remainingSpace : 0;
-        console.log("  -> Assigning", flexibleWidth, "to expandable spacer");
-        var frame = [expandableSpacer frame];
-        frame.size.width = flexibleWidth;
-        [expandableSpacer setFrame:frame];
-    }
-    else if (expandableChildren > 0)
-    {
+        var remainingSpace = newWidth - totalMinWidth;
         flexibleWidth = (remainingSpace > 0) ? (remainingSpace / expandableChildren) : 0;
-        console.log("  -> Assigning", flexibleWidth, "to each of", expandableChildren, "expandable children");
     }
 
     var currentX = 0;
@@ -125,11 +121,7 @@
         var frameWidth = 0;
         var halign = [[subview dataObject] valueForKey:@"halign"];
 
-        if (subview == expandableSpacer)
-        {
-            frameWidth = [subview frame].size.width;
-        }
-        else if (halign === "expand")
+        if (halign === "expand")
         {
             frameWidth = flexibleWidth;
         }
@@ -141,17 +133,15 @@
         var valign = [[subview dataObject] valueForKey:@"valign"];
         if (valign === "expand")
         {
-            frameHeight = bounds.size.height;
+            frameHeight = newHeight;
         }
 
         // Center vertically
-        var y = (bounds.size.height - frameHeight) / 2.0;
+        var y = (newHeight - frameHeight) / 2.0;
 
-        console.log("Setting frame for subview", i, ": x=", currentX, "y=", y, "w=", frameWidth, "h=", frameHeight);
         [subview setFrame:CGRectMake(currentX, y, frameWidth, frameHeight)];
         currentX += frameWidth;
     }
-    console.log("---------------------------------");
 }
 
 - (void)drawRect:(CGRect)rect

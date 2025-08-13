@@ -62,11 +62,17 @@
 
     var subviews = [self subviews];
     var count = [subviews count];
-    if (count === 0) return;
+    if (count === 0)
+    {
+        // If there are no children, we can optionally shrink the box.
+        // For now, we'll leave its size as is, assuming it might be manipulated directly.
+        return;
+    }
 
     var bounds = [self bounds];
     var totalFixedHeight = 0;
     var expandableChildren = 0;
+    var totalMinHeight = 0;
 
     // First pass: Calculate total height of fixed elements and count expandable ones.
     for (var i = 0; i < count; i++)
@@ -77,17 +83,36 @@
         if (valign === "expand")
         {
             expandableChildren++;
+            // For expandable, we might consider a minimum height if one were defined.
         }
         else // "min"
         {
-            totalFixedHeight += [subview frame].size.height;
+            totalMinHeight += [[subview dataObject] valueForKey:@"height"];
         }
     }
+
+    // Determine the container's new height. It should be at least the sum of the minimum heights.
+    var newHeight = totalMinHeight;
+    var currentFrame = [self frame];
+
+    // If the container's current height is larger, it means there's extra space for expandable children.
+    if (currentFrame.size.height > totalMinHeight)
+    {
+        newHeight = currentFrame.size.height;
+    }
+    else
+    {
+        // The container is smaller than its content, so it must grow.
+        // We update the data object, which will trigger a KVO notification
+        // and cause the view to be redrawn with the new frame.
+        [[self dataObject] setValue:newHeight forKey:@"height"];
+    }
+
 
     var flexibleHeight = 0;
     if (expandableChildren > 0)
     {
-        var remainingSpace = bounds.size.height - totalFixedHeight;
+        var remainingSpace = newHeight - totalMinHeight;
         flexibleHeight = (remainingSpace > 0) ? (remainingSpace / expandableChildren) : 0;
     }
 

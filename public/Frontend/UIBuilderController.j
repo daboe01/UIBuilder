@@ -443,7 +443,7 @@
     var undoManager = [[CPApp keyWindow] undoManager];
     var canvas = [self canvasView];
     var commonParentData = [self parentOfElement:selectedObjects[0]];
-    var minX = Infinity, minY = Infinity, maxX = 0, maxY = 0;
+    var minX = Infinity, minY = Infinity;
 
     for (var i = 0; i < [selectedObjects count]; i++)
     {
@@ -456,11 +456,7 @@
         var frame = [view frame];
         minX = Math.min(minX, frame.origin.x);
         minY = Math.min(minY, frame.origin.y);
-        maxX = Math.max(maxX, frame.origin.x + frame.size.width);
-        maxY = Math.max(maxY, frame.origin.y + frame.size.height);
     }
-
-    var boundingBox = CGRectMake(minX, minY, maxX - minX, maxY - minY);
 
     var containerData = [CPConservativeDictionary dictionary];
     var viewClass = [UIBuilderController classForElementType:containerType];
@@ -468,10 +464,10 @@
     [containerData setValue:@"id_" + _elementCounter++ forKey:@"id"];
     var defaultValues = [viewClass defaultValues];
     for (var key in defaultValues) [containerData setValue:defaultValues[key] forKey:key];
-    [containerData setValue:boundingBox.origin.x forKey:@"originX"];
-    [containerData setValue:boundingBox.origin.y forKey:@"originY"];
-    [containerData setValue:boundingBox.size.width forKey:@"width"];
-    [containerData setValue:boundingBox.size.height forKey:@"height"];
+    [containerData setValue:minX forKey:@"originX"];
+    [containerData setValue:minY forKey:@"originY"];
+    [containerData setValue:0 forKey:@"width"];
+    [containerData setValue:0 forKey:@"height"];
     [containerData setValue:[] forKey:@"children"];
     if (commonParentData) {
         [containerData setValue:[commonParentData valueForKey:@"id"] forKey:@"parentID"];
@@ -501,8 +497,8 @@
         var objX = [obj valueForKey:@"originX"];
         var objY = [obj valueForKey:@"originY"];
 
-        [obj setValue:objX - boundingBox.origin.x forKey:@"originX"];
-        [obj setValue:objY - boundingBox.origin.y forKey:@"originY"];
+        [obj setValue:objX - minX forKey:@"originX"];
+        [obj setValue:objY - minY forKey:@"originY"];
         [obj setValue:[containerData valueForKey:@"id"] forKey:@"parentID"];
         [newChildren addObject:obj];
     }
@@ -531,7 +527,7 @@
     // 7. Layout the new container itself
     var newContainerView = [canvas viewForElementWithID:[containerData valueForKey:@"id"]];
     if (newContainerView) {
-        [newContainerView layoutSubviews];
+        [newContainerView performSelector:@selector(layoutSubviews) withObject:nil afterDelay:0];
     }
 }
 

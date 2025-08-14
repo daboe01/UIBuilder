@@ -64,15 +64,14 @@
     var count = [subviews count];
     if (count === 0)
     {
-        // If there are no children, we can optionally shrink the box.
-        // For now, we'll leave its size as is, assuming it might be manipulated directly.
         return;
     }
 
+    const PADDING = 5;
     var bounds = [self bounds];
-    var totalFixedHeight = 0;
-    var expandableChildren = 0;
+
     var totalMinHeight = 0;
+    var expandableChildren = 0;
 
     // First pass: Calculate total height of fixed elements and count expandable ones.
     for (var i = 0; i < count; i++)
@@ -83,7 +82,6 @@
         if (valign === "expand")
         {
             expandableChildren++;
-            // For expandable, we might consider a minimum height if one were defined.
         }
         else // "min"
         {
@@ -91,38 +89,34 @@
         }
     }
 
-    // Determine the container's new height. It should be at least the sum of the minimum heights.
-    var newHeight = totalMinHeight;
-    var currentFrame = [self frame];
+    // Determine the container's new height, including padding.
+    var requiredHeight = totalMinHeight + (2 * PADDING);
+    var containerHeight = [self frame].size.height;
 
-    // If the container's current height is larger, it means there's extra space for expandable children.
-    if (currentFrame.size.height > totalMinHeight)
+    if (containerHeight < requiredHeight)
     {
-        newHeight = currentFrame.size.height;
-    }
-    else
-    {
-        // The container is smaller than its content, so it must grow.
-        // We update the data object, which will trigger a KVO notification
-        // and cause the view to be redrawn with the new frame.
-        [[self dataObject] setValue:newHeight forKey:@"height"];
+        containerHeight = requiredHeight;
+        [[self dataObject] setValue:containerHeight forKey:@"height"];
     }
 
+    // Calculate layout for children within the padded area.
+    var layoutAreaHeight = containerHeight - (2 * PADDING);
 
     var flexibleHeight = 0;
     if (expandableChildren > 0)
     {
-        var remainingSpace = newHeight - totalMinHeight;
+        var remainingSpace = layoutAreaHeight - totalMinHeight;
         flexibleHeight = (remainingSpace > 0) ? (remainingSpace / expandableChildren) : 0;
     }
 
-    var currentY = 0;
+    var currentY = PADDING;
+    var layoutAreaX = PADDING;
+    var layoutAreaWidth = bounds.size.width - (2 * PADDING);
 
     // Second pass: Set the frames.
     for (var i = 0; i < count; i++)
     {
         var subview = subviews[i];
-        var frame = [subview frame];
         var frameWidth;
         var frameHeight = 0;
         var valign = [[subview dataObject] valueForKey:@"valign"];
@@ -151,11 +145,11 @@
         }
         else // "expand"
         {
-            frameWidth = bounds.size.width;
+            frameWidth = layoutAreaWidth;
         }
         
-        // Center horizontally
-        var x = Math.max(0, (bounds.size.width - frameWidth) / 2.0);
+        // Center horizontally within the padded layout area
+        var x = layoutAreaX + Math.max(0, (layoutAreaWidth - frameWidth) / 2.0);
 
         [subview setFrame:CGRectMake(x, currentY, frameWidth, frameHeight)];
         currentY += frameHeight;

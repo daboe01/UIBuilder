@@ -61,7 +61,9 @@
     var count = [subviews count];
     if (count === 0) return;
 
+    const PADDING = 5;
     var bounds = [self bounds];
+
     var totalMinWidth = 0;
     var maxHeight = 0;
     var expandableChildren = 0;
@@ -84,40 +86,42 @@
         maxHeight = MAX(maxHeight, [[subview dataObject] valueForKey:@"height"]);
     }
 
-    // Determine the container's new size.
-    var newWidth = totalMinWidth;
-    var newHeight = maxHeight;
-    var currentFrame = [self frame];
+    // Determine the container's new size, including padding.
+    var requiredWidth = totalMinWidth + (2 * PADDING);
+    var requiredHeight = maxHeight + (2 * PADDING);
+    var containerWidth = [self frame].size.width;
+    var containerHeight = [self frame].size.height;
 
-    if (currentFrame.size.width > totalMinWidth)
+    if (containerWidth < requiredWidth)
     {
-        newWidth = currentFrame.size.width;
+        containerWidth = requiredWidth;
+        [[self dataObject] setValue:containerWidth forKey:@"width"];
     }
-    else
+    if (containerHeight < requiredHeight)
     {
-        [[self dataObject] setValue:newWidth forKey:@"width"];
+        containerHeight = requiredHeight;
+        [[self dataObject] setValue:containerHeight forKey:@"height"];
     }
 
-    if (currentFrame.size.height !== newHeight)
-    {
-        [[self dataObject] setValue:newHeight forKey:@"height"];
-    }
+    // Calculate layout for children within the padded area.
+    var layoutAreaWidth = containerWidth - (2 * PADDING);
+    var layoutAreaHeight = containerHeight - (2 * PADDING);
 
     var flexibleWidth = 0;
     if (expandableChildren > 0)
     {
-        var remainingSpace = newWidth - totalMinWidth;
+        var remainingSpace = layoutAreaWidth - totalMinWidth;
         flexibleWidth = (remainingSpace > 0) ? (remainingSpace / expandableChildren) : 0;
     }
 
-    var currentX = 0;
+    var currentX = PADDING;
+    var layoutAreaY = PADDING;
 
     // Second pass: Set the frames.
     for (var i = 0; i < count; i++)
     {
         var subview = subviews[i];
-        var frame = [subview frame];
-        var frameHeight = frame.size.height;
+        var frameHeight = [[subview dataObject] valueForKey:@"height"];
         var frameWidth = 0;
         var halign = [[subview dataObject] valueForKey:@"halign"];
 
@@ -133,11 +137,11 @@
         var valign = [[subview dataObject] valueForKey:@"valign"];
         if (valign === "expand")
         {
-            frameHeight = newHeight;
+            frameHeight = layoutAreaHeight;
         }
 
-        // Center vertically
-        var y = (newHeight - frameHeight) / 2.0;
+        // Center vertically within the padded layout area
+        var y = layoutAreaY + Math.max(0, (layoutAreaHeight - frameHeight) / 2.0);
 
         [subview setFrame:CGRectMake(currentX, y, frameWidth, frameHeight)];
         currentX += frameWidth;
@@ -177,6 +181,20 @@
         _isDropTarget = isDropTarget;
         [self setNeedsDisplay:YES];
     }
+}
+
+- (void)mouseDown:(CPEvent)theEvent
+{
+    var localPoint = [self convertPoint:[theEvent locationInWindow] fromView:nil];
+    var hitView = [self hitTest:localPoint];
+
+    if (hitView !== self)
+    {
+        [super mouseDown:theEvent];
+        return;
+    }
+    
+    [super mouseDown:theEvent];
 }
 
 @end

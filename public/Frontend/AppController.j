@@ -497,6 +497,9 @@ var CGSizeZero = CGSizeMake(0, 0);
     var fileMenuItem = [[CPMenuItem alloc] initWithTitle:@"File" action:nil keyEquivalent:@""];
     var fileMenu = [[CPMenu alloc] initWithTitle:@"File"];
     [fileMenu addItemWithTitle:@"Run" action:@selector(run:) keyEquivalent:@"r"];
+    [fileMenu addItem:[CPMenuItem separatorItem]];
+    [fileMenu addItemWithTitle:@"Save..." action:@selector(save:) keyEquivalent:@"s"];
+    [fileMenu addItemWithTitle:@"Load..." action:@selector(load:) keyEquivalent:@"l"];
     [fileMenuItem setSubmenu:fileMenu];
     [mainMenuBar addItem:fileMenuItem];
 
@@ -706,6 +709,85 @@ var CGSizeZero = CGSizeMake(0, 0);
 - (void)deleteElement:(UIElementView)elementView
 {
     [_builderController deleteElement:[elementView dataObject]];
+}
+
+- (void)save:(id)sender
+{
+    var markup = [_builderController generateGSMarkup];
+    
+    var savePanel = [[CPPanel alloc] initWithContentRect:CGRectMake(0, 0, 500, 600) styleMask:CPTitledWindowMask | CPClosableWindowMask | CPResizableWindowMask];
+    [savePanel center];
+    [savePanel setTitle:@"Save GSMarkup"];
+    
+    var contentView = [savePanel contentView];
+    var bounds = [contentView bounds];
+    
+    var scrollView = [[CPScrollView alloc] initWithFrame:bounds];
+    [scrollView setHasVerticalScroller:YES];
+    [scrollView setHasHorizontalScroller:YES];
+    [scrollView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+    
+    var textView = [[CPTextView alloc] initWithFrame:[scrollView bounds]];
+    [textView setString:markup];
+    [textView setFont:[CPFont fontWithName:@"Monaco" size:12]];
+    [textView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+    
+    [scrollView setDocumentView:textView];
+    [contentView addSubview:scrollView];
+    
+    [savePanel makeKeyAndOrderFront:self];
+}
+
+- (void)load:(id)sender
+{
+    var loadPanel = [[CPPanel alloc] initWithContentRect:CGRectMake(0, 0, 500, 600) styleMask:CPTitledWindowMask | CPClosableWindowMask | CPResizableWindowMask];
+    [loadPanel center];
+    [loadPanel setTitle:@"Load GSMarkup"];
+
+    var contentView = [loadPanel contentView];
+    var bounds = [contentView bounds];
+
+    var scrollView = [[CPScrollView alloc] initWithFrame:CGRectMake(0, 40, bounds.size.width, bounds.size.height - 40)];
+    [scrollView setHasVerticalScroller:YES];
+    [scrollView setHasHorizontalScroller:YES];
+    [scrollView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+
+    var textView = [[CPTextView alloc] initWithFrame:[scrollView bounds]];
+    [textView setFont:[CPFont fontWithName:@"Monaco" size:12]];
+    [textView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+    [textView setTag:100]; // Tag to find it later
+
+    [scrollView setDocumentView:textView];
+    [contentView addSubview:scrollView];
+
+    var loadButton = [[CPButton alloc] initWithFrame:CGRectMake(bounds.size.width - 110, 10, 100, 24)];
+    [loadButton setTitle:@"Load"];
+    [loadButton setTarget:self];
+    [loadButton setAction:@selector(performLoad:)];
+    [loadButton setAutoresizingMask:CPViewMinXMargin];
+    [contentView addSubview:loadButton];
+    
+    // Store the text view in the button's ivar for easy access
+    loadButton._textView = textView;
+
+    [loadPanel makeKeyAndOrderFront:self];
+}
+
+- (void)performLoad:(id)sender
+{
+    var textView = sender._textView;
+    var markup = [textView string];
+    
+    if (markup && [markup length] > 0)
+    {
+        [_builderController parseGSMarkup:markup];
+        [[sender window] close];
+    }
+    else
+    {
+        var alert = [CPAlert alertWithMessageText:@"Nothing to Load" defaultButton:@"OK" alternateButton:nil otherButton:nil informativeTextWithFormat:@"The text view is empty. Please paste GSMarkup to load."];
+        [alert runModal];
+    }
 }
 
 @end

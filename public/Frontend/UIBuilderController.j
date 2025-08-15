@@ -1040,4 +1040,358 @@
     }
 }
 
+#pragma mark -
+#pragma mark GSMarkup Parsing
+
+/**
+ * @brief A private recursive helper to parse a DOM node into an element data dictionary.
+ *
+ * @param elementNode The XML DOM node to parse.
+ * @param parentData The data dictionary of the parent element, or nil for top-level elements.
+ * @param allParsedElements A mutable array where all created element data dictionaries are stored flatly.
+ * @return The data dictionary for the parsed elementNode.
+ */
+- (CPDictionary)_parseElementNode:(id)elementNode parentData:(CPDictionary)parentData allParsedElements:(CPMutableArray)allParsedElements
+{
+    var type = [elementNode tagName];
+    var newElementData = [CPConservativeDictionary dictionary];
+    var viewClass = [UIBuilderController classForElementType:type];
+    if (!viewClass) {
+        console.warn("GSMarkup Parser: Unknown element type '" + type + "'. Skipping.");
+        return nil;
+    }
+    
+    // 1. Set basic properties
+    [newElementData setValue:type forKey:@"type"];
+    if (parentData) {
+        [newElementData setValue:[parentData valueForKey:@"id"] forKey:@"parentID"];
+    }
+
+    // 2. Parse attributes and convert to appropriate types
+    var attributes = [elementNode attributes];
+    var propTypes = [viewClass propertyTypes];
+
+    for (var i = 0; i < [attributes length]; i++)
+    {
+        var attr = attributes[i];
+        var key = attr.name;
+        var stringValue = attr.value;
+        var value = stringValue; // Default to string
+
+        var propType = [propTypes objectForKey:key];
+
+        if (propType === UIBBoolean) {
+            value = (stringValue.toLowerCase() === 'yes' || stringValue.toLowerCase() === 'true');
+        } else if (propType === UIBNumber) {
+            value = parseFloat(stringValue);
+        }
+        
+        [newElementData setValue:value forKey:key];
+        
+        // Update the global element counter to avoid future ID collisions
+        if (key === 'id' && [stringValue startsWith:'id_']) {
+            var idNumber = parseInt([stringValue substringFromIndex:3], 10);
+            if (!isNaN(idNumber)) {
+                _elementCounter = Math.max(_elementCounter, idNumber + 1);
+            }
+        }
+    }
+    
+    // 3. Initialize children array and add this element to the flat list
+    [newElementData setValue:[] forKey:@"children"];
+    [allParsedElements addObject:newElementData];
+
+    // 4. Recursively parse child nodes
+    var childNodes = [elementNode childNodes];
+    for (var i = 0; i < [childNodes length]; i++)
+    {
+        var childNode = childNodes[i];
+        // We only care about element nodes (type 1), not text nodes (whitespace, etc.)
+        if (childNode.nodeType === 1)
+        {
+            var childData = [self _parseElementNode:childNode parentData:newElementData allParsedElements:allParsedElements];
+            if (childData) {
+                 [[newElementData mutableArrayValueForKey:@"children"] addObject:childData];
+            }
+        }
+    }
+    
+    return newElementData;
+}
+
+
+/**
+ * @brief Parses a GSMarkup XML string to populate the UI builder's data model.
+ *
+ * This method clears the current model, then uses the browser's DOMParser
+ * to build a DOM tree from the input string. It then traverses this tree
+ * to reconstruct the element and connection data.
+ *
+ * @param gsmarkupString A CPString containing the complete GSMarkup document.
+ */
+- (void)parseGSMarkup:(CPString)gsmarkupString
+{
+    // 1. Clear the existing data model
+    [_elementsController setContent:nil];
+    [_connectionsController setContent:nil];
+    _elementCounter = 0; // Reset counter
+
+    if (!gsmarkupString || [gsmarkupString length] === 0) {
+        console.warn("GSMarkup Parser: Input string is empty. Nothing to parse.");
+        return;
+    }
+
+    // 2. Use the browser's DOMParser
+    var parser = new DOMParser();
+    var xmlDoc = parser.parseFromString(gsmarkupString, "application/xml");
+
+    // Check for parsing errors
+    var parseError = xmlDoc.getElementsByTagName("parsererror");
+    if (parseError.length > 0) {
+        console.error("Fatal Error parsing GSMarkup:", parseError[0].textContent);
+        // In a real app, you would show an alert to the user here.
+        return;
+    }
+
+    // --- 3. Parse Objects ---
+    var objectsNode = xmlDoc.getElementsByTagName("objects")[0];
+    var parsedElements = [CPMutableArray array];
+    
+    if (objectsNode) {
+        var topLevelNodes = [objectsNode childNodes];
+        for (var i = 0; i < [topLevelNodes length]; i++) {
+            var node = topLevelNodes[i];
+            if (node.nodeType === 1) { // Is an element node
+                [self _parseElementNode:node parentData:nil allParsedElements:parsedElements];
+            }
+        }
+    }
+
+    // --- 4. Parse Connectors ---
+    var connectorsNode = xmlDoc.getElementsByTagName("connectors")[0];
+    var parsedConnections = [CPMutableArray array];
+    
+    if (connectorsNode) {
+        var connectorNodes = [connectorsNode childNodes];
+        for (var i = 0; i < [connectorNodes length]; i++) {
+            var node = connectorNodes[i];
+            if (node.nodeType === 1 && [node tagName] === 'connector') {
+                var connData = [CPConservativeDictionary dictionary];
+                var sourceID = [node getAttribute:'source'];
+                var targetID = [node getAttribute:'target'];
+                
+                // Remove the '#' prefix if it exists
+                if (sourceID && [sourceID startsWith:'#']) sourceID = [sourceID substringFromIndex:1];
+                if (targetID && [targetID startsWith:'#']) targetID = [targetID substringFromIndex:1];
+
+                [connData setValue:sourceID forKey:'sourceID'];
+                [connData setValue:targetID forKey:'targetID'];
+                
+                if ([node hasAttribute:'outlet']) [connData setValue:[node getAttribute:'outlet'] forKey:'outlet'];
+                if ([node hasAttribute:'action']) [connData setValue:[node getAttribute:'action'] forKey:'action'];
+                
+                [parsedConnections addObject:connData];
+            }
+        }
+    }
+    
+    // --- 5. Populate the controllers ---
+    // This will trigger KVO and cause the UICanvasView to build the views.
+    [_elementsController addObjects:parsedElements];
+    [_connectionsController addObjects:parsedConnections];
+    
+    // Deselect all elements after loading a new file.
+    [_elementsController setSelectedObjects:nil];
+
+    console.log("GSMarkup parsing complete. Loaded " + [parsedElements count] + " elements and " + [parsedConnections count] + " connections.");
+}
+
+#pragma mark -
+#pragma mark GSMarkup Generation
+
+/*
+    A private helper method to escape special XML characters.
+*/
+- (CPString)_xmlEscape:(CPString)aString
+{
+    if (!aString)
+        return @"";
+
+    var str = String(aString);
+
+    return str.replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;')
+              .replace(/'/g, '&#39;');
+}
+
+/*
+    A private recursive helper to generate the markup for a single element
+    and all of its children.
+*/
+- (CPString)_generateMarkupForElement:(CPDictionary)elementData indentLevel:(int)level
+{
+    var indent = [@"    " repeat:level];
+    var type = [elementData valueForKey:@"type"];
+    var viewClass = [UIBuilderController classForElementType:type];
+    var children = [elementData valueForKey:@"children"];
+
+    // 1. Build the attributes string
+    var attributes = [];
+    var propertiesToArchive = [[viewClass persistentProperties] mutableCopy];
+
+    // Ensure 'id' is always included if it exists
+    if ([elementData valueForKey:@"id"] && ![propertiesToArchive containsObject:@"id"]) {
+        [propertiesToArchive addObject:@"id"];
+    }
+    // Also include outlets and actions, as they are key for connections later.
+    if ([elementData valueForKey:@"outlets"] && ![propertiesToArchive containsObject:@"outlets"]) {
+        [propertiesToArchive addObject:@"outlets"];
+    }
+    if ([elementData valueForKey:@"actions"] && ![propertiesToArchive containsObject:@"actions"]) {
+        [propertiesToArchive addObject:@"actions"];
+    }
+
+    for (var i = 0; i < [propertiesToArchive count]; i++) {
+        var key = propertiesToArchive[i];
+        var value = [elementData valueForKey:key];
+
+        // Skip structural keys and null/undefined values
+        if (key === "type" || key === "children" || key === "parentID" || value == null || value === undefined) {
+            continue;
+        }
+
+        var stringValue;
+        if (typeof value === "boolean") {
+            stringValue = value ? "YES" : "NO";
+        } else {
+            stringValue = [self _xmlEscape:value];
+        }
+        
+        if ([stringValue length] > 0) {
+            [attributes addObject:key + '="' + stringValue + '"'];
+        }
+    }
+
+    var attributeString = [attributes count] > 0 ? " " + [attributes componentsJoinedByString:@" "] : "";
+
+    // 2. Generate the final markup for this element
+    var elementMarkup = [];
+    if (children && [children count] > 0)
+    {
+        [elementMarkup addObject:indent + "<" + type + attributeString + ">"];
+        for (var i = 0; i < [children count]; i++)
+        {
+            [elementMarkup addObject:[self _generateMarkupForElement:children[i] indentLevel:level + 1]];
+        }
+        [elementMarkup addObject:indent + "</" + type + ">"];
+    }
+    else
+    {
+        [elementMarkup addObject:indent + "<" + type + attributeString + "/>"];
+    }
+
+    return [elementMarkup componentsJoinedByString:@"\n"];
+}
+
+
+/**
+ * @brief Generates a GSMarkup XML string representing the current UI graph.
+ *
+ * This method traverses the element and connection controllers to produce
+ * a declarative XML-like format that describes the UI hierarchy, properties,
+*  and connections between objects.
+ *
+ * @return A CPString containing the complete GSMarkup document.
+ */
+- (CPString)generateGSMarkup
+{
+    var markup = [
+        '<?xml version="1.0"?>',
+        '<!DOCTYPE gsmarkup>',
+        '<gsmarkup>\n',
+        '    <objects>'
+    ];
+
+    // --- Generate <objects> ---
+    var allElements = [_elementsController arrangedObjects];
+    for (var i = 0; i < [allElements count]; i++)
+    {
+        var elementData = allElements[i];
+        // Start recursion only from top-level elements (e.g., windows)
+        if (![elementData valueForKey:@"parentID"]) {
+            [markup addObject:[self _generateMarkupForElement:elementData indentLevel:2]];
+        }
+    }
+    [markup addObject:'    </objects>\n'];
+
+    // --- Generate <connectors> ---
+    [markup addObject:'    <connectors>'];
+    var connections = [_connectionsController arrangedObjects];
+    for (var i = 0; i < [connections count]; i++)
+    {
+        var conn = connections[i];
+        var sourceID = [conn valueForKey:@"sourceID"];
+        var targetID = [conn valueForKey:@"targetID"];
+        var outlet = [conn valueForKey:@"outlet"];
+        var action = [conn valueForKey:@"action"];
+
+        var connectorTag = '        <connector source="#' + sourceID + '" target="#' + targetID + '"';
+        if (outlet) {
+            connectorTag += ' outlet="' + [self _xmlEscape:outlet] + '"';
+        }
+        if (action) {
+            connectorTag += ' action="' + [self _xmlEscape:action] + '"';
+        }
+        connectorTag += '/>';
+        [markup addObject:connectorTag];
+    }
+    [markup addObject:'    </connectors>\n'];
+
+    // --- Finalize ---
+    [markup addObject:'</gsmarkup>'];
+
+    return [markup componentsJoinedByString:@"\n"];
+}
+
+@end
+
+@implementation CPString (UIBAdditions)
+
+/**
+ * @brief Returns a new string containing the receiver's characters repeated a given number of times.
+ *
+ * @param aCount An integer specifying the number of times to repeat the string. Must be non-negative.
+ *
+ * @return A new CPString object. Returns an empty string if aCount is 0.
+ *         Returns the receiver itself if aCount is 1.
+ *         Returns nil and logs an error if aCount is negative.
+ */
+- (CPString)repeat:(int)aCount
+{
+    // --- Input Validation ---
+    if (aCount < 0)
+    {
+        CPLog.warn("CPString -repeat: count must be a non-negative integer.");
+        return @""; // Or you could raise an exception. An empty string is safer.
+    }
+
+    if (aCount === 0)
+    {
+        return @"";
+    }
+
+    if (aCount === 1)
+    {
+        return self;
+    }
+
+    // --- Implementation ---
+    // A classic and efficient way to repeat a string is using Array.join().
+    // We create an array with `aCount + 1` empty slots and then join them
+    // using the receiver string as the separator.
+    return new Array(aCount + 1).join(self);
+}
+
 @end

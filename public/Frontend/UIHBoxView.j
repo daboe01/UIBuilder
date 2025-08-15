@@ -183,19 +183,5 @@
     }
 }
 
-- (void)mouseDown:(CPEvent)theEvent
-{
-    var localPoint = [self convertPoint:[theEvent locationInWindow] fromView:nil];
-    var hitView = [self hitTest:localPoint];
-
-    if (hitView !== self)
-    {
-        [super mouseDown:theEvent];
-        return;
-    }
-    
-    [super mouseDown:theEvent];
-}
-
 @end
 

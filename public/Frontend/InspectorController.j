@@ -207,6 +207,19 @@
     {
         [self _updateControlStates];
     }
+    else if (object === _inspectedObject)
+    {
+        var elementID = [_inspectedObject valueForKey:@"id"];
+        if (elementID)
+        {
+            var view = [[_builderController canvasView] viewForElementWithID:elementID];
+            if (view)
+            {
+                [view setNeedsDisplay:YES];
+                [[view superview] setNeedsLayout:YES];
+            }
+        }
+    }
 }
 
 - (void)_updateControlStates
@@ -277,10 +290,8 @@
             if (viewClass)
             {
                 var properties = [viewClass persistentProperties];
-                if ([properties containsObject:@"halign"])
-                    [_inspectedObject removeObserver:self forKeyPath:@"halign"];
-                if ([properties containsObject:@"valign"])
-                    [_inspectedObject removeObserver:self forKeyPath:@"valign"];
+                for (var i = 0; i < [properties count]; i++)
+                    [_inspectedObject removeObserver:self forKeyPath:properties[i]];
             }
         }
     }
@@ -352,7 +363,7 @@
                 control = checkbox;
             } else if (propertyType === UIBString || propertyType === UIBNumber) {
                 var textField = [[CPTextField alloc] initWithFrame:CGRectMake(120, yPos, 150, 27)];
-                [textField bind:@"value" toObject:_inspectedObject withKeyPath:propertyName options:nil];
+                [textField bind:@"value" toObject:_inspectedObject withKeyPath:propertyName options:@{CPContinuouslyUpdatesValueBindingOption: YES}];
                 [textField setBezeled:YES];
                 [textField setEditable:YES];
                 control = textField;
@@ -381,7 +392,7 @@
 
             } else { // Fallback for unknown types
                 var textField = [[CPTextField alloc] initWithFrame:CGRectMake(120, yPos, 150, 25)];
-                [textField bind:@"value" toObject:_inspectedObject withKeyPath:propertyName options:nil];
+                [textField bind:@"value" toObject:_inspectedObject withKeyPath:propertyName options:@{CPContinuouslyUpdatesValueBindingOption: YES}];
                 [textField setBezeled:YES];
                 [textField setEditable:YES];
                 control = textField;
@@ -400,11 +411,9 @@
                 yPosProperties += 30;
         }
 
-        // Add observers for dynamic enabling/disabling
-        if ([properties containsObject:@"halign"])
-            [_inspectedObject addObserver:self forKeyPath:@"halign" options:CPKeyValueObservingOptionNew context:nil];
-        if ([properties containsObject:@"valign"])
-            [_inspectedObject addObserver:self forKeyPath:@"valign" options:CPKeyValueObservingOptionNew context:nil];
+        // Add observers for dynamic enabling/disabling and redraw
+        for (var i = 0; i < [properties count]; i++)
+            [_inspectedObject addObserver:self forKeyPath:properties[i] options:CPKeyValueObservingOptionNew context:nil];
 
         [self _updateControlStates];
         [[self panel] orderFront:self];
@@ -420,11 +429,17 @@
     [_builderController removeObserver:self forKeyPath:@"elementsController.selectionIndexes"];
     if (_inspectedObject)
     {
-        var properties = [[_inspectedObject class] persistentProperties];
-        if ([properties containsObject:@"halign"])
-            [_inspectedObject removeObserver:self forKeyPath:@"halign"];
-        if ([properties containsObject:@"valign"])
-            [_inspectedObject removeObserver:self forKeyPath:@"valign"];
+        var elementType = [_inspectedObject valueForKey:@"type"];
+        if (elementType)
+        {
+            var viewClass = [UIBuilderController classForElementType:elementType];
+            if (viewClass)
+            {
+                var properties = [viewClass persistentProperties];
+                for (var i = 0; i < [properties count]; i++)
+                    [_inspectedObject removeObserver:self forKeyPath:properties[i]];
+            }
+        }
     }
     [super dealloc];
 }

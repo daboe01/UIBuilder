@@ -420,8 +420,8 @@ var _classMap = [CPMutableDictionary dictionary];
     {
         // Draw selection highlight
         [[CPColor keyboardFocusIndicatorColor] setStroke];
-        var selectionPath = [CPBezierPath bezierPathWithRect:CGRectInset([self bounds], -2, -2)];
-        [selectionPath setLineWidth:1.0];
+        var selectionPath = [CPBezierPath bezierPathWithRect:CGRectInset([self bounds], 0, 0)];
+        [selectionPath setLineWidth:2.0];
         [selectionPath stroke];
 
         // Draw resize handles ("dimples")

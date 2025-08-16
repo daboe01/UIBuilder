@@ -339,6 +339,7 @@
     if ([selectedObjects count] === 0) return;
 
     var elementsToDelete = [CPMutableArray array];
+    var uniqueParents = [CPArray array];
 
     // Function to recursively find all children
     var findChildrenRecursive = function(parent) {
@@ -356,6 +357,11 @@
     for (var i = 0; i < [selectedObjects count]; i++)
     {
         var selectedObject = selectedObjects[i];
+
+        var parent = [self parentOfElement:selectedObject];
+        if (parent && ![uniqueParents containsObject:parent])
+            [uniqueParents addObject:parent];
+
         if (![elementsToDelete containsObject:selectedObject])
         {
             [elementsToDelete addObject:selectedObject];
@@ -366,6 +372,14 @@
     [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] addObjects:elementsToDelete];
     [[[CPApp keyWindow] undoManager] setActionName:actionName];
     [_elementsController removeObjects:elementsToDelete];
+
+    for (var i = 0; i < [uniqueParents count]; i++)
+    {
+        var parent = uniqueParents[i];
+        var parentView = [_canvasView viewForElementWithID:[parent valueForKey:@"id"]];
+        if (parentView)
+            [parentView layoutSubviews];
+    }
 }
 
 - (void)removeSelectedElements
@@ -392,6 +406,8 @@
 {
     if (!elementData) return;
 
+    var parent = [self parentOfElement:elementData];
+
     var elementsToDelete = [CPMutableArray arrayWithObject:elementData];
 
     // Function to recursively find all children
@@ -413,13 +429,19 @@
     [[[CPApp keyWindow] undoManager] setActionName:@"Delete"];
 
     // Remove from parent's children array
-    var parent = [self parentOfElement:elementData];
     if (parent) {
         [[parent mutableArrayValueForKey:@"children"] removeObject:elementData];
     }
 
     // Remove all elements from the main controller
     [_elementsController removeObjects:elementsToDelete];
+
+    if (parent)
+    {
+        var parentView = [_canvasView viewForElementWithID:[parent valueForKey:@"id"]];
+        if (parentView)
+            [parentView layoutSubviews];
+    }
 }
 
 #pragma mark -

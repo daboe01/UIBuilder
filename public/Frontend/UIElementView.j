@@ -552,7 +552,7 @@ var _classMap = [CPMutableDictionary dictionary];
 
             if ([[self canvas] isViewSelected:subview])
             {
-                    return subview;
+                return subview;
             }
 
             // A subview is under the point, recurse into it.
@@ -598,23 +598,25 @@ var _classMap = [CPMutableDictionary dictionary];
     // Drill down (every click selects one view deeper)
     if (_activeHandle == kUIElementNoHandle && !([theEvent modifierFlags] & CPShiftKeyMask) && !([theEvent modifierFlags] & CPCommandKeyMask))
     {
-        var canvasPoint = [canvas convertPoint:[theEvent locationInWindow] fromView:nil];
 
         // Find the deepest selected view under the cursor, starting the search from the top-most view hit by the event (`self`).
-        var targetView = [self _findSelectedSubviewUnderPoint:canvasPoint startingFromView:self];
+        var targetView = [self _findSelectedSubviewUnderPoint:_lastMouseLoc startingFromView:self];
 
-        // no subview is selected, so we select ourself unless we are already selected
+        // no subview is selected, so we select ourself unless we are already selected or a matching subview if we are selected
         if (!targetView)
         {
-            if ([[self canvas] isViewSelected:self])
+            if ([self isSelected])
             {
-                var peek;
-
-                while (peek = [self _findSubviewUnderPoint:canvasPoint startingFromView:self])
-                    targetView = peek;
+                // If we are already selected, we look for a subview under the click point
+                targetView = [self _findSubviewUnderPoint:_lastMouseLoc startingFromView:self] || self;
             }
             else
                 targetView = self;
+        }
+        else
+        {
+            // If we found a selected subview, we use its subview as the target
+            targetView = [self _findSubviewUnderPoint:_lastMouseLoc startingFromView:targetView] || self;
         }
 
         [canvas deselectViews];

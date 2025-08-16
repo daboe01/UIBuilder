@@ -463,12 +463,16 @@
     [containerData setValue:containerType forKey:@"type"];
     [containerData setValue:@"id_" + _elementCounter++ forKey:@"id"];
     var defaultValues = [viewClass defaultValues];
-    for (var key in defaultValues) [containerData setValue:defaultValues[key] forKey:key];
+
+    for (var key in defaultValues)
+        [containerData setValue:defaultValues[key] forKey:key];
+
     [containerData setValue:minX forKey:@"originX"];
     [containerData setValue:minY forKey:@"originY"];
     [containerData setValue:0 forKey:@"width"];
     [containerData setValue:0 forKey:@"height"];
     [containerData setValue:[] forKey:@"children"];
+    
     if (commonParentData) {
         [containerData setValue:[commonParentData valueForKey:@"id"] forKey:@"parentID"];
     }
@@ -526,8 +530,11 @@
 
     // 7. Layout the new container itself
     var newContainerView = [canvas viewForElementWithID:[containerData valueForKey:@"id"]];
-    if (newContainerView) {
-        [newContainerView performSelector:@selector(layoutSubviews) withObject:nil afterDelay:0];
+    if (newContainerView)
+    {
+        [newContainerView performSelector:@selector(layoutSubviews) withObject:nil];
+        [newContainerView performSelector:@selector(sizeToFit) withObject:nil];
+        debugger
     }
 }
 

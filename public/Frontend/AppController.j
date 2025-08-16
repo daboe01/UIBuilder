@@ -729,6 +729,7 @@ var CGSizeZero = CGSizeMake(0, 0);
     
     var textView = [[CPTextView alloc] initWithFrame:[scrollView bounds]];
     [textView setString:markup];
+    [textView setSelectedRange:CPMakeRange(0, 0)];
     [textView setFont:[CPFont fontWithName:@"Monaco" size:12]];
     [textView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
     

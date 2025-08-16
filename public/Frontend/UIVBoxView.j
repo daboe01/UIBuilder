@@ -156,6 +156,58 @@
     }
 }
 
+- (void)sizeToFit
+{
+    var subviews = [self subviews];
+    var count = [subviews count];
+    const PADDING = 5;
+    const MIN_EXPANDABLE_HEIGHT = 10;
+
+    if (count === 0) {
+        [self setFrameSize:CGSizeMake(PADDING * 2, PADDING * 2)];
+        return;
+    }
+
+    var totalMinHeight = 0;
+    var maxWidth = 0;
+    var expandableChildren = 0;
+
+    for (var i = 0; i < count; i++)
+    {
+        var subview = subviews[i];
+        var data = [subview dataObject];
+        var valign = [data objectForKey:@"valign"];
+
+        if (valign !== "expand")
+        {
+            totalMinHeight += [[subview dataObject] valueForKey:@"height"];
+        }
+        else
+        {
+            expandableChildren++;
+        }
+        maxWidth = Math.max(maxWidth, [[subview dataObject] valueForKey:@"width"]);
+    }
+
+    // Calculate the total height required
+    var newHeight = totalMinHeight + (expandableChildren * MIN_EXPANDABLE_HEIGHT);
+
+    // Add padding between elements
+    if (count > 1) {
+        newHeight += (count - 1) * PADDING;
+    }
+
+    // Add padding around the container
+    newHeight += (2 * PADDING);
+    var newWidth = maxWidth + (2 * PADDING);
+
+    var data = [self dataObject];
+    [data setValue:newWidth forKey:@"width"];
+    [data setValue:newHeight forKey:@"height"];
+
+    [self setNeedsLayout:YES];
+}
+
 - (void)drawRect:(CGRect)rect
 {
     [self drawSkeleton:rect];

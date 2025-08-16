@@ -738,6 +738,32 @@ var _selectedConnectionsObservationContext = 1095;
     return [self _findDeepestUIElementViewAtPoint:aPoint inView:self];
 }
 
+- (UIElementView)childViewAtPoint:(CGPoint)canvasPoint withinView:(UIElementView)topView
+{
+    var localPoint = [topView convertPoint:canvasPoint fromView:self];
+
+    // Iterate backwards to check top-most views first
+    for (var i = [[topView subviews] count] - 1; i >= 0; i--)
+    {
+        var subview = [[topView subviews] objectAtIndex:i];
+
+        // We only care about UIElementView subclasses that are visible
+        if (![subview isKindOfClass:[UIElementView class]] || [subview isHidden])
+            continue;
+
+        var pointInSubview = [topView convertPoint:localPoint toView:subview];
+
+        // If the point is inside the subview's bounds, it's our target.
+        if (CGRectContainsPoint([subview bounds], pointInSubview))
+        {
+            return subview; // Found the direct child.
+        }
+    }
+
+    // If no subview at this level contains the point, return nil.
+    return nil;
+}
+
 - (UIElementView)_findDeepestUIElementViewAtPoint:(CGPoint)aPoint inView:(CPView)currentView
 {
     // Iterate backwards to check top-most views first
@@ -754,6 +780,7 @@ var _selectedConnectionsObservationContext = 1095;
         // If the point is inside the subview's bounds, it's a candidate.
         if (CGRectContainsPoint([subview bounds], localPoint))
         {
+
             // If this subview is a container, recursively search its children.
             // This is the crucial step to find the *deepest* view.
             if (subview._isContainer && [[subview subviews] count] > 0)

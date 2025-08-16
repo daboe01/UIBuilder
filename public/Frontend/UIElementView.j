@@ -540,6 +540,49 @@ var _classMap = [CPMutableDictionary dictionary];
     [self mouseUp:theEvent];
 }
 
+- (UIElementView)_findSelectedSubviewUnderPoint:(CGPoint)canvasPoint startingFromView:(UIElementView)topView
+{
+    var localPoint = [topView convertPoint:canvasPoint fromView:[self canvas]];
+    var subviews = [topView subviews];
+
+    // Search children first, in reverse order to check top-most views first
+    for (var i = [subviews count] - 1; i >= 0; i--) {
+        var subview = subviews[i];
+        if ([subview isKindOfClass:[UIElementView class]] && CGRectContainsPoint([subview frame], localPoint)) {
+
+            if ([[self canvas] isViewSelected:subview])
+            {
+                    return subview;
+            }
+
+            // A subview is under the point, recurse into it.
+            var deeperView = [self _findSelectedSubviewUnderPoint:canvasPoint startingFromView:subview];
+
+            if (deeperView)
+                return deeperView;
+            }
+    }
+
+    return nil;
+}
+
+- (UIElementView)_findSubviewUnderPoint:(CGPoint)canvasPoint startingFromView:(UIElementView)topView
+{
+    var localPoint = [topView convertPoint:canvasPoint fromView:[self canvas]];
+    var subviews = [topView subviews];
+
+    // Search children first, in reverse order to check top-most views first
+    for (var i = [subviews count] - 1; i >= 0; i--) {
+        var subview = subviews[i];
+
+        if ([subview isKindOfClass:[UIElementView class]] && CGRectContainsPoint([subview frame], localPoint))
+            return subview;
+    }
+
+    return nil;
+}
+
+
 - (void)mouseDown:(CPEvent)theEvent
 {
     var canvas = [self canvas];
@@ -551,6 +594,35 @@ var _classMap = [CPMutableDictionary dictionary];
 
     // First, check if we clicked a resize handle
     _activeHandle = [self handleAtPoint:localPoint];
+
+    // Drill down (every click selects one view deeper)
+    if (_activeHandle == kUIElementNoHandle && !([theEvent modifierFlags] & CPShiftKeyMask) && !([theEvent modifierFlags] & CPCommandKeyMask))
+    {
+        var canvasPoint = [canvas convertPoint:[theEvent locationInWindow] fromView:nil];
+
+        // Find the deepest selected view under the cursor, starting the search from the top-most view hit by the event (`self`).
+        var targetView = [self _findSelectedSubviewUnderPoint:canvasPoint startingFromView:self];
+
+        // no subview is selected, so we select ourself unless we are already selected
+        if (!targetView)
+        {
+            if ([[self canvas] isViewSelected:self])
+            {
+                var peek;
+
+                while (peek = [self _findSubviewUnderPoint:canvasPoint startingFromView:self])
+                    targetView = peek;
+            }
+            else
+                targetView = self;
+        }
+
+        [canvas deselectViews];
+        [canvas selectView:targetView state:YES];
+
+        // Consume the event to prevent dragging the container
+        return;
+    }
 
     // No handle was clicked, proceed with selection and movement logic
     if ([theEvent modifierFlags] & CPShiftKeyMask)

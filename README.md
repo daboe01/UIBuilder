@@ -64,11 +64,10 @@ This is just the beginning. Our roadmap is focused on making Espresso an indispe
 
 ### ⚙️ Phase 2: The Inspector Deep-Dive (In Progress)
 - [x] Context-aware **Property Inspector Panel** to view element properties.
-- [x] **Live Preview Mode** to generate and run the native UI.
 - [x] **Live Property Editing:** Change an element's title, color, or state in the inspector and see it update instantly on the canvas.
 - [x] **Geometry & Sizing:** Precise numeric input for an element's position and size.
 - [ ] **Full support for all properties:** Currently only a few properties of a few views are implemented to demonstrate the concepts.
 
-### 💾 Phase 3: Persistency & Code Generation
+### 💾 Phase 3: Persistency
 - [ ] **Project Persistency:** Save and load your visual UI designs to and from a file (`.xib` or `.cib` equivalent).
 - [ ] **Outlet & Action Generation:** Visually connect elements to "File's Owner" to automatically generate Objective-J outlet and action stubs in your controller files.

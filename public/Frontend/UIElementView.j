@@ -37,6 +37,19 @@
 @class UIHSpaceView;
 @class UIVSpaceView;
 @class UICanvasView;
+@class UITabViewView;
+@class UITabViewItemView;
+@class UICustomView;
+@class UIOwnerView;
+
+// Keys every element view watches in addition to its persistent properties.
+var UIBObservedKeys = ["value", "title", "halign", "valign", "width", "height", "markupKeys", "items", "columns",
+                       "identifier", "markupTag", "hasBorder", "selectedTabIndex", "isIndeterminate", "minValue",
+                       "maxValue", "style", "vertical", "pullsDown", "actions", "outlets", "color", "horizontalTextAlign"];
+
+// Changes to these keys can change the size an element wants in a box.
+var UIBLayoutKeys = { "value": YES, "title": YES, "halign": YES, "valign": YES, "width": YES, "height": YES,
+                      "markupKeys": YES, "items": YES, "selectedTabIndex": YES, "hasBorder": YES };
 
 var _classMap = [CPMutableDictionary dictionary];
 
@@ -90,6 +103,11 @@ var _classMap = [CPMutableDictionary dictionary];
         [self registerViewClass:UIHSpaceView forElementType:@"hspace"];
         [self registerViewClass:UIVSpaceView forElementType:@"vspace"];
         [self registerViewClass:UICanvasView forElementType:@"canvas"];
+        [self registerViewClass:UITabViewView forElementType:@"tabView"];
+        [self registerViewClass:UITabViewItemView forElementType:@"tabViewItem"];
+        [self registerViewClass:UICustomView forElementType:@"custom"];
+        [self registerViewClass:UIOwnerView forElementType:@"owner"];
+        [self registerViewClass:UIProgressIndicatorView forElementType:@"progressIndicator"];
     }
 }
 
@@ -144,8 +162,8 @@ var _classMap = [CPMutableDictionary dictionary];
 + (CPDictionary)propertyEnumerations
 {
     return @{
-                "halign": ["expand", "min"],
-                "valign": ["expand", "min"]
+                "halign": UIBHorizontalAlignValues,
+                "valign": UIBVerticalAlignValues
             }
 }
 
@@ -158,11 +176,18 @@ var _classMap = [CPMutableDictionary dictionary];
 {
     var menu = [[CPMenu alloc] initWithTitle:@""];
 
+    [menu addItemWithTitle:@"Cut" action:@selector(cut:) keyEquivalent:@""];
     [menu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@""];
     [menu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@""];
+    [menu addItemWithTitle:@"Duplicate" action:@selector(duplicate:) keyEquivalent:@""];
+    [menu addItemWithTitle:@"Delete" action:@selector(delete:) keyEquivalent:@""];
     [menu addItem:[CPMenuItem separatorItem]];
-    [menu addItemWithTitle:@"Group in hbox" action:@selector(groupInHBox:) keyEquivalent:@""];
-    [menu addItemWithTitle:@"Group in vbox" action:@selector(groupInVBox:) keyEquivalent:@""];
+    [menu addItemWithTitle:@"Group in HBox" action:@selector(groupInHBox:) keyEquivalent:@""];
+    [menu addItemWithTitle:@"Group in VBox" action:@selector(groupInVBox:) keyEquivalent:@""];
+    [menu addItemWithTitle:@"Ungroup" action:@selector(ungroup:) keyEquivalent:@""];
+    [menu addItem:[CPMenuItem separatorItem]];
+    [menu addItemWithTitle:@"Move Earlier" action:@selector(moveEarlier:) keyEquivalent:@""];
+    [menu addItemWithTitle:@"Move Later" action:@selector(moveLater:) keyEquivalent:@""];
 
     return menu;
 }
@@ -239,12 +264,21 @@ var _classMap = [CPMutableDictionary dictionary];
     [super dealloc];
 }
 
++ (CPArray)observedProperties
+{
+    var result = [[self persistentProperties] copy] || [];
+    for (var i = 0; i < UIBObservedKeys.length; i++)
+        if (result.indexOf(UIBObservedKeys[i]) < 0)
+            result.push(UIBObservedKeys[i]);
+    return result;
+}
+
 - (void)setDataObject:(id)newDataObject
 {
     var oldDataObject = [self dataObject];
-    if (newDataObject != oldDataObject)
+    if (newDataObject !== oldDataObject)
     {
-        var properties = [[self class] persistentProperties];
+        var properties = [[self class] observedProperties];
         if (oldDataObject)
             for (var i = 0; i < [properties count]; i++)
                 [oldDataObject removeObserver:self forKeyPath:properties[i]];
@@ -266,18 +300,10 @@ var _classMap = [CPMutableDictionary dictionary];
 {
     if (context == self)
     {
-        if ([keyPath isEqualToString:@"halign"] || [keyPath isEqualToString:@"valign"] || [keyPath isEqualToString:@"value"])
-        {
-            var superview = [self superview];
-            if (superview)
-            {
-                [superview setNeedsLayout:YES];
-            }
-        }
-        else
-        {
-            [self setNeedsDisplay:YES];
-        }
+        if (UIBLayoutKeys[keyPath])
+            [self invalidateLayoutUpwards];
+
+        [self setNeedsDisplay:YES];
     }
     else
     {
@@ -371,6 +397,99 @@ var _classMap = [CPMutableDictionary dictionary];
         [self setFrame:frame];
         [[self superview] setNeedsLayout:YES];
     }
+}
+
+#pragma mark -
+#pragma mark *** Root Container ***
+
+// The frame the root vbox of a container (window, scroll view, split view) should fill.
+- (CGRect)rootContainerFrame
+{
+    return [self bounds];
+}
+
+- (void)setFrameSize:(CGSize)aSize
+{
+    var oldSize = [self frame].size;
+    [super setFrameSize:aSize];
+
+    if (_isContainer)
+    {
+        [self _syncRootContainerFrame];
+
+        if (oldSize.width !== aSize.width || oldSize.height !== aSize.height)
+            [self setNeedsLayout:YES];
+    }
+}
+
+// Keeps the root vbox the same size as its container. This is derived state,
+// so it is never recorded for undo on its own.
+- (void)_syncRootContainerFrame
+{
+    var subviews = [self subviews],
+        frame = [self rootContainerFrame];
+
+    for (var i = 0; i < [subviews count]; i++)
+    {
+        var subview = subviews[i];
+
+        if (![subview isKindOfClass:[UIElementView class]] || ![[subview dataObject] valueForKey:@"isRootVBox"])
+            continue;
+
+        var data = [subview dataObject];
+        UIBPerformWithoutUndo(function()
+        {
+            [data setValue:frame.origin.x forKey:@"originX"];
+            [data setValue:frame.origin.y forKey:@"originY"];
+            [data setValue:frame.size.width forKey:@"width"];
+            [data setValue:frame.size.height forKey:@"height"];
+        });
+    }
+}
+
+#pragma mark -
+#pragma mark *** Layout Sizes ***
+
+// A change of this element's preferred size affects every enclosing box.
+- (void)invalidateLayoutUpwards
+{
+    var view = self;
+    while (view && [view isKindOfClass:[UIElementView class]])
+    {
+        [view setNeedsLayout:YES];
+        [view setNeedsDisplay:YES];
+        view = [view superview];
+    }
+}
+
+// YES if the markup fixes this dimension (width or height).
+- (BOOL)hasExplicitSizeForKey:(CPString)aKey
+{
+    var markupKeys = [[self dataObject] valueForKey:@"markupKeys"] || [];
+    return markupKeys.indexOf(aKey) >= 0;
+}
+
+// The size the element would like without an explicit width/height.
+// Subclasses measure their content (labels, buttons, boxes, ...).
+- (CGSize)intrinsicContentSize
+{
+    var data = [self dataObject];
+    return CGSizeMake(Number([data valueForKey:@"width"]) || [self frame].size.width,
+                      Number([data valueForKey:@"height"]) || [self frame].size.height);
+}
+
+// The size a box uses for this element: explicit sizes win over the intrinsic size.
+- (CGSize)preferredLayoutSize
+{
+    var size = [self intrinsicContentSize],
+        data = [self dataObject];
+
+    if ([self hasExplicitSizeForKey:@"width"])
+        size.width = Number([data valueForKey:@"width"]) || size.width;
+    if ([self hasExplicitSizeForKey:@"height"])
+        size.height = Number([data valueForKey:@"height"]) || size.height;
+
+    return CGSizeMake(MAX(0, size.width), MAX(0, size.height));
 }
 
 #pragma mark -
@@ -473,8 +592,8 @@ var _classMap = [CPMutableDictionary dictionary];
 
 - (void)drawHandles
 {
-    var halign = [[self dataObject] valueForKey:@"halign"] || @"expand";
-    var valign = [[self dataObject] valueForKey:@"valign"] || @"expand";
+    var halign = UIBAlignKind([[self dataObject] valueForKey:@"halign"]);
+    var valign = UIBAlignKind([[self dataObject] valueForKey:@"valign"]);
 
     [[CPColor controlDarkShadowColor] setFill];
 
@@ -506,8 +625,8 @@ var _classMap = [CPMutableDictionary dictionary];
 {
     if (![self isSelected]) return kUIElementNoHandle;
 
-    var halign = [[self dataObject] valueForKey:@"halign"];
-    var valign = [[self dataObject] valueForKey:@"valign"];
+    var halign = UIBAlignKind([[self dataObject] valueForKey:@"halign"]);
+    var valign = UIBAlignKind([[self dataObject] valueForKey:@"valign"]);
 
     for (var i = 1; i <= 8; i++)
     {
@@ -548,7 +667,7 @@ var _classMap = [CPMutableDictionary dictionary];
     // Search children first, in reverse order to check top-most views first
     for (var i = [subviews count] - 1; i >= 0; i--) {
         var subview = subviews[i];
-        if ([subview isKindOfClass:[UIElementView class]] && CGRectContainsPoint([subview frame], localPoint)) {
+        if ([subview isKindOfClass:[UIElementView class]] && ![subview isHidden] && CGRectContainsPoint([subview frame], localPoint)) {
 
             if ([[self canvas] isViewSelected:subview])
             {
@@ -575,7 +694,7 @@ var _classMap = [CPMutableDictionary dictionary];
     for (var i = [subviews count] - 1; i >= 0; i--) {
         var subview = subviews[i];
 
-        if ([subview isKindOfClass:[UIElementView class]] && CGRectContainsPoint([subview frame], localPoint))
+        if ([subview isKindOfClass:[UIElementView class]] && ![subview isHidden] && CGRectContainsPoint([subview frame], localPoint))
             return subview;
     }
 
@@ -647,6 +766,11 @@ var _classMap = [CPMutableDictionary dictionary];
 - (void)mouseDragged:(CPEvent)theEvent
 {
     var canvas = [self canvas];
+
+    // The drag was cancelled (Escape) or never started.
+    if (!canvas || ![canvas isDragActive])
+        return;
+
     var mouseLoc = [canvas convertPoint:[theEvent locationInWindow] fromView:nil];
 
     if (!_lastMouseLoc) {
@@ -704,29 +828,33 @@ var _classMap = [CPMutableDictionary dictionary];
         var processedHBoxes = [CPSet set];
         var processedVBoxes = [CPSet set];
 
+        var builder = [canvas delegate];
+
         for (var i = 0; i < [selectedViews count]; i++)
         {
             var view = selectedViews[i];
-            var appController = [CPApp delegate];
             var isFreeForm = YES;
 
             // --- Handle Horizontal Drag (within an HBox) ---
+            // Moving an element inside a box changes the spacer in front of it.
+            // Spacers created here are part of the drag's single undo step.
             var hBoxParent = [view superview];
             if ([hBoxParent isKindOfClass:[UIHBoxView class]] && ![processedHBoxes containsObject:hBoxParent])
             {
                 isFreeForm = NO;
-                var viewIndex = [[hBoxParent subviews] indexOfObject:view];
-                var precedingView = (viewIndex > 0) ? [[hBoxParent subviews] objectAtIndex:viewIndex - 1] : nil;
+                var siblings = [hBoxParent subviews];
+                var viewIndex = [siblings indexOfObject:view];
+                var spacerData = nil;
 
                 if ([view isKindOfClass:[UIHSpaceView class]])
-                    precedingView = view;
+                    spacerData = [view dataObject];
+                else if (viewIndex > 0 && [siblings[viewIndex - 1] isKindOfClass:[UIHSpaceView class]])
+                    spacerData = [siblings[viewIndex - 1] dataObject];
+                else if (deltaX !== 0 && [builder respondsToSelector:@selector(insertSpacerOfType:inParent:atIndex:)])
+                    spacerData = [builder insertSpacerOfType:@"hspace" inParent:[hBoxParent dataObject] atIndex:viewIndex];
 
-                else if (!precedingView || ![precedingView isKindOfClass:[UIHSpaceView class]])
-                    precedingView = [appController addNewElementOfType:@"hspace" atPoint:CGPointMake(0,0) inParent:[hBoxParent dataObject] atIndex:viewIndex];
-                
-                var currentWidth = [[precedingView dataObject] valueForKey:@"width"];
-                var newWidth = currentWidth + deltaX;
-                [[precedingView dataObject] setValue:MAX(0, newWidth) forKey:@"width"];
+                if (spacerData)
+                    [spacerData setValue:MAX(0, (Number([spacerData valueForKey:@"width"]) || 0) + deltaX) forKey:@"width"];
 
                 [hBoxParent setNeedsLayout:YES];
                 [processedHBoxes addObject:hBoxParent];
@@ -743,22 +871,20 @@ var _classMap = [CPMutableDictionary dictionary];
                 if ([vBoxParent isKindOfClass:[UIVBoxView class]] && ![processedVBoxes containsObject:vBoxParent])
                 {
                     isFreeForm = NO;
-                    var viewIndex = [[vBoxParent subviews] indexOfObject:itemInVBox];
-                    var precedingView = (viewIndex > 0) ? [[vBoxParent subviews] objectAtIndex:viewIndex - 1] : nil;
+                    var rows = [vBoxParent subviews];
+                    var rowIndex = [rows indexOfObject:itemInVBox];
+                    var vSpacerData = nil;
 
-                    if ([itemInVBox isKindOfClass:[UIVSpaceView class]]) {
-                        precedingView = itemInVBox;
-                    }
+                    if ([itemInVBox isKindOfClass:[UIVSpaceView class]])
+                        vSpacerData = [itemInVBox dataObject];
+                    else if (rowIndex > 0 && [rows[rowIndex - 1] isKindOfClass:[UIVSpaceView class]])
+                        vSpacerData = [rows[rowIndex - 1] dataObject];
+                    else if (deltaY !== 0 && [builder respondsToSelector:@selector(insertSpacerOfType:inParent:atIndex:)])
+                        vSpacerData = [builder insertSpacerOfType:@"vspace" inParent:[vBoxParent dataObject] atIndex:rowIndex];
 
-                    if (!precedingView || ![precedingView isKindOfClass:[UIVSpaceView class]]) {
-                        precedingView = [appController addNewElementOfType:@"vspace" atPoint:CGPointMake(0,0) inParent:[vBoxParent dataObject] atIndex:viewIndex];
-                        [[precedingView dataObject] setValue:0 forKey:@"height"];
-                    }
+                    if (vSpacerData)
+                        [vSpacerData setValue:MAX(0, (Number([vSpacerData valueForKey:@"height"]) || 0) + deltaY) forKey:@"height"];
 
-                    var currentHeight = [[precedingView dataObject] valueForKey:@"height"];
-                    var newHeight = currentHeight + deltaY;
-                    [[precedingView dataObject] setValue:MAX(0, newHeight) forKey:@"height"];
-                    
                     [vBoxParent setNeedsLayout:YES];
                     [processedVBoxes addObject:vBoxParent];
                 }
@@ -785,25 +911,27 @@ var _classMap = [CPMutableDictionary dictionary];
     }
 }
 
+- (void)resetMouseTrackingState
+{
+    _isConnecting = NO;
+    _activeHandle = kUIElementNoHandle;
+    _lastMouseLoc = nil;
+    [[CPCursor arrowCursor] set];
+}
+
 - (void)mouseUp:(CPEvent)theEvent
 {
     var canvas = [self canvas];
-    var wasCanceling = [canvas isCancelingDrag];
 
-    // Critical: Signal drag end before any logic that might trigger a new state.
-    [canvas dragDidEnd];
-
-    if (wasCanceling)
+    // The drag was cancelled with Escape: nothing to commit.
+    if (!theEvent || !canvas || ![canvas isDragActive])
     {
-        // Reset local state and prevent any commit actions.
-        _isConnecting = NO;
-        _activeHandle = kUIElementNoHandle;
-        _lastMouseLoc = nil;
-        [[CPCursor arrowCursor] set];
+        [self resetMouseTrackingState];
         return;
     }
 
     var mouseLoc = [canvas convertPoint:[theEvent locationInWindow] fromView:nil];
+    var actionName = nil;
 
     if (_isConnecting)
     {
@@ -846,6 +974,7 @@ var _classMap = [CPMutableDictionary dictionary];
         _lastMouseLoc = nil;
         [canvas setNeedsDisplay:YES];
         [canvas elementDidResize:self];
+        actionName = @"Resize";
     }
     else
     {
@@ -854,7 +983,11 @@ var _classMap = [CPMutableDictionary dictionary];
         _lastMouseLoc = nil;
         [canvas setNeedsDisplay:YES];
         [canvas elementDidMove:self];
+        actionName = @"Move";
     }
+
+    // Commit the whole drag as a single undo step (no-op if nothing changed).
+    [canvas dragDidEndWithActionName:actionName];
 }
 
 - (void)_resizeWithEvent:(CPEvent)theEvent
@@ -1018,9 +1151,31 @@ var _classMap = [CPMutableDictionary dictionary];
 
 - (id)nativeUIElementWithMap:(CPMutableDictionary)aMap
 {
-    // Base implementation returns a generic view with a red background to indicate it's not a real UI element.
     var view = [[CPView alloc] initWithFrame:[self frame]];
-    [view setBackgroundColor:[CPColor redColor]];
+
+    if (_isContainer)
+    {
+        // Layout containers become plain views holding their native children.
+        var subviews = [self subviews];
+        for (var i = 0; i < [subviews count]; i++)
+        {
+            if ([subviews[i] isKindOfClass:[UIElementView class]])
+                [view addSubview:[subviews[i] nativeUIElementWithMap:aMap]];
+        }
+    }
+    else
+    {
+        // Elements without a native implementation yet: a labelled placeholder.
+        [view setBackgroundColor:[CPColor colorWithCalibratedWhite:0.85 alpha:1.0]];
+
+        var label = [[CPTextField alloc] initWithFrame:[view bounds]];
+        [label setStringValue:[[self dataObject] valueForKey:@"type"] || @""];
+        [label setAlignment:CPCenterTextAlignment];
+        [label setTextColor:[CPColor darkGrayColor]];
+        [label setFont:[CPFont systemFontOfSize:10]];
+        [label setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+        [view addSubview:label];
+    }
 
     if (aMap)
     {
@@ -1047,6 +1202,15 @@ var _classMap = [CPMutableDictionary dictionary];
     [[self canvas] paste:sender];
 }
 
+- (void)cut:(id)sender       { [[self canvas] cut:sender]; }
+- (void)delete:(id)sender    { [[self canvas] delete:sender]; }
+- (void)duplicate:(id)sender { [[self canvas] duplicate:sender]; }
+- (void)groupInHBox:(id)sender { [[self canvas] groupInHBox:sender]; }
+- (void)groupInVBox:(id)sender { [[self canvas] groupInVBox:sender]; }
+- (void)ungroup:(id)sender   { [[self canvas] ungroup:sender]; }
+- (void)moveEarlier:(id)sender { [[self canvas] moveEarlier:sender]; }
+- (void)moveLater:(id)sender { [[self canvas] moveLater:sender]; }
+
 - (BOOL)validateMenuItem:(CPMenuItem)aMenuItem
 {
     // Forward validation to the canvas, which is the main handler.
@@ -1068,3 +1232,96 @@ var _classMap = [CPMutableDictionary dictionary];
 
 @end
 
+
+
+// --- Box layout (Renaissance-style) ---
+
+UIBStackPadding = 4;
+
+// The element views among someViews that take part in layout.
+UIBLayoutViews = function(someViews)
+{
+    var result = [];
+    for (var i = 0; i < someViews.length; i++)
+    {
+        var view = someViews[i];
+        if ([view isKindOfClass:[UIElementView class]] && ![view isHidden])
+            result.push(view);
+    }
+    return result;
+};
+
+/*!
+    Lays out views along one axis inside aRect, like a Renaissance vbox/hbox:
+    along the axis, "expand" elements share the remaining space and all
+    others get their preferred size; across the axis each element is
+    aligned min / center / max or stretched (expand).
+*/
+UIBLayoutStack = function(someViews, aRect, isVertical)
+{
+    var views = UIBLayoutViews(someViews),
+        mainAlignKey = isVertical ? "valign" : "halign",
+        crossAlignKey = isVertical ? "halign" : "valign",
+        available = isVertical ? aRect.size.height : aRect.size.width,
+        crossAvailable = isVertical ? aRect.size.width : aRect.size.height,
+        preferred = [],
+        fixedTotal = 0,
+        expanders = 0;
+
+    for (var i = 0; i < views.length; i++)
+    {
+        var size = [views[i] preferredLayoutSize];
+        preferred.push(size);
+
+        if (UIBAlignKind([[views[i] dataObject] valueForKey:mainAlignKey]) === "expand")
+            expanders++;
+        else
+            fixedTotal += isVertical ? size.height : size.width;
+    }
+
+    var flexible = expanders ? MAX(0, (available - fixedTotal) / expanders) : 0,
+        position = isVertical ? aRect.origin.y : aRect.origin.x,
+        crossStart = isVertical ? aRect.origin.x : aRect.origin.y;
+
+    for (var i = 0; i < views.length; i++)
+    {
+        var view = views[i],
+            data = [view dataObject],
+            size = preferred[i],
+            mainSize = (UIBAlignKind([data valueForKey:mainAlignKey]) === "expand") ? flexible : (isVertical ? size.height : size.width),
+            crossKind = UIBAlignKind([data valueForKey:crossAlignKey]),
+            crossPreferred = isVertical ? size.width : size.height,
+            crossSize = (crossKind === "expand") ? crossAvailable : MIN(crossPreferred, MAX(0, crossAvailable)),
+            offset = 0;
+
+        if (crossKind === "center")
+            offset = (crossAvailable - crossSize) / 2;
+        else if (crossKind === "max")
+            offset = crossAvailable - crossSize;
+
+        var frame = isVertical ? CGRectMake(crossStart + offset, position, crossSize, mainSize)
+                               : CGRectMake(position, crossStart + offset, mainSize, crossSize);
+
+        if (!CGRectEqualToRect([view frame], frame))
+            [view setFrame:frame];
+
+        position += mainSize;
+    }
+};
+
+// The size needed to show someViews stacked along one axis.
+UIBFittingStackSize = function(someViews, isVertical)
+{
+    var views = UIBLayoutViews(someViews),
+        main = 0,
+        cross = 0;
+
+    for (var i = 0; i < views.length; i++)
+    {
+        var size = [views[i] preferredLayoutSize];
+        main += isVertical ? size.height : size.width;
+        cross = MAX(cross, isVertical ? size.width : size.height);
+    }
+
+    return isVertical ? CGSizeMake(cross, main) : CGSizeMake(main, cross);
+};

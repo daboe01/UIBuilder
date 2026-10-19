@@ -34,6 +34,13 @@
 @import "UIBoxView.j";
 @import "UIHBoxView.j";
 @import "UIVBoxView.j";
+@import "UIHSpaceView.j";
+@import "UIVSpaceView.j";
+@import "UITabViewView.j";
+@import "UICustomView.j";
+@import "UIOwnerView.j";
+@import "UIBSkeletons.j";
+@import "CappusanceCodec.j";
 
 
 function treshold(value, limit)
@@ -73,6 +80,10 @@ function treshold(value, limit)
     UIElementView   _connectionTarget;
     BOOL            _connectionMade;
 
+    // Fast lookups (documents can have thousands of elements)
+    JSObject        _viewsByID;
+    JSObject        _selectedIDs;
+
     // Drag cancellation state
     UIElementView   _draggedElement;
     CPArray         _originalFrames;
@@ -84,10 +95,24 @@ function treshold(value, limit)
     return _isCancelingDrag;
 }
 
+// YES between the mouse down on an element and the matching mouse up (or Escape).
+- (BOOL)isDragActive
+{
+    return _draggedElement != nil;
+}
+
 - (void)dragDidStart:(UIElementView)anElement
 {
+    // Close a bracket that never saw its mouse up (should not happen, but never leave undo suspended).
+    if (_draggedElement)
+        [self dragDidEndWithActionName:nil];
+
     _draggedElement = anElement;
     _isCancelingDrag = NO;
+
+    // Everything that happens until the mouse goes up becomes one undo step.
+    if (_delegate && [_delegate respondsToSelector:@selector(beginInteractiveChange)])
+        [_delegate beginInteractiveChange];
 
     if (![_draggedElement isConnecting])
     {
@@ -102,11 +127,22 @@ function treshold(value, limit)
     }
 }
 
-- (void)dragDidEnd
+- (void)dragDidEndWithActionName:(CPString)anActionName
 {
+    if (!_draggedElement)
+        return;
+
     _draggedElement = nil;
     _originalFrames = nil;
     _isCancelingDrag = NO;
+
+    if (_delegate && [_delegate respondsToSelector:@selector(endInteractiveChangeWithActionName:)])
+        [_delegate endInteractiveChangeWithActionName:anActionName];
+}
+
+- (void)dragDidEnd
+{
+    [self dragDidEndWithActionName:nil];
 }
 
 -(BOOL)acceptsFirstMouse:(CPEvent)aEvent
@@ -151,8 +187,13 @@ var _selectedConnectionsObservationContext = 1095;
             UIHBoxDragType,
             UIVBoxDragType,
             UIHSpaceDragType,
-            UIVSpaceDragType
+            UIVSpaceDragType,
+            UITabViewDragType,
+            UICustomViewDragType
         ]];
+
+        _viewsByID = {};
+        _selectedIDs = {};
 
         _connectionView = [[ConnectionView alloc] initWithFrame:[self bounds]];
         [_connectionView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
@@ -265,44 +306,48 @@ var _selectedConnectionsObservationContext = 1095;
     if (!dataObjects || dataObjects == [CPNull null] || [dataObjects count] === 0)
         return;
 
-    var canvasWindow = [self window];
-    if (!canvasWindow) {
-        console.error("FATAL: Canvas has no window. Cannot create views.");
-        return;
-    }
+    [self _createViewsForDataObjects:dataObjects];
+}
 
-    var objectsToProcess = [dataObjects mutableCopy];
-    var successfullyAdded;
-    var lastCount = 0;
+// Creates views for new data objects, parents before children.
+- (void)_createViewsForDataObjects:(CPArray)dataObjects
+{
+    var pending = dataObjects.slice();
 
-    while ([objectsToProcess count] > 0 && [objectsToProcess count] != lastCount) {
-        lastCount = [objectsToProcess count];
-        successfullyAdded = [CPMutableArray array];
+    while (pending.length)
+    {
+        var deferred = [];
 
-        for (var i = 0; i < [objectsToProcess count]; i++) {
-            var newDataObject = objectsToProcess[i];
-            var parentID = [newDataObject valueForKey:@"parentID"];
-            var parentView = nil;
+        for (var i = 0; i < pending.length; i++)
+        {
+            var dataObject = pending[i],
+                parentID = [dataObject valueForKey:@"parentID"],
+                parentView = parentID ? [self viewForElementWithID:parentID] : nil;
 
-            if (parentID) {
-                parentView = [self viewForElementWithID:parentID];
+            if (parentID && !parentView)
+            {
+                deferred.push(dataObject);
+                continue;
             }
 
-            if (!parentID || parentView) {
-                var superview = parentView || self;
-                [self _createViewForDataObject:newDataObject superview:superview window:canvasWindow];
-                [successfullyAdded addObject:newDataObject];
-            }
+            var index = -1;
+            if (parentView)
+                index = ([[parentView dataObject] valueForKey:@"children"] || []).indexOf(dataObject);
+
+            [self _createViewForDataObject:dataObject superview:parentView || self window:[self window] atIndex:index];
         }
 
-        [objectsToProcess removeObjectsInArray:successfullyAdded];
+        if (deferred.length === pending.length)
+        {
+            for (var i = 0; i < deferred.length; i++)
+                console.error("UICanvasView: Could not create view for object:", deferred[i], ". Parent view not found.");
+            break;
+        }
+
+        pending = deferred;
     }
 
-    if ([objectsToProcess count] > 0) {
-        for (var i = 0; i < [objectsToProcess count]; i++) {
-            console.error("UICanvasView: Could not create view for object during initial load:", objectsToProcess[i], ". Parent view not found.");
-        }
-    }
+    [self setNeedsLayout:YES];
 }
 
 - (void)_createViewForDataObject:(CPDictionary)dataObject superview:(CPView)superview window:(CPWindow)aWindow atIndex:(int)index
@@ -320,12 +365,14 @@ var _selectedConnectionsObservationContext = 1095;
         return;
     }
 
-    if (index >= 0 && [superview respondsToSelector:@selector(_insertSubview:atIndex:)])
+    if (index >= 0 && index < [[superview subviews] count] && [superview respondsToSelector:@selector(_insertSubview:atIndex:)])
         [superview _insertSubview:newView atIndex:index];
     else
         [superview addSubview:newView];
-        
+
     [newView setDataObject:dataObject];
+    _viewsByID[[dataObject valueForKey:@"id"]] = newView;
+    [superview setNeedsLayout:YES];
 
     // Bind common properties
     [newView bind:@"originX" toObject:dataObject withKeyPath:@"originX" options:nil];
@@ -348,31 +395,49 @@ var _selectedConnectionsObservationContext = 1095;
 {
     if (!dataObjects || dataObjects == [CPNull null]) return;
 
-    var viewsToRemove = [CPMutableArray array];
-    [self _findViewsForDataObjects:dataObjects inView:self foundViews:viewsToRemove];
-    
-    for (var i = 0; i < [viewsToRemove count]; i++) {
-        var viewToRemove = viewsToRemove[i];
-        [self _removeViewAndChildren:viewToRemove];
+    for (var i = 0; i < dataObjects.length; i++)
+    {
+        var view = _viewsByID[[dataObjects[i] valueForKey:@"id"]];
+        if (view && [view dataObject] === dataObjects[i])
+            [self _removeViewAndChildren:view];
     }
 }
 
 - (void)_removeViewAndChildren:(UIElementView)viewToRemove
 {
+    var isElement = [viewToRemove isKindOfClass:[UIElementView class]],
+        oldSuperview = [viewToRemove superview];
+
     // Unbind everything before removing
-    [viewToRemove unbind:@"value"];
-    [viewToRemove unbind:@"originX"];
-    [viewToRemove unbind:@"originY"];
-    [viewToRemove unbind:@"width"];
-    [viewToRemove unbind:@"height"];
+    if (isElement)
+    {
+        [viewToRemove unbind:@"value"];
+        [viewToRemove unbind:@"originX"];
+        [viewToRemove unbind:@"originY"];
+        [viewToRemove unbind:@"width"];
+        [viewToRemove unbind:@"height"];
+    }
 
     var subviews = [[viewToRemove subviews] copy];
     for (var i = 0; i < [subviews count]; i++)
     {
-        [self _removeViewAndChildren:subviews[i]];
+        if ([subviews[i] isKindOfClass:[UIElementView class]])
+            [self _removeViewAndChildren:subviews[i]];
+    }
+
+    // Stop observing the data object: it may come back through redo and get a new view.
+    if (isElement)
+    {
+        var elementID = [[viewToRemove dataObject] valueForKey:@"id"];
+        if (_viewsByID[elementID] === viewToRemove)
+            delete _viewsByID[elementID];
+        [viewToRemove setDataObject:nil];
     }
 
     [viewToRemove removeFromSuperview];
+
+    if (oldSuperview && oldSuperview !== self)
+        [oldSuperview setNeedsLayout:YES];
 }
 
 - (void)observeValueForKeyPath:(CPString)keyPath ofObject:(id)object change:(CPDictionary)change context:(id)context
@@ -380,94 +445,29 @@ var _selectedConnectionsObservationContext = 1095;
     if (context == _dataObjectsObservationContext)
     {
         var newDataObjects = [object valueForKeyPath:_dataObjectsKeyPath];
-        var oldDataObjects = _oldDataObjects;
+        if (!newDataObjects || newDataObjects == [CPNull null])
+            newDataObjects = [];
 
-        var added = [newDataObjects mutableCopy];
-        [added removeObjectsInArray:oldDataObjects];
+        var oldDataObjects = _oldDataObjects || [],
+            oldSet = new Set(oldDataObjects),
+            newSet = new Set(newDataObjects);
 
-        if ([added count] > 0)
-        {
-            var successfullyAdded;
-            var lastCount = 0;
+        var removed = oldDataObjects.filter(function(anObject) { return !newSet.has(anObject); }),
+            added = newDataObjects.filter(function(anObject) { return !oldSet.has(anObject); });
 
-            while ([added count] > 0 && [added count] != lastCount) {
-                lastCount = [added count];
-                successfullyAdded = [CPMutableArray array];
-
-                for (var i = 0; i < [added count]; i++) {
-                    var newDataObject = added[i];
-                    var parentID = [newDataObject valueForKey:@"parentID"];
-                    var parentView = nil;
-
-                    if (parentID) {
-                        parentView = [self viewForElementWithID:parentID];
-                    }
-
-                    if (!parentID || parentView) {
-                        var superview = parentView || self;
-                        var index = -1;
-                        if (parentView)
-                        {
-                            var parentData = [parentView dataObject];
-                            var siblingData = [parentData valueForKey:@"children"];
-                            index = [siblingData indexOfObject:newDataObject];
-                        }
-                        
-                        [self _createViewForDataObject:newDataObject superview:superview window:[self window] atIndex:index];
-                        [successfullyAdded addObject:newDataObject];
-                    }
-                }
-
-                [added removeObjectsInArray:successfullyAdded];
-            }
-
-            if ([added count] > 0) {
-                for (var i = 0; i < [added count]; i++) {
-                    console.error("UICanvasView: Could not create view for object:", added[i], ". Parent view not found.");
-                }
-            }
-        }
-
-        var removed = [oldDataObjects mutableCopy];
-        [removed removeObjectsInArray:newDataObjects];
         [self stopObservingDataObjects:removed];
 
-        _oldDataObjects = [newDataObjects copy];
+        if (added.length)
+            [self _createViewsForDataObjects:added];
+
+        _oldDataObjects = newDataObjects.slice();
+        [self _refreshSelection];
+        [self setNeedsLayout:YES];
         [self setNeedsDisplay:YES];
     }
     else if (context == _selectionIndexesObservationContext)
     {
-        var allDataObjects = [self dataObjects];
-        var newIndexes = [change objectForKey:CPKeyValueChangeNewKey] || [CPIndexSet indexSet];
-        var oldIndexes = [change objectForKey:CPKeyValueChangeOldKey] || [CPIndexSet indexSet];
-
-        // Find views for newly selected objects and redraw them
-        var newSelectedDataObjects = [allDataObjects objectsAtIndexes:newIndexes];
-        var newlySelectedViews = [CPMutableArray array];
-        [self _findViewsForDataObjects:newSelectedDataObjects inView:self foundViews:newlySelectedViews];
-        [newlySelectedViews makeObjectsPerformSelector:@selector(setNeedsDisplay:) withObject:YES];
-
-        // Find views for deselected objects and redraw them, but only if those objects still exist.
-        var previouslySelectedViews = [CPMutableArray array];
-        var oldSelectedDataObjects = [CPMutableArray array];
-        var lastIndex = [oldIndexes lastIndex];
-
-        if (lastIndex != CPNotFound && lastIndex < [allDataObjects count])
-        {
-             oldSelectedDataObjects = [allDataObjects objectsAtIndexes:oldIndexes];
-        }
-        else
-        {
-            // If the indexes are out of bounds, it likely means the objects were deleted.
-            // We need to find the views that were associated with the old indexes another way.
-            // This is a tricky state to recover from. For now, we will just redraw all views.
-            // A more sophisticated solution might involve caching view-data relationships.
-            [[self subviews] makeObjectsPerformSelector:@selector(setNeedsDisplay:) withObject:YES];
-            return;
-        }
-
-        [self _findViewsForDataObjects:oldSelectedDataObjects inView:self foundViews:previouslySelectedViews];
-        [previouslySelectedViews makeObjectsPerformSelector:@selector(setNeedsDisplay:) withObject:YES];
+        [self _refreshSelection];
     }
     else if (context == _connectionsObservationContext)
     {
@@ -488,9 +488,17 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (void)drawRect:(CPRect)rect
 {
-    // === START: Infographic Drawing ===
+    // === START: Infographic Drawing (only while the document has no windows) ===
 
-    var bounds = [self bounds];
+    var bounds = [self visibleRect],
+        hasWindows = NO,
+        subviewsForWatermark = [self subviews];
+
+    for (var w = 0; w < subviewsForWatermark.length && !hasWindows; w++)
+        if ([subviewsForWatermark[w] isKindOfClass:[UIWindowView class]])
+            hasWindows = YES;
+
+    if (!hasWindows) {
 
     // 1. Define text attributes for the infographic
     var titleFont = [CPFont fontWithName:@"Helvetica-Bold" size:36];
@@ -517,8 +525,10 @@ var _selectedConnectionsObservationContext = 1095;
     var features = [
         @"• Drag-and-Drop UI Creation",
         @"• Direct Manipulation: Move & Resize (Keyboard / Mouse)",
-        @"• Undo/Redo & Keyboard Navigation",
-        @"• Control-Draggin  -> Target-Action & Outlet Connections",
+        @"• Unlimited Undo/Redo for every edit (⌘Z / ⇧⌘Z)",
+        @"• Import & export Cappusance markup (File menu)",
+        @"• Cut, Copy, Paste, Duplicate, Group & Ungroup",
+        @"• Control-drag between elements for target/action & outlet connections",
         @"• Context sensitive inspector panel",
         @"• Run the 'real thing' in a separate native window",
         @"• Source: https://github.com/daboe01/UIBuilder"
@@ -529,15 +539,15 @@ var _selectedConnectionsObservationContext = 1095;
     var titleSize = [title sizeWithAttributes:titleAttributes];
     var subtitleSize = [subtitle sizeWithAttributes:subtitleAttributes];
     var totalHeight = titleSize.height + subtitleSize.height + ([features count] * 20) + 40; // Approximate total height
-    var currentY = (bounds.size.height - totalHeight) / 2.0;
+    var currentY = bounds.origin.y + (bounds.size.height - totalHeight) / 2.0;
 
     // Draw Title
-    var titlePoint = CGPointMake((bounds.size.width - titleSize.width) / 2.0, currentY);
+    var titlePoint = CGPointMake(bounds.origin.x + (bounds.size.width - titleSize.width) / 2.0, currentY);
     [title drawAtPoint:titlePoint withAttributes:titleAttributes];
     currentY += titleSize.height + 10;
 
     // Draw Subtitle
-    var subtitlePoint = CGPointMake((bounds.size.width - subtitleSize.width) / 2.0, currentY);
+    var subtitlePoint = CGPointMake(bounds.origin.x + (bounds.size.width - subtitleSize.width) / 2.0, currentY);
     [subtitle drawAtPoint:subtitlePoint withAttributes:subtitleAttributes];
     currentY += subtitleSize.height + 30;
 
@@ -545,11 +555,12 @@ var _selectedConnectionsObservationContext = 1095;
     for (var i = 0; i < [features count]; i++) {
         var feature = features[i];
         var featureSize = [feature sizeWithAttributes:featureAttributes];
-        var featurePoint = CGPointMake((bounds.size.width - featureSize.width) / 2.0, currentY);
+        var featurePoint = CGPointMake(bounds.origin.x + (bounds.size.width - featureSize.width) / 2.0, currentY);
         [feature drawAtPoint:featurePoint withAttributes:featureAttributes];
         currentY += featureSize.height + 5;
     }
 
+    }
     // === END: Infographic Drawing ===
 
     // The background is drawn by the window. We only draw the rubber-band.
@@ -707,14 +718,21 @@ var _selectedConnectionsObservationContext = 1095;
     return nil;
 }
 
-// Public method to start the search from the canvas itself.
+// Public method to look up the view of an element.
 - (UIElementView)viewForElementWithID:(CPString)elementID
 {
     if (!elementID)
         return nil;
 
-    // Start the recursive search from the top-level canvas view.
-    return [self _findViewForElementWithID:elementID inView:self];
+    var view = _viewsByID[elementID];
+    if (view && [view dataObject] && [[view dataObject] valueForKey:@"id"] === elementID)
+        return view;
+
+    // Fall back to a search (should not be needed).
+    view = [self _findViewForElementWithID:elementID inView:self];
+    if (view)
+        _viewsByID[elementID] = view;
+    return view;
 }
 
 - (void)drawConnectionFrom:(CGPoint)startPoint to:(CGPoint)endPoint
@@ -864,6 +882,73 @@ var _selectedConnectionsObservationContext = 1095;
     }
 }
 
+- (void)deleteBackward:(id)sender
+{
+    [self delete:sender];
+}
+
+- (void)deleteForward:(id)sender
+{
+    [self delete:sender];
+}
+
+- (void)undo:(id)sender
+{
+    var undoManager = [_delegate undoManager];
+    if ([undoManager canUndo])
+        [undoManager undo];
+    [self setNeedsDisplay:YES];
+}
+
+- (void)redo:(id)sender
+{
+    var undoManager = [_delegate undoManager];
+    if ([undoManager canRedo])
+        [undoManager redo];
+    [self setNeedsDisplay:YES];
+}
+
+- (CPUndoManager)undoManager
+{
+    return [_delegate undoManager] || [super undoManager];
+}
+
+- (void)duplicate:(id)sender
+{
+    if (_delegate && [_delegate respondsToSelector:@selector(duplicate:)])
+        [_delegate duplicate:sender];
+}
+
+- (void)selectAll:(id)sender
+{
+    if (_delegate && [_delegate respondsToSelector:@selector(selectAll:)])
+        [_delegate selectAll:sender];
+}
+
+- (void)selectParent:(id)sender
+{
+    if (_delegate && [_delegate respondsToSelector:@selector(selectParent:)])
+        [_delegate selectParent:sender];
+}
+
+- (void)ungroup:(id)sender
+{
+    if (_delegate && [_delegate respondsToSelector:@selector(ungroupSelection:)])
+        [_delegate ungroupSelection:sender];
+}
+
+- (void)moveEarlier:(id)sender
+{
+    if (_delegate && [_delegate respondsToSelector:@selector(moveSelectionEarlier:)])
+        [_delegate moveSelectionEarlier:sender];
+}
+
+- (void)moveLater:(id)sender
+{
+    if (_delegate && [_delegate respondsToSelector:@selector(moveSelectionLater:)])
+        [_delegate moveSelectionLater:sender];
+}
+
 - (void)cut:(id)sender
 {
     if (_delegate && [_delegate respondsToSelector:@selector(cut:)]) {
@@ -917,55 +1002,51 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (BOOL)validateMenuItem:(CPMenuItem)aMenuItem
 {
-    var action = [aMenuItem action];
+    var action = [aMenuItem action],
+        hasSelection = [[self selectionIndexes] count] > 0;
 
-    if (action == @selector(copy:) || action == @selector(cut:) || action == @selector(delete:))
-    {
-        return [[self selectionIndexes] count] > 0;
-    }
+    if (action == @selector(copy:) || action == @selector(cut:) || action == @selector(delete:) || action == @selector(duplicate:))
+        return hasSelection;
 
     if (action == @selector(paste:))
-    {
-        return [[[CPPasteboard generalPasteboard] types] containsObject:UIBuilderElementPboardType];
-    }
+        return [_delegate respondsToSelector:@selector(canPaste)] ? [_delegate canPaste] : [[[CPPasteboard generalPasteboard] types] containsObject:UIBuilderElementPboardType];
+
+    if (action == @selector(selectAll:))
+        return [[self dataObjects] count] > 0;
+
+    if (action == @selector(selectParent:))
+        return hasSelection;
 
     if (action == @selector(groupInHBox:) || action == @selector(groupInVBox:))
-    {
-        var selectedObjects = [[_delegate elementsController] selectedObjects];
-        if ([selectedObjects count] <= 1)
-            return NO;
+        return [_delegate respondsToSelector:@selector(canGroupSelection)] && [_delegate canGroupSelection];
 
-        var controller = [self delegate];
-        if (!controller || ![controller respondsToSelector:@selector(parentOfElement:)])
-            return NO;
+    if (action == @selector(ungroup:))
+        return [_delegate respondsToSelector:@selector(canUngroupSelection)] && [_delegate canUngroupSelection];
 
-        var firstParent = [controller parentOfElement:selectedObjects[0]];
-        for (var i = 1; i < [selectedObjects count]; i++)
-        {
-            if ([controller parentOfElement:selectedObjects[i]] != firstParent)
-                return NO;
-        }
-        return YES;
-    }
+    if (action == @selector(moveEarlier:))
+        return [_delegate respondsToSelector:@selector(canMoveSelectionBy:)] && [_delegate canMoveSelectionBy:-1];
+
+    if (action == @selector(moveLater:))
+        return [_delegate respondsToSelector:@selector(canMoveSelectionBy:)] && [_delegate canMoveSelectionBy:1];
 
     if (action == @selector(createTargetActionConnection:) || action == @selector(createOutletConnection:))
-    {
         return YES;
-    }
 
-    var undoManager = [[self window] undoManager];
+    var undoManager = [_delegate undoManager] || [[self window] undoManager];
 
     if (action == @selector(undo:))
     {
+        [aMenuItem setTitle:[undoManager undoMenuItemTitle] || @"Undo"];
         return [undoManager canUndo];
     }
 
     if (action == @selector(redo:))
     {
+        [aMenuItem setTitle:[undoManager redoMenuItemTitle] || @"Redo"];
         return [undoManager canRedo];
     }
 
-    return [super validateMenuItem:aMenuItem];
+    return YES;
 }
 
 
@@ -1003,6 +1084,13 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (void)cancelOperation:(id)sender
 {
+    if (!_draggedElement)
+    {
+        // Escape without a drag: clear the selection.
+        [self deselectViews];
+        return;
+    }
+
     if (_draggedElement)
     {
         _isCancelingDrag = YES;
@@ -1028,8 +1116,17 @@ var _selectedConnectionsObservationContext = 1095;
             }
         }
 
+        // Throw away everything the drag did, without leaving an undo step behind.
+        var element = _draggedElement;
+        _draggedElement = nil;
+        _originalFrames = nil;
+        _isCancelingDrag = NO;
+
+        if (_delegate && [_delegate respondsToSelector:@selector(cancelInteractiveChange)])
+            [_delegate cancelInteractiveChange];
+
         // Tell the element to stop its drag loop/state
-        [_draggedElement mouseUp:nil];
+        [element resetMouseTrackingState];
 
         [self setNeedsDisplay:YES];
     }
@@ -1166,6 +1263,14 @@ var _selectedConnectionsObservationContext = 1095;
     {
         var type = types[i];
         if ([registeredTypes containsObject:type]) {
+            // The palette puts the element type on the pasteboard.
+            var declaredType = [pasteboard stringForType:type];
+            if (declaredType && [[UIElementView classMap] objectForKey:declaredType])
+            {
+                elementType = declaredType;
+                break;
+            }
+
             var temp = [type stringByReplacingOccurrencesOfString:@"DragType" withString:@""];
             if ([temp hasPrefix:@"UI"])
                 temp = [temp substringFromIndex:2];
@@ -1274,7 +1379,7 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (void)deselectViews
 {
-    [_selectionIndexesContainer setValue:nil forKeyPath:_selectionIndexesKeyPath];
+    [_selectionIndexesContainer setValue:[CPIndexSet indexSet] forKeyPath:_selectionIndexesKeyPath];
 }
 
 - (void)selectView:(UIElementView)aView state:(BOOL)select
@@ -1295,21 +1400,93 @@ var _selectedConnectionsObservationContext = 1095;
     [_selectionIndexesContainer setValue:selection forKeyPath:_selectionIndexesKeyPath];
 }
 
+// Rebuilds the set of selected element IDs and redraws what changed.
+- (void)_refreshSelection
+{
+    var oldIDs = _selectedIDs || {},
+        newIDs = {},
+        all = [self dataObjects] || [],
+        indexes = [self selectionIndexes];
+
+    if (indexes && indexes != [CPNull null])
+    {
+        var index = [indexes firstIndex];
+        while (index != CPNotFound)
+        {
+            if (index < all.length)
+                newIDs[[all[index] valueForKey:@"id"]] = YES;
+            index = [indexes indexGreaterThanIndex:index];
+        }
+    }
+
+    _selectedIDs = newIDs;
+
+    var redraw = function(ids)
+    {
+        for (var elementID in ids)
+        {
+            var view = _viewsByID[elementID];
+            if (view)
+                [view setNeedsDisplay:YES];
+        }
+    };
+
+    redraw(oldIDs);
+    redraw(newIDs);
+    [self setNeedsDisplay:YES];
+}
+
 - (CPArray)selectedSubViews
 {
-    var selectedDataObjects = [[self dataObjects] objectsAtIndexes:[self selectionIndexes]];
-    var selectedViews = [CPMutableArray array];
-
-    [self _findViewsForDataObjects:selectedDataObjects inView:self foundViews:selectedViews];
-
-    return selectedViews;
+    var result = [];
+    for (var elementID in _selectedIDs)
+    {
+        var view = [self viewForElementWithID:elementID];
+        if (view)
+            result.push(view);
+    }
+    return result;
 }
 
 - (BOOL)isViewSelected:(CPView)aView
 {
-    var selected = [self selectedSubViews];
+    var data = [aView respondsToSelector:@selector(dataObject)] ? [aView dataObject] : nil;
+    return !!data && !!_selectedIDs[[data valueForKey:@"id"]];
+}
 
-    return [selected containsObject:aView];
+#pragma mark - Document Size
+
+// The canvas is the document view of a scroll view; it grows with its content.
+- (void)updateDocumentSize
+{
+    var scrollView = [self enclosingScrollView];
+    if (!scrollView)
+        return;
+
+    var visible = [[scrollView contentView] bounds].size,
+        width = visible.width,
+        height = visible.height,
+        subviews = [self subviews];
+
+    for (var i = 0; i < subviews.length; i++)
+    {
+        if (![subviews[i] isKindOfClass:[UIElementView class]])
+            continue;
+
+        var frame = [subviews[i] frame];
+        width = MAX(width, CGRectGetMaxX(frame) + 80);
+        height = MAX(height, CGRectGetMaxY(frame) + 80);
+    }
+
+    var current = [self frame].size;
+    if (current.width !== width || current.height !== height)
+        [self setFrameSize:CGSizeMake(width, height)];
+}
+
+- (void)layoutSubviews
+{
+    [super layoutSubviews];
+    [self updateDocumentSize];
 }
 
 - (void)_findViewsForDataObjects:(CPArray)dataObjects inView:(CPView)aView foundViews:(CPMutableArray)foundViews
@@ -1339,6 +1516,7 @@ var _selectedConnectionsObservationContext = 1095;
 // These methods are called by the UIElementView children to notify the controller
 - (void)elementDidMove:(UIElementView)anElement
 {
+    [self setNeedsLayout:YES];
     if (_delegate && [_delegate respondsToSelector:@selector(canvasView:didMoveElement:)]) {
         [_delegate canvasView:self didMoveElement:anElement];
     }
@@ -1346,6 +1524,7 @@ var _selectedConnectionsObservationContext = 1095;
 
 - (void)elementDidResize:(UIElementView)anElement
 {
+    [self setNeedsLayout:YES];
     if (_delegate && [_delegate respondsToSelector:@selector(canvasView:didResizeElement:)]) {
         [_delegate canvasView:self didResizeElement:anElement];
     }
@@ -1373,7 +1552,7 @@ var _selectedConnectionsObservationContext = 1095;
     var targetActions = [[_connectionTarget dataObject] valueForKey:@"actions"];
     if (targetActions && [targetActions length] > 0)
     {
-        var actionsArray = [targetActions componentsSeparatedByString:@", "];
+        var actionsArray = UIBSplitList(targetActions);
         for (var i = 0; i < [actionsArray count]; i++)
         {
             var actionName = actionsArray[i];
@@ -1390,7 +1569,7 @@ var _selectedConnectionsObservationContext = 1095;
     var sourceOutlets = [[_connectionSource dataObject] valueForKey:@"outlets"];
     if (sourceOutlets && [sourceOutlets length] > 0)
     {
-        var outletsArray = [sourceOutlets componentsSeparatedByString:@", "];
+        var outletsArray = UIBSplitList(sourceOutlets);
         for (var i = 0; i < [outletsArray count]; i++)
         {
             var outletName = outletsArray[i];

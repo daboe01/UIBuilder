@@ -102,7 +102,8 @@
     if (aFloat !== [self height])
     {
         [super setHeight:aFloat];
-        [[self dataObject] setValue:aFloat forKey:@"height"];
+        var data = [self dataObject];
+        UIBPerformWithoutUndo(function() { [data setValue:aFloat forKey:@"height"]; });
     }
 }
 

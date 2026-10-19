@@ -1,3 +1,4 @@
+
 @class UIElementView;
 
 @implementation UIVBoxView : UIElementView
@@ -53,159 +54,26 @@
 - (void)addSubview:(CPView)aView
 {
     [super addSubview:aView];
-    [self setNeedsLayout:YES];
+    [self invalidateLayoutUpwards];
+}
+
+// Children are stacked top to bottom (see UIBLayoutStack).
+- (CGRect)stackRect
+{
+    return CGRectInset([self bounds], UIBStackPadding, UIBStackPadding);
 }
 
 - (void)layoutSubviews
 {
     [super layoutSubviews];
-
-    var subviews = [self subviews];
-    var count = [subviews count];
-    if (count === 0)
-    {
-        return;
-    }
-
-    const PADDING = 5;
-    var bounds = [self bounds];
-
-    var totalMinHeight = 0;
-    var expandableChildren = 0;
-
-    // First pass: Calculate total height of fixed elements and count expandable ones.
-    for (var i = 0; i < count; i++)
-    {
-        var subview = subviews[i];
-        var valign = [[subview dataObject] valueForKey:@"valign"];
-
-        if (valign === "expand")
-        {
-            expandableChildren++;
-        }
-        else // "min"
-        {
-            totalMinHeight += [[subview dataObject] valueForKey:@"height"];
-        }
-    }
-
-    // Determine the container's new height, including padding.
-    var requiredHeight = totalMinHeight + (2 * PADDING);
-    var containerHeight = [self frame].size.height;
-
-    if (containerHeight < requiredHeight)
-    {
-        containerHeight = requiredHeight;
-        [[self dataObject] setValue:containerHeight forKey:@"height"];
-    }
-
-    // Calculate layout for children within the padded area.
-    var layoutAreaHeight = containerHeight - (2 * PADDING);
-
-    var flexibleHeight = 0;
-    if (expandableChildren > 0)
-    {
-        var remainingSpace = layoutAreaHeight - totalMinHeight;
-        flexibleHeight = (remainingSpace > 0) ? (remainingSpace / expandableChildren) : 0;
-    }
-
-    var currentY = PADDING;
-    var layoutAreaX = PADDING;
-    var layoutAreaWidth = bounds.size.width - (2 * PADDING);
-
-    // Second pass: Set the frames.
-    for (var i = 0; i < count; i++)
-    {
-        var subview = subviews[i];
-        var frameWidth;
-        var frameHeight = 0;
-        var valign = [[subview dataObject] valueForKey:@"valign"];
-
-        if (valign === "expand")
-        {
-            frameHeight = flexibleHeight;
-        }
-        else // "min"
-        {
-            frameHeight = [[subview dataObject] valueForKey:@"height"];
-        }
-
-        var halign = [[subview dataObject] valueForKey:@"halign"];
-        if (halign === "min")
-        {
-            if ([subview respondsToSelector:@selector(sizeToFit)])
-            {
-                [subview sizeToFit];
-                frameWidth = [subview frame].size.width;
-            }
-            else
-            {
-                frameWidth = [subview frame].size.width;
-            }
-        }
-        else // "expand"
-        {
-            frameWidth = layoutAreaWidth;
-        }
-        
-        // Center horizontally within the padded layout area
-        var x = layoutAreaX + Math.max(0, (layoutAreaWidth - frameWidth) / 2.0);
-
-        [subview setFrame:CGRectMake(x, currentY, frameWidth, frameHeight)];
-        currentY += frameHeight;
-    }
+    UIBLayoutStack([self subviews], [self stackRect], YES);
 }
 
-- (void)sizeToFit
+// The size of the stacked content, used when this box sits in another box.
+- (CGSize)intrinsicContentSize
 {
-    var subviews = [self subviews];
-    var count = [subviews count];
-    const PADDING = 5;
-    const MIN_EXPANDABLE_HEIGHT = 10;
-
-    if (count === 0) {
-        [self setFrameSize:CGSizeMake(PADDING * 2, PADDING * 2)];
-        return;
-    }
-
-    var totalMinHeight = 0;
-    var maxWidth = 0;
-    var expandableChildren = 0;
-
-    for (var i = 0; i < count; i++)
-    {
-        var subview = subviews[i];
-        var data = [subview dataObject];
-        var valign = [data objectForKey:@"valign"];
-
-        if (valign !== "expand")
-        {
-            totalMinHeight += [[subview dataObject] valueForKey:@"height"];
-        }
-        else
-        {
-            expandableChildren++;
-        }
-        maxWidth = Math.max(maxWidth, [[subview dataObject] valueForKey:@"width"]);
-    }
-
-    // Calculate the total height required
-    var newHeight = totalMinHeight + (expandableChildren * MIN_EXPANDABLE_HEIGHT);
-
-    // Add padding between elements
-    if (count > 1) {
-        newHeight += (count - 1) * PADDING;
-    }
-
-    // Add padding around the container
-    newHeight += (2 * PADDING);
-    var newWidth = maxWidth + (2 * PADDING);
-
-    var data = [self dataObject];
-    [data setValue:newWidth forKey:@"width"];
-    [data setValue:newHeight forKey:@"height"];
-
-    [self setNeedsLayout:YES];
+    var size = UIBFittingStackSize([self subviews], YES);
+    return CGSizeMake(MAX(20, size.width + 2 * UIBStackPadding), MAX(20, size.height + 2 * UIBStackPadding));
 }
 
 - (void)drawRect:(CGRect)rect
@@ -231,8 +99,8 @@
 - (void)drawSkeleton:(CGRect)rect
 {
     var bounds = [self bounds];
-    var path = [CPBezierPath bezierPathWithRect:bounds];
-    [[CPColor grayColor] setStroke];
+    var path = [CPBezierPath bezierPathWithRect:CGRectInset(bounds, 0.5, 0.5)];
+    [[[CPColor grayColor] colorWithAlphaComponent:[[self dataObject] valueForKey:@"isRootVBox"] ? 0.25 : 0.6] setStroke];
     [path setLineWidth:[self isSelected] ? 3.0 : 1.0];
     [path setLineDash:[2,2] count:2 phase:0];
     [path stroke];
@@ -284,8 +152,8 @@
 
             for (var i = 0; i < [[self subviews] count]; i++) {
                 var aView = [self subviews][i];
-                if (CGRectIntersectsRect([aView frame], rubberRect)) {
-                    var dataIndex = [allDataObjects indexOfObject:[aView dataObject]];
+                if ([aView isKindOfClass:[UIElementView class]] && ![aView isHidden] && CGRectIntersectsRect([aView frame], rubberRect)) {
+                    var dataIndex = [allDataObjects indexOfObjectIdenticalTo:[aView dataObject]];
                     if (dataIndex != CPNotFound) {
                         [indexesToSelect addIndex:dataIndex];
                     }
@@ -304,4 +172,3 @@
 }
 
 @end
-

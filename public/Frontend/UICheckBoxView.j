@@ -80,4 +80,18 @@
     }
 }
 
+- (id)nativeUIElementWithMap:(CPMutableDictionary)aMap
+{
+    var data = [self dataObject],
+        checkBox = [[CPCheckBox alloc] initWithFrame:[self frame]];
+
+    [checkBox setTitle:[data valueForKey:@"title"] || @""];
+    [checkBox setState:[data valueForKey:@"value"] ? CPOnState : CPOffState];
+
+    if (aMap)
+        [aMap setObject:checkBox forKey:[data valueForKey:@"id"]];
+
+    return checkBox;
+}
+
 @end

@@ -4,6 +4,18 @@
 //  It manages the data model for all elements on the canvas and acts
 //  as a delegate for the UICanvasView to respond to user interactions.
 //
+//  Every change to the document goes through a small set of primitives that
+//  register their inverse with one document-wide CPUndoManager:
+//
+//    - insertElement:intoParent:atIndex:   <->  _detachElement:
+//    - addConnection:                      <->  removeConnection:
+//    - moveElement:toIndex:                <->  moveElement:toIndex:
+//    - per-key property changes            (recorded by CPConservativeDictionary)
+//    - interactive drags                   (one coalesced geometry step)
+//
+//  Higher-level commands (add, delete, paste, group, ...) are composed from
+//  these, so each of them is a single, fully redoable undo step.
+//
 //  By Daniel Boehringer in 2025.
 //
 
@@ -11,9 +23,40 @@
 @class UIElementView
 @import "UICanvasView.j"
 @import "UIBuilderConstants.j";
+@import "CappusanceCodec.j";
+
+// Recorded for interactive drags (markupKeys: a resize fixes the size in the markup).
+var UIBGeometryKeys = ["originX", "originY", "width", "height", "markupKeys"];
+
+// Builder defaults for an element type (view class defaults + Cappusance schema).
+function UIBDefaultsForType(aType)
+{
+    return [CappusanceCodec defaultsForType:aType];
+}
+
+function UIBIsLayoutType(aType)
+{
+    return !!UIBLayoutElementTypes[aType];
+}
+
+// A vbox stacks rows. Anything that is not a row (or a vertical spacer, a
+// nested vbox or a big view) gets wrapped in an hbox before it goes into a vbox.
+function UIBVBoxAcceptsDirectly(aType)
+{
+    return aType === "hbox" || aType === "vbox" || aType === "vspace" || aType === "box" ||
+           aType === "scrollView" || aType === "splitView" || aType === "tabView";
+}
+
+// Containers that stack their children vertically.
+function UIBIsVerticalStackType(aType)
+{
+    return aType === "vbox" || aType === "tabViewItem";
+}
 
 // This is a simple data model. In a real app, it might have more properties.
 // We use a custom dictionary to ensure KVO compatibility and proper value setting.
+// It also reports every value change to UIBModelUndoDelegate, which is how
+// edits made through bindings (e.g. in the inspector) become undoable.
 @implementation CPConservativeDictionary : CPDictionary
 { }
 
@@ -33,18 +76,51 @@
 
 - (void)setValue:(id)aVal forKey:(CPString)aKey
 {
-    // Only set the value if it's different from the current value
     var currentValue = [super valueForKey:aKey];
-    
 
-    // Always set the value if the current value is null or undefined
-    if (currentValue == null || currentValue == undefined || currentValue != aVal) {
-        [super setValue:aVal forKey:aKey];
+    // Geometry must stay numeric; ignore garbage (e.g. a cleared inspector field).
+    if (UIBNumericKeys[aKey])
+    {
+        if (aVal === nil || aVal === undefined || aVal === "")
+        {
+            // Some numbers (a window's x/y) may be removed again.
+            if (UIBClearableNumericKeys[aKey] && currentValue !== nil && currentValue !== undefined)
+            {
+                if (UIBModelUndoDelegate)
+                    [UIBModelUndoDelegate dataObject:self willChangeValueForKey:aKey fromValue:currentValue];
+                [self removeObjectForKey:aKey];
+            }
+            return;
+        }
+
+        aVal = Number(aVal);
+
+        if (isNaN(aVal))
+            return;
     }
+
+    // Checkboxes bound to boolean properties deliver 0/1.
+    if (typeof currentValue === "boolean" && typeof aVal === "number")
+        aVal = !!aVal;
+
+    // Only set the value if it's different from the current value
+    if (currentValue !== null && currentValue !== undefined && currentValue == aVal && typeof currentValue === typeof aVal)
+        return;
+
+    if (UIBModelUndoDelegate && !UIBStructuralKeys[aKey])
+        [UIBModelUndoDelegate dataObject:self willChangeValueForKey:aKey fromValue:currentValue];
+
+    [super setValue:aVal forKey:aKey];
 }
 
 - (BOOL)isEqual:(id)otherObject
 {
+    if (self === otherObject)
+        return YES;
+
+    if (!otherObject || !otherObject.isa || ![otherObject respondsToSelector:@selector(valueForKey:)])
+        return NO;
+
     return [self valueForKey:'id'] == [otherObject valueForKey:'id'];
 }
 
@@ -86,9 +162,23 @@
 {
     CPArrayController _elementsController @accessors(property=elementsController);
     CPArrayController _connectionsController @accessors(property=connectionsController);
-    CPMutableArray _connections;
-    int _elementCounter; // To generate unique IDs
-    UICanvasView _canvasView @accessors(property=canvasView);
+    UICanvasView      _canvasView @accessors(property=canvasView);
+    CPUndoManager     _undoManager;
+    BOOL              _documentEdited @accessors(getter=isDocumentEdited);
+
+    int               _elementCounter; // To generate unique IDs
+    JSObject          _elementsByID;   // id -> data object, for every element in the document
+
+    // Cappusance document state
+    id                _ownerElement;
+    CappusanceCodec   _codec;
+    CPArray           _markupOrder;         // top-level order of the imported document
+    CPArray           _unknownConnectors;   // connectors the builder does not model
+
+    // Interactive (mouse-drag) change tracking
+    int               _interactiveDepth;
+    CPArray           _interactiveSnapshot;
+    CPArray           _interactiveInsertions;
 }
 
 + (Class)classForElementType:(CPString)elementType
@@ -101,285 +191,988 @@
     self = [super init];
     if (self) {
         _elementsController = [[CPArrayController alloc] init];
+        [_elementsController setContent:[CPMutableArray array]];
+        [_elementsController setSelectsInsertedObjects:NO];
+        [_elementsController setAvoidsEmptySelection:NO];
+
         _connectionsController = [[CPArrayController alloc] init];
+        [_connectionsController setContent:[CPMutableArray array]];
+        [_connectionsController setSelectsInsertedObjects:NO];
+        [_connectionsController setAvoidsEmptySelection:NO];
+        if ([_connectionsController respondsToSelector:@selector(setClearsFilterPredicateOnInsertion:)])
+            [_connectionsController setClearsFilterPredicateOnInsertion:NO];
+
         _elementCounter = 0;
+        _elementsByID = {};
+        _interactiveDepth = 0;
+
+        _undoManager = [[CPUndoManager alloc] init];
+        if ([_undoManager respondsToSelector:@selector(setLevelsOfUndo:)])
+            [_undoManager setLevelsOfUndo:200];
+
+        var center = [CPNotificationCenter defaultCenter];
+        if (typeof CPUndoManagerDidUndoChangeNotification !== "undefined")
+            [center addObserver:self selector:@selector(_undoManagerDidUndoOrRedo:) name:CPUndoManagerDidUndoChangeNotification object:_undoManager];
+        if (typeof CPUndoManagerDidRedoChangeNotification !== "undefined")
+            [center addObserver:self selector:@selector(_undoManagerDidUndoOrRedo:) name:CPUndoManagerDidRedoChangeNotification object:_undoManager];
+
+        UIBModelUndoDelegate = self;
+
+        _codec = [[CappusanceCodec alloc] initWithController:self];
+        _markupOrder = [];
+        _unknownConnectors = [];
     }
     return self;
 }
 
+- (id)ownerElement
+{
+    return _ownerElement;
+}
+
+- (CPUndoManager)undoManager
+{
+    return _undoManager;
+}
+
 #pragma mark -
-#pragma mark Data Management
+#pragma mark Document State
 
-- (CPDictionary)_containerDataAtPoint:(CGPoint)aPoint
+- (void)setDocumentEdited:(BOOL)flag
 {
-    var allElements = [_elementsController arrangedObjects];
-    for (var i = [allElements count] - 1; i >= 0; i--)
-    {
-        var elementData = allElements[i];
-        var type = [elementData valueForKey:@"type"];
-        if (type === "window")
-        {
-            var frame = CGRectMake([elementData valueForKey:@"originX"], [elementData valueForKey:@"originY"], [elementData valueForKey:@"width"], [elementData valueForKey:@"height"]);
-            if (CGRectContainsPoint(frame, aPoint))
-                return elementData;
-        }
-    }
-    return nil;
+    // KVO notifications are sent automatically for this setter.
+    _documentEdited = !!flag;
 }
 
-- (CPDictionary)_ensureVBoxForWindow:(CPDictionary)windowData
+- (void)_noteDocumentChanged
 {
-    var children = [windowData valueForKey:@"children"];
-    for (var i = 0; i < [children count]; i++) {
-        if ([[children[i] valueForKey:@"type"] isEqualToString:@"vbox"]) {
-            console.log("-> Found existing VBox in window.");
-            return children[i];
-        }
-    }
-
-    // No VBox found, create one.
-    console.log("-> No VBox found in window. Creating one on-the-fly.");
-    var vboxData = [CPConservativeDictionary dictionary];
-    var vboxClass = [UIBuilderController classForElementType:@"vbox"];
-    var windowWidth = [windowData valueForKey:@"width"];
-    var windowHeight = [windowData valueForKey:@"height"];
-
-    [vboxData setValue:@"vbox" forKey:@"type"];
-    [vboxData setValue:@"id_" + _elementCounter++ forKey:@"id"];
-    [vboxData setValue:[windowData valueForKey:@"id"] forKey:@"parentID"];
-
-    var defaultVBoxValues = [vboxClass defaultValues];
-    for (var key in defaultVBoxValues) {
-        [vboxData setValue:defaultVBoxValues[key] forKey:key];
-    }
-
-    // Make the vbox fill the window's content area
-    [vboxData setValue:0 forKey:@"originX"];
-    [vboxData setValue:22 forKey:@"originY"]; // Below title bar
-    [vboxData setValue:windowWidth forKey:@"width"];
-    [vboxData setValue:windowHeight - 22 forKey:@"height"];
-    [vboxData setValue:YES forKey:@"isRootVBox"];
-    [vboxData setValue:[] forKey:@"children"];
-
-    [[windowData mutableArrayValueForKey:@"children"] addObject:vboxData];
-    [_elementsController addObject:vboxData]; // IMPORTANT: Add to controller for KVO
-
-    return vboxData;
+    if (!_documentEdited)
+        [self setDocumentEdited:YES];
 }
 
-- (void)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint inParent:(CPDictionary)parentData
+- (void)_undoManagerDidUndoOrRedo:(CPNotification)aNotification
 {
-    [self addNewElementOfType:elementType atPoint:aPoint inParent:parentData atIndex:-1];
+    [self _noteDocumentChanged];
+    [_canvasView setNeedsDisplay:YES];
 }
 
-- (void)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint inParent:(CPDictionary)parentData atIndex:(int)index
+- (void)_setActionName:(CPString)anActionName
 {
-    if (parentData)
-        console.log("-> Parent data type is: '" + [parentData valueForKey:@"type"] + "'");
+    if (!anActionName || [_undoManager isUndoing] || [_undoManager isRedoing])
+        return;
 
-    var isLayoutElement = (elementType === "hbox" || elementType === "vbox" || elementType === "hspace" || elementType === "vspace");
+    if ([_undoManager respondsToSelector:@selector(groupingLevel)] && [_undoManager groupingLevel] === 0)
+        return;
 
-    // Scenario: Dropping into a window. Ensure it has a VBox.
-    if (parentData && [parentData valueForKey:@"type"] === "window" && !isLayoutElement)
-    {
-        var vboxData = [self _ensureVBoxForWindow:parentData];
-        // Retarget the drop operation to the VBox
-        parentData = vboxData;
-        console.log("-> Retargeted drop to VBox:", [parentData valueForKey:@"id"]);
-    }
+    [_undoManager setActionName:anActionName];
+}
 
-    // Scenario: Dropping a non-layout element into a VBox
-    if (parentData && [parentData valueForKey:@"type"] === "vbox" && !isLayoutElement)
-    {
-        var canvas = [self canvasView];
-        var viewAtDropPoint = [canvas viewAtPoint:aPoint];
-        var targetHBox = nil;
+- (CPString)_actionNameForKey:(CPString)aKey
+{
+    if (aKey === @"originX" || aKey === @"originY")
+        return @"Move";
+    if (aKey === @"width" || aKey === @"height")
+        return @"Resize";
+    if (aKey === @"value")
+        return @"Change Value";
 
-        // Determine if the drop is on an existing HBox
-        if (viewAtDropPoint)
+    // "horizontalTextAlign" -> "Change Horizontal Text Align"
+    var words = String(aKey).replace(/([a-z0-9])([A-Z])/g, "$1 $2");
+    return @"Change " + words.charAt(0).toUpperCase() + words.substring(1);
+}
+
+#pragma mark -
+#pragma mark Undo Primitives
+
+// Called by CPConservativeDictionary before any non-structural value change.
+- (void)dataObject:(id)anObject willChangeValueForKey:(CPString)aKey fromValue:(id)oldValue
+{
+    if (UIBUndoSuppressionCount > 0)
+        return;
+
+    // Only objects that are part of the document are tracked. Freshly built
+    // elements (not inserted yet) and detached ones are ignored.
+    if (_elementsByID[[anObject objectForKey:@"id"]] !== anObject)
+        return;
+
+    [[_undoManager prepareWithInvocationTarget:self] _setValue:oldValue forKey:aKey ofElement:anObject];
+    [self _setActionName:[self _actionNameForKey:aKey]];
+    [self _noteDocumentChanged];
+
+    // What the user changes is written to the markup from now on.
+    if (aKey !== "markupKeys" && aKey !== "originX" && aKey !== "originY" && aKey !== "extraAttributes" &&
+        ![_undoManager isUndoing] && ![_undoManager isRedoing])
+        [self _markKeys:[aKey] forMarkupOfElement:anObject];
+}
+
+- (void)_markKeys:(CPArray)keys forMarkupOfElement:(id)anElement
+{
+    var markupKeys = ([anElement valueForKey:@"markupKeys"] || []).slice(),
+        changed = NO;
+
+    for (var i = 0; i < keys.length; i++)
+        if (markupKeys.indexOf(keys[i]) < 0)
         {
-            var currentView = viewAtDropPoint;
-            while(currentView && currentView != canvas) {
-                if ([currentView isKindOfClass:[UIHBoxView class]]) {
-                    targetHBox = [currentView dataObject];
-                    break;
-                }
-                currentView = [currentView superview];
-            }
+            markupKeys.push(keys[i]);
+            changed = YES;
         }
 
-        if (targetHBox)
-        {
-            // Scenario 1: Dropped on an existing HBox. Add the element to it.
-            console.log("-> VBox Drop: Adding to existing HBox:", [targetHBox valueForKey:@"id"]);
-            [self addNewElementOfType:elementType atPoint:aPoint inParent:targetHBox atIndex:index];
+    if (changed)
+        [anElement setValue:markupKeys forKey:@"markupKeys"];
+}
 
+// Undo target for per-key changes. The value change itself registers the
+// inverse again (through dataObject:willChangeValueForKey:fromValue:), which
+// is what makes redo work.
+- (void)_setValue:(id)aValue forKey:(CPString)aKey ofElement:(id)anElement
+{
+    if (aValue === nil || aValue === undefined)
+    {
+        var current = [anElement valueForKey:aKey];
+        if (current === nil || current === undefined)
             return;
-        }
-        else
-        {
-            // Scenario 2: Dropped elsewhere in the VBox. Create a new HBox at the bottom.
-            console.log("-> VBox Drop: Creating new HBox at the end.");
-            var newHBoxData = [self addNewHBoxInParent:parentData atIndex:-1]; // -1 appends to the end
-            [_elementsController addObject:newHBoxData];
 
-            // Add the new element inside the newly created HBox.
-            [self addNewElementOfType:elementType atPoint:CGPointMake(0, 0) inParent:newHBoxData atIndex:index];
-            // perform initial layout
-            [[canvas viewForElementWithID:[newHBoxData valueForKey:@"id"]] layoutSubviews];
-            return;
-        }
-    }
+        // Record the inverse manually, removeObjectForKey: bypasses setValue:forKey:
+        if (UIBUndoSuppressionCount === 0 && _elementsByID[[anElement objectForKey:@"id"]] === anElement)
+            [[_undoManager prepareWithInvocationTarget:self] _setValue:current forKey:aKey ofElement:anElement];
 
-    var newElementData = [CPConservativeDictionary dictionary];
-    var containerData = parentData || [self _containerDataAtPoint:aPoint];
-    var viewClass = [UIBuilderController classForElementType:elementType];
-
-    // Set default properties based on type
-    [newElementData setValue:elementType forKey:@"type"];
-    [newElementData setValue:@"id_" + _elementCounter++ forKey:@"id"];
-
-    // Set default values from the view class
-    var defaultValues = [viewClass defaultValues];
-    var keys = [defaultValues allKeys];
-    for (var i = 0; i < [keys count]; i++) {
-        var key = keys[i];
-        [newElementData setValue:[defaultValues objectForKey:key] forKey:key];
-    }
-
-    // Set default sizes by creating a temporary view and giving it the default data
-    var tempView = [[viewClass alloc] initWithFrame:CGRectMakeZero()];
-    [tempView setDataObject:newElementData]; // Provide data to the temp view
-
-    if ([tempView respondsToSelector:@selector(sizeToFit)])
-    {
-        [tempView sizeToFit];
-    }
-    
-    var initialSize = [tempView frame].size;
-
-    // For windows, we still want a larger default size.
-    if (elementType === "window")
-    {
-        initialSize = CGSizeMake(250, 200);
-        [newElementData setValue:[] forKey:@"children"];
-    }
-
-    [newElementData setValue:initialSize.width forKey:@"width"];
-    [newElementData setValue:initialSize.height forKey:@"height"];
-
-    // Calculate centered position
-    var elementWidth = [newElementData valueForKey:@"width"];
-    var elementHeight = [newElementData valueForKey:@"height"];
-    var centeredX = aPoint.x - (elementWidth / 2);
-    var centeredY = aPoint.y - (elementHeight / 2);
-    [newElementData setValue:centeredX forKey:@"originX"];
-    [newElementData setValue:centeredY forKey:@"originY"];
-
-    if (containerData && elementType !== "window")
-    {
-        console.log("-> Adding as child to container:", [containerData valueForKey:@"id"]);
-        // Convert point to be relative to the container
-        var relativeX = aPoint.x - [containerData valueForKey:@"originX"];
-        var relativeY = aPoint.y - [containerData valueForKey:@"originY"];
-
-        // For HBox, we don't center, we just add. Layout is managed by the HBox.
-        if ([containerData valueForKey:@"type"] === 'hbox') {
-             [newElementData setValue:0 forKey:@"originX"];
-             [newElementData setValue:0 forKey:@"originY"];
-        } else {
-            [newElementData setValue:relativeX - (elementWidth / 2) forKey:@"originX"];
-            [newElementData setValue:relativeY - (elementHeight / 2) forKey:@"originY"];
-        }
-
-        [newElementData setValue:[containerData valueForKey:@"id"] forKey:@"parentID"];
-        var children = [containerData mutableArrayValueForKey:@"children"];
-        if (index >= 0 && index < [children count])
-            [children insertObject:newElementData atIndex:index];
-        else
-            [children addObject:newElementData];
-    }
-
-    // Add to the main elements controller to trigger KVO
-    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:self] removeElement:newElementData fromParent:containerData];
-    [[[CPApp keyWindow] undoManager] setActionName:@"Add Element"];
-
-    var arrangedObjects = [_elementsController arrangedObjects];
-    var insertionIndex = -1;
-
-    if (containerData)
-    {
-        var childDataObjects = [containerData valueForKey:@"children"];
-        var referenceChild = childDataObjects[index];
-        insertionIndex = [arrangedObjects indexOfObject:referenceChild] - 1;
-    }
-    if (insertionIndex < 0)
-        insertionIndex = 0;
-
-    if (insertionIndex >= 0 && insertionIndex <= [arrangedObjects count])
-    {
-        [_elementsController insertObject:newElementData atArrangedObjectIndex:insertionIndex];
+        [anElement removeObjectForKey:aKey];
     }
     else
-        [_elementsController insertObject:newElementData];
+        [anElement setValue:aValue forKey:aKey];
 
+    [self _relayoutElement:[self parentOfElement:anElement]];
+}
 
-    // If we just created a new top-level window, ensure it has a VBox by default.
-    if (elementType === "window" && !containerData) {
-        [self _ensureVBoxForWindow:newElementData];
+- (void)_registerUndoForInsertionOfElement:(id)elementData
+{
+    if (UIBUndoSuppressionCount > 0)
+    {
+        // Elements created while dragging (spacers) are undone together with the drag.
+        if (_interactiveDepth > 0 && _interactiveInsertions)
+            [_interactiveInsertions addObject:elementData];
+        return;
     }
 
-    [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
-    console.log("-> Finished addNewElementOfType. New element data:", newElementData);
+    [[_undoManager prepareWithInvocationTarget:self] _detachElement:elementData];
+    [self _noteDocumentChanged];
 }
+
+/*!
+    Inserts an element (and its whole subtree) into the document. This is the
+    only way elements enter the document. Undo: _detachElement:.
+*/
+- (void)insertElement:(id)elementData intoParent:(id)parentData atIndex:(int)anIndex
+{
+    if (!elementData)
+        return;
+
+    if (parentData)
+    {
+        var children = [parentData valueForKey:@"children"];
+        if (!children)
+        {
+            children = [];
+            [parentData setValue:children forKey:@"children"];
+        }
+
+        var existingIndex = children.indexOf(elementData);
+        if (existingIndex >= 0)
+            children.splice(existingIndex, 1);
+
+        if (anIndex === nil || anIndex === undefined || anIndex < 0 || anIndex > children.length)
+            anIndex = children.length;
+
+        children.splice(anIndex, 0, elementData);
+        [elementData setValue:[parentData valueForKey:@"id"] forKey:@"parentID"];
+    }
+    else
+        [elementData removeObjectForKey:@"parentID"];
+
+    var subtree = [self _subtreeOfElement:elementData normalizingParents:YES];
+    for (var i = 0; i < subtree.length; i++)
+        _elementsByID[[subtree[i] valueForKey:@"id"]] = subtree[i];
+
+    [_elementsController addObjects:subtree];
+    [self _relayoutElement:parentData];
+    [_canvasView setNeedsDisplay:YES];
+
+    [self _registerUndoForInsertionOfElement:elementData];
+}
+
+/*!
+    Takes an element (and its whole subtree) out of the document, keeping its
+    connections. Undo: insertElement:intoParent:atIndex: at the same place.
+*/
+- (void)_detachElement:(id)elementData
+{
+    if (!elementData || _elementsByID[[elementData valueForKey:@"id"]] !== elementData)
+        return;
+
+    var parentData = [self parentOfElement:elementData],
+        index = -1;
+
+    if (parentData)
+    {
+        var children = [parentData valueForKey:@"children"] || [];
+        index = children.indexOf(elementData);
+        if (index >= 0)
+            children.splice(index, 1);
+    }
+
+    var subtree = [self _subtreeOfElement:elementData normalizingParents:NO];
+    for (var i = 0; i < subtree.length; i++)
+        delete _elementsByID[[subtree[i] valueForKey:@"id"]];
+
+    var previousSelection = [[_elementsController selectedObjects] copy] || [];
+
+    [_elementsController removeObjects:subtree];
+
+    var remainingSelection = [];
+    for (var i = 0; i < previousSelection.length; i++)
+        if (subtree.indexOf(previousSelection[i]) < 0)
+            remainingSelection.push(previousSelection[i]);
+    [_elementsController setSelectedObjects:remainingSelection];
+
+    [self _relayoutElement:parentData];
+    [_canvasView setNeedsDisplay:YES];
+
+    if (UIBUndoSuppressionCount === 0)
+    {
+        [[_undoManager prepareWithInvocationTarget:self] insertElement:elementData intoParent:parentData atIndex:index];
+        [self _noteDocumentChanged];
+    }
+}
+
+/*!
+    Deletes an element: removes all connections from/to its subtree and
+    detaches it. Undo restores both.
+*/
+- (void)removeElement:(id)elementData
+{
+    if (!elementData || _elementsByID[[elementData valueForKey:@"id"]] !== elementData)
+        return;
+
+    var subtree = [self _subtreeOfElement:elementData normalizingParents:NO],
+        ids = {};
+
+    for (var i = 0; i < subtree.length; i++)
+        ids[[subtree[i] valueForKey:@"id"]] = YES;
+
+    var connections = [self allConnections];
+    for (var i = 0; i < connections.length; i++)
+    {
+        var connection = connections[i];
+        if (ids[[connection valueForKey:@"sourceID"]] || ids[[connection valueForKey:@"targetID"]])
+            [self removeConnection:connection];
+    }
+
+    [self _detachElement:elementData];
+}
+
+/*!
+    Reorders an element among its siblings. Undo: the same with the old index.
+*/
+- (void)moveElement:(id)elementData toIndex:(int)newIndex
+{
+    var parentData = [self parentOfElement:elementData];
+    if (!parentData)
+        return;
+
+    var children = [parentData valueForKey:@"children"],
+        oldIndex = children.indexOf(elementData);
+
+    newIndex = MAX(0, MIN(newIndex, children.length - 1));
+
+    if (oldIndex < 0 || oldIndex === newIndex)
+        return;
+
+    children.splice(oldIndex, 1);
+    children.splice(newIndex, 0, elementData);
+
+    // Recreate the views so they are stacked (and laid out) in the new order.
+    var subtree = [self _subtreeOfElement:elementData normalizingParents:NO],
+        selection = [[_elementsController selectedObjects] copy] || [];
+
+    [_elementsController removeObjects:subtree];
+    [_elementsController addObjects:subtree];
+    [_elementsController setSelectedObjects:selection];
+
+    [self _relayoutElement:parentData];
+
+    if (UIBUndoSuppressionCount === 0)
+    {
+        [[_undoManager prepareWithInvocationTarget:self] moveElement:elementData toIndex:oldIndex];
+        [self _noteDocumentChanged];
+    }
+}
+
+- (void)addConnection:(id)aConnection
+{
+    if (!aConnection)
+        return;
+
+    [_connectionsController addObject:aConnection];
+    [_connectionsController rearrangeObjects];
+    [_canvasView setNeedsDisplay:YES];
+
+    if (UIBUndoSuppressionCount === 0)
+    {
+        [[_undoManager prepareWithInvocationTarget:self] removeConnection:aConnection];
+        [self _noteDocumentChanged];
+    }
+}
+
+- (void)removeConnection:(id)aConnection
+{
+    if (!aConnection || [[self allConnections] indexOfObjectIdenticalTo:aConnection] == CPNotFound)
+        return;
+
+    [_connectionsController removeObject:aConnection];
+    [_canvasView setNeedsDisplay:YES];
+
+    if (UIBUndoSuppressionCount === 0)
+    {
+        [[_undoManager prepareWithInvocationTarget:self] addConnection:aConnection];
+        [self _noteDocumentChanged];
+    }
+}
+
+- (void)removeConnections:(CPArray)connections
+{
+    connections = [connections copy] || [];
+    if (connections.length === 0)
+        return;
+
+    for (var i = 0; i < connections.length; i++)
+        [self removeConnection:connections[i]];
+
+    [self _setActionName:connections.length === 1 ? @"Delete Connection" : @"Delete Connections"];
+}
+
+// All connections, regardless of the filter the inspector puts on the controller.
+- (CPArray)allConnections
+{
+    return [[_connectionsController content] copy] || [];
+}
+
+#pragma mark -
+#pragma mark Interactive Changes (mouse drags)
+
+- (CPArray)_geometrySnapshot
+{
+    var snapshot = [];
+    for (var elementID in _elementsByID)
+    {
+        if (!_elementsByID.hasOwnProperty(elementID))
+            continue;
+
+        var element = _elementsByID[elementID],
+            record = { element: element };
+
+        for (var i = 0; i < UIBGeometryKeys.length; i++)
+            record[UIBGeometryKeys[i]] = [element valueForKey:UIBGeometryKeys[i]];
+
+        snapshot.push(record);
+    }
+    return snapshot;
+}
+
+- (CPArray)_currentGeometryForRecords:(CPArray)records
+{
+    var result = [];
+    for (var i = 0; i < records.length; i++)
+    {
+        var element = records[i].element,
+            record = { element: element };
+
+        for (var j = 0; j < UIBGeometryKeys.length; j++)
+            record[UIBGeometryKeys[j]] = [element valueForKey:UIBGeometryKeys[j]];
+
+        result.push(record);
+    }
+    return result;
+}
+
+// Undo target for interactive changes: applies a geometry snapshot and
+// registers the current geometry as the inverse.
+- (void)_applyGeometry:(CPArray)records
+{
+    if (UIBUndoSuppressionCount === 0)
+        [[_undoManager prepareWithInvocationTarget:self] _applyGeometry:[self _currentGeometryForRecords:records]];
+
+    [self _applyGeometryWithoutUndo:records];
+}
+
+- (void)_applyGeometryWithoutUndo:(CPArray)records
+{
+    UIBPerformWithoutUndo(function()
+    {
+        for (var i = 0; i < records.length; i++)
+        {
+            var record = records[i];
+            for (var j = 0; j < UIBGeometryKeys.length; j++)
+            {
+                var key = UIBGeometryKeys[j];
+                if (record[key] !== nil && record[key] !== undefined)
+                    [record.element setValue:record[key] forKey:key];
+                else if (key === "markupKeys")
+                    [record.element setValue:[] forKey:key];
+            }
+        }
+    });
+
+    for (var i = 0; i < records.length; i++)
+    {
+        var view = [_canvasView viewForElementWithID:[records[i].element valueForKey:@"id"]];
+        if (view)
+            [view invalidateLayoutUpwards];
+    }
+    [_canvasView setNeedsLayout:YES];
+    [_canvasView setNeedsDisplay:YES];
+}
+
+/*!
+    Called by the canvas when a mouse drag (move, resize, connect) starts.
+    Until the matching end, model changes are not recorded one by one; the
+    whole drag becomes a single undo step.
+*/
+- (void)beginInteractiveChange
+{
+    if (_interactiveDepth++ > 0)
+        return;
+
+    _interactiveSnapshot = [self _geometrySnapshot];
+    _interactiveInsertions = [];
+    UIBUndoSuppressionCount++;
+}
+
+- (void)endInteractiveChangeWithActionName:(CPString)anActionName
+{
+    if (_interactiveDepth <= 0)
+        return;
+
+    if (--_interactiveDepth > 0)
+        return;
+
+    UIBUndoSuppressionCount = MAX(0, UIBUndoSuppressionCount - 1);
+
+    var before = _interactiveSnapshot || [],
+        insertions = _interactiveInsertions || [],
+        changed = [],
+        insertedAndAlive = [];
+
+    _interactiveSnapshot = nil;
+    _interactiveInsertions = nil;
+
+    for (var i = 0; i < before.length; i++)
+    {
+        var record = before[i];
+        for (var j = 0; j < UIBGeometryKeys.length; j++)
+        {
+            var key = UIBGeometryKeys[j];
+            if ([record.element valueForKey:key] !== record[key])
+            {
+                changed.push(record);
+                break;
+            }
+        }
+    }
+
+    for (var i = 0; i < insertions.length; i++)
+        if (_elementsByID[[insertions[i] valueForKey:@"id"]] === insertions[i])
+            insertedAndAlive.push(insertions[i]);
+
+    if (changed.length === 0 && insertedAndAlive.length === 0)
+        return;
+
+    // Undo runs in reverse order: first the new spacers go away, then the
+    // geometry is restored.
+    [[_undoManager prepareWithInvocationTarget:self] _applyGeometry:changed];
+
+    for (var i = 0; i < insertedAndAlive.length; i++)
+        [[_undoManager prepareWithInvocationTarget:self] _detachElement:insertedAndAlive[i]];
+
+    [self _setActionName:anActionName || @"Change Layout"];
+    [self _noteDocumentChanged];
+}
+
+- (void)cancelInteractiveChange
+{
+    if (_interactiveDepth <= 0)
+        return;
+
+    var before = _interactiveSnapshot || [],
+        insertions = _interactiveInsertions || [];
+
+    _interactiveDepth = 0;
+    _interactiveSnapshot = nil;
+    _interactiveInsertions = nil;
+
+    // Still suppressed: nothing of this is recorded.
+    for (var i = insertions.length - 1; i >= 0; i--)
+        [self _detachElement:insertions[i]];
+
+    [self _applyGeometryWithoutUndo:before];
+
+    UIBUndoSuppressionCount = MAX(0, UIBUndoSuppressionCount - 1);
+}
+
+#pragma mark -
+#pragma mark Tree Helpers
+
+- (CPString)_nextElementID
+{
+    var newID;
+    do
+        newID = @"id_" + _elementCounter++;
+    while (_elementsByID[newID]);
+
+    return newID;
+}
+
+// The element plus all descendants, parents before children.
+- (CPArray)_subtreeOfElement:(id)elementData normalizingParents:(BOOL)normalize
+{
+    var result = [];
+    var walk = function(element)
+    {
+        result.push(element);
+        var children = [element valueForKey:@"children"];
+        if (!children)
+            return;
+
+        for (var i = 0; i < children.length; i++)
+        {
+            if (normalize)
+                [children[i] setValue:[element valueForKey:@"id"] forKey:@"parentID"];
+            walk(children[i]);
+        }
+    };
+    walk(elementData);
+    return result;
+}
+
+- (CPDictionary)parentOfElement:(CPDictionary)elementData
+{
+    var parentID = [elementData valueForKey:@"parentID"];
+    if (!parentID)
+        return nil;
+
+    return _elementsByID[parentID] || nil;
+}
+
+- (id)elementWithID:(CPString)anID
+{
+    return _elementsByID[anID] || nil;
+}
+
+- (BOOL)containsElement:(id)elementData
+{
+    return !!elementData && _elementsByID[[elementData valueForKey:@"id"]] === elementData;
+}
+
+- (BOOL)_isElement:(id)possibleAncestor ancestorOf:(id)elementData
+{
+    var parent = [self parentOfElement:elementData];
+    while (parent)
+    {
+        if (parent === possibleAncestor)
+            return YES;
+        parent = [self parentOfElement:parent];
+    }
+    return NO;
+}
+
+- (int)_indexOfElement:(id)elementData
+{
+    var parentData = [self parentOfElement:elementData];
+    if (!parentData)
+        return -1;
+
+    return ([parentData valueForKey:@"children"] || []).indexOf(elementData);
+}
+
+- (BOOL)_isRootContainer:(id)elementData
+{
+    return !!elementData && !![elementData valueForKey:@"isRootVBox"];
+}
+
+// Elements that cannot be deleted, copied or grouped.
+- (BOOL)_isFixedElement:(id)elementData
+{
+    return [self _isRootContainer:elementData] || [elementData valueForKey:@"type"] === "owner";
+}
+
+// The selection without root containers and without elements whose ancestor
+// is also selected, in document order.
+- (CPArray)_topLevelSelection
+{
+    return [self _topLevelSelectionIncludingOwner:NO];
+}
+
+- (CPArray)_topLevelSelectionIncludingOwner:(BOOL)includeOwner
+{
+    var selected = [[_elementsController selectedObjects] copy] || [],
+        result = [];
+
+    for (var i = 0; i < selected.length; i++)
+    {
+        var element = selected[i],
+            covered = NO;
+
+        if ([self _isRootContainer:element] || ![self containsElement:element])
+            continue;
+
+        if (!includeOwner && [element valueForKey:@"type"] === "owner")
+            continue;
+
+        for (var j = 0; j < selected.length && !covered; j++)
+            if (selected[j] !== element && [self _isElement:selected[j] ancestorOf:element])
+                covered = YES;
+
+        if (!covered)
+            result.push(element);
+    }
+
+    var order = [_elementsController arrangedObjects];
+    result.sort(function(a, b)
+    {
+        var parentA = [a valueForKey:@"parentID"], parentB = [b valueForKey:@"parentID"];
+        if (parentA && parentA === parentB)
+            return [self _indexOfElement:a] - [self _indexOfElement:b];
+        return [order indexOfObjectIdenticalTo:a] - [order indexOfObjectIdenticalTo:b];
+    });
+
+    return result;
+}
+
+- (void)_relayoutElement:(id)elementData
+{
+    if (!elementData || !_canvasView)
+        return;
+
+    var view = [_canvasView viewForElementWithID:[elementData valueForKey:@"id"]];
+    if (view)
+    {
+        [view setNeedsLayout:YES];
+        [view setNeedsDisplay:YES];
+    }
+}
+
+- (void)_selectElements:(CPArray)elements
+{
+    [_elementsController setSelectedObjects:elements || []];
+}
+
+#pragma mark -
+#pragma mark Element Factory
+
+/*!
+    Builds the data for a new element of the given type with default values,
+    a fresh ID and a sensible initial size. The element is not part of the
+    document until it is passed to insertElement:intoParent:atIndex:.
+*/
+- (id)_newElementDataOfType:(CPString)elementType
+{
+    var viewClass = [UIBuilderController classForElementType:elementType],
+        defaults = UIBDefaultsForType(elementType),
+        data = [CPConservativeDictionary dictionary];
+
+    [data setValue:elementType forKey:@"type"];
+    [data setValue:[self _nextElementID] forKey:@"id"];
+
+    for (var key in defaults)
+        if (defaults.hasOwnProperty(key) && !UIBNumericKeys[key])
+            [data setValue:defaults[key] forKey:key];
+
+    [data setValue:[] forKey:@"markupKeys"];
+    [data setValue:{} forKey:@"extraAttributes"];
+
+    // Determine the initial size with a temporary view.
+    var tempView = [[viewClass alloc] initWithFrame:CGRectMakeZero()];
+    [tempView setDataObject:data];
+
+    var size = tempView._isContainer ? [tempView frame].size : [tempView intrinsicContentSize];
+    [tempView setDataObject:nil];
+
+    var width = (size.width >= 4) ? size.width : (defaults.width || 20),
+        height = (size.height >= 4) ? size.height : (defaults.height || 20);
+
+    if (tempView._isContainer && defaults.width && defaults.height)
+    {
+        width = defaults.width;
+        height = defaults.height;
+    }
+
+    if (elementType === "window")
+    {
+        width = 320;
+        height = 240;
+    }
+
+    [data setValue:width forKey:@"width"];
+    [data setValue:height forKey:@"height"];
+    [data setValue:0 forKey:@"originX"];
+    [data setValue:0 forKey:@"originY"];
+    [data setValue:[] forKey:@"children"];
+
+    if (elementType === "window" || elementType === "scrollView" || elementType === "splitView")
+        [data valueForKey:@"children"].push([self _newRootVBoxForContainer:data]);
+
+    if (elementType === "tabView")
+    {
+        for (var i = 1; i <= 2; i++)
+        {
+            var item = [self _newElementDataOfType:@"tabViewItem"];
+            [item setValue:@"Tab " + i forKey:@"value"];
+            [item setValue:[data valueForKey:@"id"] forKey:@"parentID"];
+            [item valueForKey:@"children"].push([self _newElementDataOfType:@"vbox"]);
+            [data valueForKey:@"children"].push(item);
+        }
+    }
+
+    if (elementType === "box")
+        [data valueForKey:@"children"].push([self _newElementDataOfType:@"vbox"]);
+
+    return data;
+}
+
+- (CGRect)_rootFrameForContainer:(id)containerData
+{
+    var width = [containerData valueForKey:@"width"],
+        height = [containerData valueForKey:@"height"];
+
+    if ([containerData valueForKey:@"type"] === "window")
+        return CGRectMake(0, 22, width, MAX(0, height - 22));
+
+    return CGRectMake(0, 0, width, height);
+}
+
+- (id)_newRootVBoxForContainer:(id)containerData
+{
+    var vbox = [self _newElementDataOfType:@"vbox"],
+        frame = [self _rootFrameForContainer:containerData];
+
+    [vbox setValue:YES forKey:@"isRootVBox"];
+    [vbox setValue:@"expand" forKey:@"halign"];
+    [vbox setValue:@"expand" forKey:@"valign"];
+    [vbox setValue:frame.origin.x forKey:@"originX"];
+    [vbox setValue:frame.origin.y forKey:@"originY"];
+    [vbox setValue:frame.size.width forKey:@"width"];
+    [vbox setValue:frame.size.height forKey:@"height"];
+    [vbox setValue:[containerData valueForKey:@"id"] forKey:@"parentID"];
+
+    return vbox;
+}
+
+- (id)_newRowContainingElement:(id)elementData width:(float)aWidth
+{
+    var hbox = [self _newElementDataOfType:@"hbox"];
+    if (aWidth > 0)
+        [hbox setValue:aWidth forKey:@"width"];
+
+    [hbox valueForKey:@"children"].push(elementData);
+    [elementData setValue:[hbox valueForKey:@"id"] forKey:@"parentID"];
+
+    return hbox;
+}
+
+// Wraps an element in a row if it cannot live directly in the given container.
+- (id)_element:(id)elementData adaptedForContainer:(id)containerData
+{
+    if (!containerData)
+        return elementData;
+
+    var containerType = [containerData valueForKey:@"type"],
+        parentType = [[self parentOfElement:containerData] valueForKey:@"type"];
+
+    // The document view of a scroll view / the panes of a split view go in directly.
+    if ([containerData valueForKey:@"isRootVBox"] && (parentType === "scrollView" || parentType === "splitView"))
+        return elementData;
+
+    if (UIBIsVerticalStackType(containerType) && !UIBVBoxAcceptsDirectly([elementData valueForKey:@"type"]))
+        return [self _newRowContainingElement:elementData width:[containerData valueForKey:@"width"]];
+
+    return elementData;
+}
+
+// Where the content of an element goes: windows, scroll views and split views
+// keep their content in a root vbox, boxes and tab items in their content view
+// (created on demand, as an undoable step); tab views in the visible tab.
+- (id)_contentContainerOfElement:(id)elementData
+{
+    var type = [elementData valueForKey:@"type"],
+        children = [elementData valueForKey:@"children"] || [];
+
+    if (type === "window" || type === "scrollView" || type === "splitView")
+    {
+        for (var i = 0; i < children.length; i++)
+            if ([children[i] valueForKey:@"isRootVBox"])
+                return children[i];
+
+        var vbox = [self _newRootVBoxForContainer:elementData];
+        [self insertElement:vbox intoParent:elementData atIndex:-1];
+        return vbox;
+    }
+
+    if (type === "tabView")
+    {
+        if (!children.length)
+        {
+            var item = [self _newElementDataOfType:@"tabViewItem"];
+            [self insertElement:item intoParent:elementData atIndex:-1];
+            return [self _contentContainerOfElement:item];
+        }
+
+        var index = MAX(0, MIN(Number([elementData valueForKey:@"selectedTabIndex"]) || 0, children.length - 1));
+        return [self _contentContainerOfElement:children[index]];
+    }
+
+    if (type === "box" || type === "tabViewItem")
+    {
+        if (children.length === 1 && ([children[0] valueForKey:@"type"] === "vbox" || [children[0] valueForKey:@"type"] === "hbox"))
+            return children[0];
+
+        if (children.length === 0)
+        {
+            var content = [self _newElementDataOfType:@"vbox"];
+            [self insertElement:content intoParent:elementData atIndex:-1];
+            return content;
+        }
+
+        return elementData;
+    }
+
+    return elementData;
+}
+
+- (BOOL)_isContainerElement:(id)elementData
+{
+    var type = [elementData valueForKey:@"type"];
+    return type === "window" || type === "vbox" || type === "hbox" || type === "box" || type === "scrollView" ||
+           type === "splitView" || type === "tabView" || type === "tabViewItem";
+}
+
+#pragma mark -
+#pragma mark Adding Elements
+
+- (id)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint inParent:(CPDictionary)parentData
+{
+    return [self addNewElementOfType:elementType atPoint:aPoint inParent:parentData atIndex:-1];
+}
+
+- (id)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint inParent:(CPDictionary)parentData atIndex:(int)index
+{
+    if (!parentData || elementType === "window")
+    {
+        if (elementType !== "window")
+            return [self addNewElementOfType:elementType inNewWindowAtPoint:aPoint];
+
+        var windowData = [self _newElementDataOfType:@"window"];
+        [windowData setValue:aPoint.x - [windowData valueForKey:@"width"] / 2 forKey:@"originX"];
+        [windowData setValue:aPoint.y - [windowData valueForKey:@"height"] / 2 forKey:@"originY"];
+
+        [self insertElement:windowData intoParent:nil atIndex:-1];
+        [self _selectElements:[windowData]];
+        [self _setActionName:@"Add Window"];
+        return windowData;
+    }
+
+    if (elementType === "tabViewItem" && [parentData valueForKey:@"type"] === "tabView")
+    {
+        var newItem = [self _newElementDataOfType:@"tabViewItem"];
+        [newItem valueForKey:@"children"].push([self _newElementDataOfType:@"vbox"]);
+        [self insertElement:newItem intoParent:parentData atIndex:-1];
+        [self _selectElements:[newItem]];
+        [self _setActionName:@"Add Tab"];
+        return newItem;
+    }
+
+    var newElementData = [self _newElementDataOfType:elementType],
+        containerData = [self _contentContainerOfElement:parentData];
+
+    // The drop index was computed for the view under the mouse.
+    if (containerData !== parentData)
+        index = -1;
+
+    [self insertElement:[self _element:newElementData adaptedForContainer:containerData] intoParent:containerData atIndex:index];
+
+    [self _selectElements:[newElementData]];
+    [self _setActionName:@"Add " + [self _displayNameForType:elementType]];
+
+    return newElementData;
+}
+
+- (id)addNewElementOfType:(CPString)elementType inNewWindowAtPoint:(CGPoint)aPoint
+{
+    var windowData = [self _newElementDataOfType:@"window"],
+        rootVBox = [windowData valueForKey:@"children"][0],
+        newElementData = [self _newElementDataOfType:elementType],
+        child = [self _element:newElementData adaptedForContainer:rootVBox];
+
+    [windowData setValue:aPoint.x - [windowData valueForKey:@"width"] / 2 forKey:@"originX"];
+    [windowData setValue:aPoint.y - [windowData valueForKey:@"height"] / 2 forKey:@"originY"];
+    [rootVBox valueForKey:@"children"].push(child);
+
+    [self insertElement:windowData intoParent:nil atIndex:-1];
+    [self _selectElements:[newElementData]];
+    [self _setActionName:@"Add " + [self _displayNameForType:elementType]];
+
+    return newElementData;
+}
+
+// Used by the canvas while dragging inside boxes. Recorded as part of the drag.
+- (id)insertSpacerOfType:(CPString)spacerType inParent:(id)parentData atIndex:(int)anIndex
+{
+    var spacer = [self _newElementDataOfType:spacerType];
+
+    UIBPerformWithoutUndo(function()
+    {
+        if (spacerType === "hspace")
+        {
+            [spacer setValue:0 forKey:@"width"];
+            [spacer setValue:@"min" forKey:@"halign"];
+        }
+        else
+        {
+            [spacer setValue:0 forKey:@"height"];
+            [spacer setValue:@"min" forKey:@"valign"];
+        }
+    });
+
+    [self insertElement:spacer intoParent:parentData atIndex:anIndex];
+    return spacer;
+}
+
+- (CPString)_displayNameForType:(CPString)aType
+{
+    var names = {
+        "hbox": "HBox", "vbox": "VBox", "hspace": "Horizontal Space", "vspace": "Vertical Space",
+        "progresIndicator": "Progress Indicator"
+    };
+
+    if (names[aType])
+        return names[aType];
+
+    var words = String(aType).replace(/([a-z])([A-Z])/g, "$1 $2");
+    return words.charAt(0).toUpperCase() + words.substring(1);
+}
+
+#pragma mark -
+#pragma mark Deleting
 
 - (void)removeSelectedElementsWithActionName:(CPString)actionName
 {
-    var selectedObjects = [[_elementsController selectedObjects] copy];
-    if ([selectedObjects count] === 0) return;
+    var elements = [self _topLevelSelection];
+    if (elements.length === 0)
+        return;
 
-    var elementsToDelete = [CPMutableArray array];
-    var uniqueParents = [CPArray array];
+    for (var i = elements.length - 1; i >= 0; i--)
+        [self removeElement:elements[i]];
 
-    // Function to recursively find all children
-    var findChildrenRecursive = function(parent) {
-        var children = [parent valueForKey:@"children"];
-        if (children && [children count] > 0) {
-            for (var i = 0; i < [children count]; i++) {
-                var child = children[i];
-                [elementsToDelete addObject:child];
-                findChildrenRecursive(child);
-            }
-        }
-    };
-
-    // Add selected objects and all their children to the deletion list
-    for (var i = 0; i < [selectedObjects count]; i++)
-    {
-        var selectedObject = selectedObjects[i];
-
-        var parent = [self parentOfElement:selectedObject];
-        if (parent && ![uniqueParents containsObject:parent])
-            [uniqueParents addObject:parent];
-
-        if (![elementsToDelete containsObject:selectedObject])
-        {
-            [elementsToDelete addObject:selectedObject];
-            findChildrenRecursive(selectedObject);
-        }
-    }
-
-    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] addObjects:elementsToDelete];
-    [[[CPApp keyWindow] undoManager] setActionName:actionName];
-    [_elementsController removeObjects:elementsToDelete];
-
-    for (var i = 0; i < [uniqueParents count]; i++)
-    {
-        var parent = uniqueParents[i];
-        var parentView = [_canvasView viewForElementWithID:[parent valueForKey:@"id"]];
-        if (parentView)
-            [parentView layoutSubviews];
-    }
+    [self _selectElements:[]];
+    [self _setActionName:actionName];
 }
 
 - (void)removeSelectedElements
@@ -387,65 +1180,92 @@
     [self removeSelectedElementsWithActionName:@"Delete"];
 }
 
-- (void)removeElement:(CPDictionary)elementData fromParent:(CPDictionary)parentData
-{
-    if (parentData)
-    {
-        [[parentData mutableArrayValueForKey:@"children"] removeObject:elementData];
-    }
-    [_elementsController removeObject:elementData];
-}
-
-- (void)cut:(id)sender
-{
-    [self copy:sender];
-    [self removeSelectedElementsWithActionName:@"Cut"];
-}
-
 - (void)deleteElement:(CPDictionary)elementData
 {
-    if (!elementData) return;
+    if (![self containsElement:elementData] || [self _isFixedElement:elementData])
+        return;
 
-    var parent = [self parentOfElement:elementData];
+    [self removeElement:elementData];
+    [self _setActionName:@"Delete"];
+}
 
-    var elementsToDelete = [CPMutableArray arrayWithObject:elementData];
+// Kept for compatibility with older callers.
+- (void)removeElement:(CPDictionary)elementData fromParent:(CPDictionary)parentData
+{
+    [self removeElement:elementData];
+}
 
-    // Function to recursively find all children
-    var findChildrenRecursive = function(parent) {
-        var children = [parent valueForKey:@"children"];
-        if (children && [children count] > 0) {
-            for (var i = 0; i < [children count]; i++) {
-                var child = children[i];
-                [elementsToDelete addObject:child];
-                findChildrenRecursive(child);
-            }
-        }
-    };
+#pragma mark -
+#pragma mark Selection
 
-    findChildrenRecursive(elementData);
+- (void)selectAll:(id)sender
+{
+    // Select the siblings of the current selection, or all windows.
+    var selection = [self _topLevelSelection],
+        parentData = selection.length ? [self parentOfElement:selection[0]] : nil,
+        candidates = parentData ? [parentData valueForKey:@"children"] : [_elementsController arrangedObjects],
+        result = [];
 
-    // Setup Undo
-    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] addObjects:elementsToDelete];
-    [[[CPApp keyWindow] undoManager] setActionName:@"Delete"];
-
-    // Remove from parent's children array
-    if (parent) {
-        [[parent mutableArrayValueForKey:@"children"] removeObject:elementData];
-    }
-
-    // Remove all elements from the main controller
-    [_elementsController removeObjects:elementsToDelete];
-
-    if (parent)
+    for (var i = 0; i < candidates.length; i++)
     {
-        var parentView = [_canvasView viewForElementWithID:[parent valueForKey:@"id"]];
-        if (parentView)
-            [parentView layoutSubviews];
+        var element = candidates[i];
+        if ([self _isRootContainer:element])
+            continue;
+        if (!parentData && [element valueForKey:@"parentID"])
+            continue;
+        result.push(element);
     }
+
+    [self _selectElements:result];
+}
+
+- (void)selectParent:(id)sender
+{
+    var selection = [self _topLevelSelection];
+    if (selection.length !== 1)
+        return;
+
+    var parentData = [self parentOfElement:selection[0]];
+    if ([self _isRootContainer:parentData])
+        parentData = [self parentOfElement:parentData];
+
+    if (parentData)
+        [self _selectElements:[parentData]];
 }
 
 #pragma mark -
 #pragma mark Grouping
+
+- (BOOL)canGroupSelection
+{
+    var selection = [self _topLevelSelection];
+    if (selection.length < 2)
+        return NO;
+
+    var parentID = [selection[0] valueForKey:@"parentID"];
+    if (!parentID)
+        return NO;
+
+    for (var i = 0; i < selection.length; i++)
+    {
+        if ([selection[i] valueForKey:@"parentID"] !== parentID || [selection[i] valueForKey:@"type"] === "window")
+            return NO;
+    }
+
+    return YES;
+}
+
+- (BOOL)canUngroupSelection
+{
+    var selection = [self _topLevelSelection];
+    if (selection.length !== 1)
+        return NO;
+
+    var element = selection[0],
+        type = [element valueForKey:@"type"];
+
+    return (type === "hbox" || type === "vbox" || type === "box") && !![self parentOfElement:element] && ([element valueForKey:@"children"] || []).length > 0;
+}
 
 - (void)groupSelectionInHBox:(id)sender
 {
@@ -459,551 +1279,455 @@
 
 - (void)_groupSelectionInContainerOfType:(CPString)containerType withActionName:(CPString)actionName
 {
-    var selectedObjects = [[_elementsController selectedObjects] copy];
-    if ([selectedObjects count] <= 1) return;
+    if (![self canGroupSelection])
+        return;
 
-    var undoManager = [[CPApp keyWindow] undoManager];
-    var canvas = [self canvasView];
-    var commonParentData = [self parentOfElement:selectedObjects[0]];
-    var minX = Infinity, minY = Infinity;
+    var selection = [self _topLevelSelection],
+        parentData = [self parentOfElement:selection[0]],
+        parentType = [parentData valueForKey:@"type"],
+        insertIndex = [self _indexOfElement:selection[0]],
+        minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
-    for (var i = 0; i < [selectedObjects count]; i++)
+    for (var i = 0; i < selection.length; i++)
     {
-        var obj = selectedObjects[i];
-        if ([self parentOfElement:obj] != commonParentData) {
-            CPLog.warn("Cannot group elements with different parents yet.");
-            return;
-        }
-        var view = [canvas viewForElementWithID:[obj valueForKey:@"id"]];
-        var frame = [view frame];
-        minX = Math.min(minX, frame.origin.x);
-        minY = Math.min(minY, frame.origin.y);
+        var element = selection[i],
+            x = [element valueForKey:@"originX"] || 0,
+            y = [element valueForKey:@"originY"] || 0;
+
+        minX = MIN(minX, x);
+        minY = MIN(minY, y);
+        maxX = MAX(maxX, x + ([element valueForKey:@"width"] || 0));
+        maxY = MAX(maxY, y + ([element valueForKey:@"height"] || 0));
     }
 
-    var containerData = [CPConservativeDictionary dictionary];
-    var viewClass = [UIBuilderController classForElementType:containerType];
-    [containerData setValue:containerType forKey:@"type"];
-    [containerData setValue:@"id_" + _elementCounter++ forKey:@"id"];
-    var defaultValues = [viewClass defaultValues];
+    // In free-form containers the visual order decides the order in the new box.
+    if (parentType !== "hbox" && parentType !== "vbox")
+    {
+        var sortKey = (containerType === "hbox") ? @"originX" : @"originY";
+        selection.sort(function(a, b) { return [a valueForKey:sortKey] - [b valueForKey:sortKey]; });
+    }
 
-    for (var key in defaultValues)
-        [containerData setValue:defaultValues[key] forKey:key];
-
+    var containerData = [self _newElementDataOfType:containerType];
     [containerData setValue:minX forKey:@"originX"];
     [containerData setValue:minY forKey:@"originY"];
-    [containerData setValue:0 forKey:@"width"];
-    [containerData setValue:0 forKey:@"height"];
-    [containerData setValue:[] forKey:@"children"];
-    
-    if (commonParentData) {
-        [containerData setValue:[commonParentData valueForKey:@"id"] forKey:@"parentID"];
-    }
+    [containerData setValue:MAX(10, maxX - minX + 10) forKey:@"width"];
+    [containerData setValue:MAX(10, maxY - minY + 10) forKey:@"height"];
 
-    // Register Undo Action
-    [[undoManager prepareWithInvocationTarget:self] _ungroupContainer:containerData andRestoreSelection:selectedObjects withActionName:actionName];
-    [undoManager setActionName:actionName];
-
-    // --- Reparenting ---
-    // 1. Remove selected objects from their original parent and the main controller
-    if (commonParentData) {
-        [[commonParentData mutableArrayValueForKey:@"children"] removeObjectsInArray:selectedObjects];
-    }
-    // We remove them from the main controller. The views will be destroyed.
-    // They will be recreated when their data objects are re-added as children of the new container.
-    [_elementsController removeObjects:selectedObjects];
-
-
-    // 2. Update children to be relative to the new container and change parentID
-    var newChildren = [containerData mutableArrayValueForKey:@"children"];
-    for (var i = 0; i < [selectedObjects count]; i++)
+    // 1. Make the positions relative to the new container (while still in the document, so it is recorded).
+    for (var i = 0; i < selection.length; i++)
     {
-        var obj = selectedObjects[i];
-        
-        // Get the frame info from the data object itself, as the view has been removed.
-        var objX = [obj valueForKey:@"originX"];
-        var objY = [obj valueForKey:@"originY"];
-
-        [obj setValue:objX - minX forKey:@"originX"];
-        [obj setValue:objY - minY forKey:@"originY"];
-        [obj setValue:[containerData valueForKey:@"id"] forKey:@"parentID"];
-        [newChildren addObject:obj];
+        [selection[i] setValue:([selection[i] valueForKey:@"originX"] || 0) - minX forKey:@"originX"];
+        [selection[i] setValue:([selection[i] valueForKey:@"originY"] || 0) - minY forKey:@"originY"];
     }
 
-    var sortKey = (containerType === "hbox") ? @"originX" : @"originY";
-    var sortDescriptor = [CPSortDescriptor sortDescriptorWithKey:sortKey ascending:YES];
-    [newChildren sortUsingDescriptors:[CPArray arrayWithObject:sortDescriptor]];
+    // 2. Take them out of their current parent (highest index first).
+    var byIndex = selection.slice().sort(function(a, b) { return [self _indexOfElement:b] - [self _indexOfElement:a]; });
+    for (var i = 0; i < byIndex.length; i++)
+        [self _detachElement:byIndex[i]];
 
-    // 3. Add the new container to the parent's children array
-    if (commonParentData) {
-        [[commonParentData mutableArrayValueForKey:@"children"] addObject:containerData];
-    }
+    // 3. Fill the container and insert it where the first element was.
+    var children = [containerData valueForKey:@"children"];
+    for (var i = 0; i < selection.length; i++)
+        children.push([self _element:selection[i] adaptedForContainer:containerData]);
 
-    // 4. Add container and its now-updated children back to the main controller.
-    [_elementsController addObject:containerData];
-    [_elementsController addObjects:newChildren];
+    [self insertElement:[self _element:containerData adaptedForContainer:parentData] intoParent:parentData atIndex:insertIndex];
 
+    [self _selectElements:[containerData]];
+    [self _setActionName:actionName];
 
-    // 5. Update selection
-    [_elementsController setSelectedObjects:[CPArray arrayWithObject:containerData]];
-
-    // 6. Trigger layout
-    var parentView = commonParentData ? [canvas viewForElementWithID:[commonParentData valueForKey:@"id"]] : canvas;
-    [parentView setNeedsLayout:YES];
-
-    // 7. Layout the new container itself
-    var newContainerView = [canvas viewForElementWithID:[containerData valueForKey:@"id"]];
-    if (newContainerView)
-    {
-        [newContainerView performSelector:@selector(layoutSubviews) withObject:nil];
-        [newContainerView performSelector:@selector(sizeToFit) withObject:nil];
-        debugger
-    }
+    var containerView = [_canvasView viewForElementWithID:[containerData valueForKey:@"id"]];
+    if (containerView)
+        [containerView setNeedsLayout:YES];
 }
 
-- (void)_ungroupContainer:(CPDictionary)containerData andRestoreSelection:(CPArray)selectionToRestore withActionName:(CPString)actionName
+- (void)ungroupSelection:(id)sender
 {
-    var undoManager = [[CPApp keyWindow] undoManager];
-    var parentData = [self parentOfElement:containerData];
-    var childrenToUngroup = [[containerData valueForKey:@"children"] copy];
-    var containerOrigin = {x: [containerData valueForKey:@"originX"], y: [containerData valueForKey:@"originY"]};
+    if (![self canUngroupSelection])
+        return;
 
-    [undoManager setActionName:actionName];
+    var containerData = [self _topLevelSelection][0],
+        parentData = [self parentOfElement:containerData],
+        index = [self _indexOfElement:containerData],
+        offsetX = [containerData valueForKey:@"originX"] || 0,
+        offsetY = [containerData valueForKey:@"originY"] || 0,
+        children = ([containerData valueForKey:@"children"] || []).slice(),
+        result = [];
 
-    // 1. Remove container and its children from the controller
-    if (parentData) {
-        [[parentData mutableArrayValueForKey:@"children"] removeObject:containerData];
-    }
-    [_elementsController removeObject:containerData];
-    [_elementsController removeObjects:childrenToUngroup];
-
-
-    // 2. Reparent children and add them back to the controller
-    for (var i = 0; i < [childrenToUngroup count]; i++)
+    // Make the positions absolute again (while still in the document, so it is recorded).
+    for (var i = 0; i < children.length; i++)
     {
-        var child = childrenToUngroup[i];
-        [child setValue:parentData ? [parentData valueForKey:@"id"] : nil forKey:@"parentID"];
-        [child setValue:[child valueForKey:@"originX"] + containerOrigin.x forKey:@"originX"];
-        [child setValue:[child valueForKey:@"originY"] + containerOrigin.y forKey:@"originY"];
-
-        if (parentData) {
-            [[parentData mutableArrayValueForKey:@"children"] addObject:child];
-        }
-        [_elementsController addObject:child];
+        [children[i] setValue:([children[i] valueForKey:@"originX"] || 0) + offsetX forKey:@"originX"];
+        [children[i] setValue:([children[i] valueForKey:@"originY"] || 0) + offsetY forKey:@"originY"];
     }
 
-    // 3. Restore selection
-    [_elementsController setSelectedObjects:selectionToRestore];
+    [self _detachElement:containerData];
 
-    // 4. Trigger layout
-    var canvas = [self canvasView];
-    var parentView = parentData ? [canvas viewForElementWithID:[parentData valueForKey:@"id"]] : canvas;
-    [parentView setNeedsLayout:YES];
+    for (var i = 0; i < children.length; i++)
+    {
+        var child = [self _element:children[i] adaptedForContainer:parentData];
+        [self insertElement:child intoParent:parentData atIndex:index + i];
+        result.push(children[i]);
+    }
+
+    [self _selectElements:result];
+    [self _setActionName:@"Ungroup"];
 }
 
+#pragma mark -
+#pragma mark Ordering
+
+- (BOOL)canMoveSelectionBy:(int)aDelta
+{
+    var selection = [self _topLevelSelection];
+    if (selection.length !== 1)
+        return NO;
+
+    var parentData = [self parentOfElement:selection[0]];
+    if (!parentData)
+        return NO;
+
+    var index = [self _indexOfElement:selection[0]] + aDelta;
+    return index >= 0 && index < ([parentData valueForKey:@"children"] || []).length;
+}
+
+- (void)moveSelectionEarlier:(id)sender
+{
+    if (![self canMoveSelectionBy:-1])
+        return;
+
+    var element = [self _topLevelSelection][0];
+    [self moveElement:element toIndex:[self _indexOfElement:element] - 1];
+    [self _setActionName:@"Move Earlier"];
+}
+
+- (void)moveSelectionLater:(id)sender
+{
+    if (![self canMoveSelectionBy:1])
+        return;
+
+    var element = [self _topLevelSelection][0];
+    [self moveElement:element toIndex:[self _indexOfElement:element] + 1];
+    [self _setActionName:@"Move Later"];
+}
 
 #pragma mark -
 #pragma mark Keyboard Movement
 
 - (void)moveSelectedElementsByDeltaX:(int)deltaX deltaY:(int)deltaY
 {
-    var selectedDataObjects = [_elementsController selectedObjects];
-    var changes = [CPMutableArray array];
-    for (var i = 0; i < [selectedDataObjects count]; i++)
+    var selection = [self _topLevelSelection];
+    if (selection.length === 0)
+        return;
+
+    for (var i = 0; i < selection.length; i++)
     {
-        var data = selectedDataObjects[i];
-        var newFrame = {
-            origin: {
-                x: [data valueForKey:@"originX"] + deltaX,
-                y: [data valueForKey:@"originY"] + deltaY
-            }
-        };
-        [changes addObject:{ data: data, frame: newFrame }];
+        var data = selection[i];
+        [data setValue:([data valueForKey:@"originX"] || 0) + deltaX forKey:@"originX"];
+        [data setValue:([data valueForKey:@"originY"] || 0) + deltaY forKey:@"originY"];
     }
-    [self applyFrameChanges:changes withActionName:@"Move"];
+
+    [self _setActionName:@"Move"];
+    [_canvasView setNeedsDisplay:YES];
 }
 
-- (void)moveLeft:(id)sender
-{
-    [self moveSelectedElementsByDeltaX:-1 deltaY:0];
-}
+- (void)moveLeft:(id)sender  { [self moveSelectedElementsByDeltaX:-1 deltaY:0]; }
+- (void)moveRight:(id)sender { [self moveSelectedElementsByDeltaX:1 deltaY:0]; }
+- (void)moveUp:(id)sender    { [self moveSelectedElementsByDeltaX:0 deltaY:-1]; }
+- (void)moveDown:(id)sender  { [self moveSelectedElementsByDeltaX:0 deltaY:1]; }
 
-- (void)moveRight:(id)sender
-{
-    [self moveSelectedElementsByDeltaX:1 deltaY:0];
-}
+- (void)moveLeftAndModifySelection:(id)sender  { [self moveSelectedElementsByDeltaX:-10 deltaY:0]; }
+- (void)moveRightAndModifySelection:(id)sender { [self moveSelectedElementsByDeltaX:10 deltaY:0]; }
+- (void)moveUpAndModifySelection:(id)sender    { [self moveSelectedElementsByDeltaX:0 deltaY:-10]; }
+- (void)moveDownAndModifySelection:(id)sender  { [self moveSelectedElementsByDeltaX:0 deltaY:10]; }
 
-- (void)moveUp:(id)sender
-{
-    [self moveSelectedElementsByDeltaX:0 deltaY:-1];
-}
-
-- (void)moveDown:(id)sender
-{
-    [self moveSelectedElementsByDeltaX:0 deltaY:1];
-}
-
-#pragma mark - 
+#pragma mark -
 #pragma mark Copy & Paste
+
+- (JSObject)_plainObjectForElement:(id)elementData
+{
+    var result = {},
+        keys = [elementData allKeys];
+
+    for (var i = 0; i < [keys count]; i++)
+    {
+        var key = keys[i],
+            value = [elementData objectForKey:key];
+
+        if (key === "parentID" || value === nil || value === undefined)
+            continue;
+
+        if (key === "children")
+        {
+            result.children = [];
+            for (var j = 0; j < value.length; j++)
+                result.children.push([self _plainObjectForElement:value[j]]);
+        }
+        else if (typeof value !== "object")
+            result[key] = value;
+        else if (!value.isa)
+            result[key] = JSON.parse(JSON.stringify(value));
+    }
+
+    return result;
+}
+
+- (id)_elementFromPlainObject:(JSObject)anObject
+{
+    var data = [CPConservativeDictionary dictionary];
+
+    for (var key in anObject)
+    {
+        // Copies get no markup id: ids must stay unique.
+        if (!anObject.hasOwnProperty(key) || key === "children" || key === "parentID" || key === "identifier")
+            continue;
+
+        [data setValue:anObject[key] forKey:key];
+    }
+
+    // Fresh identity for the copy.
+    [data setValue:[self _nextElementID] forKey:@"id"];
+
+    var children = [];
+    for (var i = 0; anObject.children && i < anObject.children.length; i++)
+    {
+        var child = [self _elementFromPlainObject:anObject.children[i]];
+        [child setValue:[data valueForKey:@"id"] forKey:@"parentID"];
+        children.push(child);
+    }
+    [data setValue:children forKey:@"children"];
+
+    return data;
+}
+
+- (CPString)_serializedSelection
+{
+    var selection = [self _topLevelSelection];
+    if (selection.length === 0)
+        return nil;
+
+    var plain = [];
+    for (var i = 0; i < selection.length; i++)
+        plain.push([self _plainObjectForElement:selection[i]]);
+
+    return JSON.stringify({ marker: UIBuilderDocumentPasteboardMarker, version: 1, elements: plain });
+}
+
+- (CPArray)_elementsFromSerializedString:(CPString)aString
+{
+    if (!aString)
+        return nil;
+
+    try
+    {
+        var payload = JSON.parse(aString);
+        if (!payload || payload.marker !== UIBuilderDocumentPasteboardMarker || !payload.elements)
+            return nil;
+
+        var result = [];
+        for (var i = 0; i < payload.elements.length; i++)
+            result.push([self _elementFromPlainObject:payload.elements[i]]);
+
+        return result;
+    }
+    catch (e)
+    {
+        return nil;
+    }
+}
+
+- (BOOL)canPaste
+{
+    var pboard = [CPPasteboard generalPasteboard],
+        types = [pboard types];
+
+    if ([types containsObject:UIBuilderElementPboardType])
+        return YES;
+
+    if ([types containsObject:CPStringPboardType])
+    {
+        var string = [pboard stringForType:CPStringPboardType];
+        return !!string && string.indexOf(UIBuilderDocumentPasteboardMarker) >= 0;
+    }
+
+    return NO;
+}
 
 - (void)copy:(id)sender
 {
-    var selectedData = [_elementsController selectedObjects];
+    var serialized = [self _serializedSelection];
+    if (!serialized)
+        return;
 
-    if ([selectedData count] > 0)
-    {
-        var pboard = [CPPasteboard generalPasteboard];
-        var data = [CPKeyedArchiver archivedDataWithRootObject:selectedData];
-
-        // 1. Declare that you are providing BOTH a custom type and a standard string type.
-        [pboard declareTypes:[UIBuilderElementPboardType, CPStringPboardType] owner:nil];
-
-        // 2. Set the data for your custom type, for your app's internal 'paste' to use.
-        [pboard setData:data forType:UIBuilderElementPboardType];
-
-        // 3. Set a string representation for the browser and other applications.
-        //    This can be a simple description or a more complex JSON representation.
-        var description = [selectedData count] + " UI element(s) copied.";
-        [pboard setString:description forType:CPStringPboardType];
-    }
+    var pboard = [CPPasteboard generalPasteboard];
+    [pboard declareTypes:[UIBuilderElementPboardType, CPStringPboardType] owner:nil];
+    [pboard setString:serialized forType:UIBuilderElementPboardType];
+    [pboard setString:serialized forType:CPStringPboardType];
 }
 
-- (void)_assignNewIDsToElement:(CPMutableDictionary)elementData
+- (void)cut:(id)sender
 {
-    [elementData setValue:@"id_" + _elementCounter++ forKey:@"id"];
-
-    var children = [elementData valueForKey:@"children"];
-    if (children)
-    {
-        var newChildren = [CPMutableArray array];
-        for (var i = 0; i < [children count]; i++)
-        {
-            var child = children[i];
-            // Deep copy child before modifying
-            var newChild = [CPKeyedUnarchiver unarchiveObjectWithData:[CPKeyedArchiver archivedDataWithRootObject:child]];
-            [newChild setValue:[elementData valueForKey:@"id"] forKey:@"parentID"];
-            [self _assignNewIDsToElement:newChild];
-            [newChildren addObject:newChild];
-        }
-        [elementData setValue:newChildren forKey:@"children"];
-    }
+    [self copy:sender];
+    [self removeSelectedElementsWithActionName:@"Cut"];
 }
 
 - (void)paste:(id)sender
 {
-    var pboard = [CPPasteboard generalPasteboard];
-    var types = [pboard types];
+    var pboard = [CPPasteboard generalPasteboard],
+        elements = [self _elementsFromSerializedString:[pboard stringForType:UIBuilderElementPboardType]];
 
-    if ([types containsObject:UIBuilderElementPboardType])
+    if (!elements)
+        elements = [self _elementsFromSerializedString:[pboard stringForType:CPStringPboardType]];
+
+    if (!elements || elements.length === 0)
+        return;
+
+    [self _insertElementsNearSelection:elements];
+    [self _setActionName:@"Paste"];
+}
+
+- (void)duplicate:(id)sender
+{
+    var elements = [self _elementsFromSerializedString:[self _serializedSelection]];
+    if (!elements || elements.length === 0)
+        return;
+
+    [self _insertElementsNearSelection:elements];
+    [self _setActionName:@"Duplicate"];
+}
+
+// Inserts copied elements: into the selected container, or after the
+// selected element, or (with nothing selected) into the first window.
+- (void)_insertElementsNearSelection:(CPArray)elements
+{
+    var selection = [self _topLevelSelection],
+        anchor = selection.length ? selection[selection.length - 1] : nil,
+        targetParent = nil,
+        index = -1,
+        inserted = [];
+
+    if (anchor)
     {
-        var data = [pboard dataForType:UIBuilderElementPboardType];
-        var pastedElements = [CPKeyedUnarchiver unarchiveObjectWithData:data];
-        var newSelection = [CPMutableArray array];
-
-        // Determine the target container
-        var targetContainer = nil;
-        var selectedObjects = [_elementsController selectedObjects];
-        if ([selectedObjects count] > 0)
+        if ([self _isContainerElement:anchor])
+            targetParent = [self _contentContainerOfElement:anchor];
+        else
         {
-            var firstSelected = selectedObjects[0];
-            var parentID = [firstSelected valueForKey:@"parentID"];
-            if (parentID)
+            targetParent = [self parentOfElement:anchor];
+            index = [self _indexOfElement:anchor] + 1;
+        }
+    }
+
+    for (var i = 0; i < elements.length; i++)
+    {
+        var element = elements[i];
+
+        if ([element valueForKey:@"type"] === "window" || !targetParent)
+        {
+            if ([element valueForKey:@"type"] !== "window")
             {
-                // Find the parent container in the elements controller
-                var allElements = [_elementsController arrangedObjects];
-                for (var i = 0; i < [allElements count]; i++)
-                {
-                    if ([[allElements[i] valueForKey:@"id"] isEqualToString:parentID])
-                    {
-                        targetContainer = allElements[i];
-                        break;
-                    }
-                }
+                // Nothing to paste into: give the element its own window.
+                var windowData = [self _newElementDataOfType:@"window"],
+                    rootVBox = [windowData valueForKey:@"children"][0];
+
+                [windowData setValue:120 + 20 * i forKey:@"originX"];
+                [windowData setValue:120 + 20 * i forKey:@"originY"];
+                [rootVBox valueForKey:@"children"].push([self _element:element adaptedForContainer:rootVBox]);
+                [self insertElement:windowData intoParent:nil atIndex:-1];
             }
             else
             {
-                // If the selected object has no parent, it must be a window
-                targetContainer = firstSelected;
+                [element setValue:([element valueForKey:@"originX"] || 0) + 20 forKey:@"originX"];
+                [element setValue:([element valueForKey:@"originY"] || 0) + 20 forKey:@"originY"];
+                [self insertElement:element intoParent:nil atIndex:-1];
             }
         }
         else
         {
-            // If no selection, find the first window
-            var allElements = [_elementsController arrangedObjects];
-            for (var i = 0; i < [allElements count]; i++)
+            if (![self _isLayoutContainer:targetParent])
             {
-                if ([[allElements[i] valueForKey:@"type"] isEqualToString:@"window"])
-                {
-                    targetContainer = allElements[i];
-                    break;
-                }
+                [element setValue:([element valueForKey:@"originX"] || 0) + 10 forKey:@"originX"];
+                [element setValue:([element valueForKey:@"originY"] || 0) + 10 forKey:@"originY"];
             }
+
+            [self insertElement:[self _element:element adaptedForContainer:targetParent] intoParent:targetParent atIndex:index];
+
+            if (index >= 0)
+                index++;
         }
 
-        for (var i = 0; i < [pastedElements count]; i++)
-        {
-            var newElement = [CPKeyedUnarchiver unarchiveObjectWithData:[CPKeyedArchiver archivedDataWithRootObject:pastedElements[i]]];
-
-            [newElement setValue:[newElement valueForKey:@"originX"] + 10 forKey:@"originX"];
-            [newElement setValue:[newElement valueForKey:@"originY"] + 10 forKey:@"originY"];
-            
-            [self _assignNewIDsToElement:newElement];
-
-            if (targetContainer && [newElement valueForKey:@"type"] !== @"window")
-            {
-                [newElement setValue:[targetContainer valueForKey:@"id"] forKey:@"parentID"];
-                [[targetContainer mutableArrayValueForKey:@"children"] addObject:newElement];
-            }
-            else
-            {
-                [newElement removeObjectForKey:@"parentID"];
-            }
-
-            [_elementsController addObject:newElement];
-            
-            if ([newElement valueForKey:@"children"])
-                [_elementsController addObjects:[newElement valueForKey:@"children"]];
-
-            [newSelection addObject:newElement];
-        }
-        
-        [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] removeObjects:newSelection];
-        [[[CPApp keyWindow] undoManager] setActionName:@"Paste"];
-        [_elementsController setSelectedObjects:newSelection];
+        inserted.push(element);
     }
+
+    [self _selectElements:inserted];
 }
 
-- (CPDictionary)parentOfElement:(CPDictionary)elementData
+- (BOOL)_isLayoutContainer:(id)elementData
 {
-    var parentID = [elementData valueForKey:@"parentID"];
-    if (!parentID) return nil;
-
-    var allElements = [_elementsController arrangedObjects];
-    for (var i = 0; i < [allElements count]; i++)
-    {
-        if ([[allElements[i] valueForKey:@"id"] isEqualToString:parentID])
-            return allElements[i];
-    }
-    return nil;
+    var type = [elementData valueForKey:@"type"];
+    return type === "hbox" || type === "vbox";
 }
 
-- (void)addNewElementOfType:(CPString)elementType inNewWindowAtPoint:(CGPoint)aPoint
-{
-    // 1. Create the window data
-    var windowData = [CPConservativeDictionary dictionary];
-    var windowClass = [UIBuilderController classForElementType:@"window"];
-    var windowWidth = 250, windowHeight = 200;
-    [windowData setValue:@"window" forKey:@"type"];
-    [windowData setValue:@"id_" + _elementCounter++ forKey:@"id"];
-    [windowData setValue:windowWidth forKey:@"width"];
-    [windowData setValue:windowHeight forKey:@"height"];
-    [windowData setValue:[] forKey:@"children"];
-
-    var defaultWindowValues = [windowClass defaultValues];
-    for (var key in [defaultWindowValues allKeys]) {
-        [windowData setValue:defaultWindowValues[key] forKey:key];
-    }
-
-    // 2. Position the window so its center is at the drop point
-    [windowData setValue:aPoint.x - (windowWidth / 2) forKey:@"originX"];
-    [windowData setValue:aPoint.y - (windowHeight / 2) forKey:@"originY"];
-
-    // 3. Add the window to the elements controller
-    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_elementsController] removeObject:windowData];
-    [[[CPApp keyWindow] undoManager] setActionName:@"Add Element in New Window"];
-    [_elementsController addObject:windowData];
-
-    // 4. Create the VBox data and add it as a child of the window
-    var vboxData = [CPConservativeDictionary dictionary];
-    var vboxClass = [UIBuilderController classForElementType:@"vbox"];
-    [vboxData setValue:@"vbox" forKey:@"type"];
-    [vboxData setValue:@"id_" + _elementCounter++ forKey:@"id"];
-    [vboxData setValue:[windowData valueForKey:@"id"] forKey:@"parentID"];
-
-    var defaultVBoxValues = [vboxClass defaultValues];
-    for (var key in [defaultVBoxValues allKeys]) {
-        [vboxData setValue:defaultVBoxValues[key] forKey:key];
-    }
-    // Make the vbox fill the window's content area
-    [vboxData setValue:0 forKey:@"originX"];
-    [vboxData setValue:22 forKey:@"originY"]; // Below title bar
-    [vboxData setValue:windowWidth forKey:@"width"];
-    [vboxData setValue:windowHeight - 22 forKey:@"height"];
-    [vboxData setValue:YES forKey:@"isRootVBox"];
-    [vboxData setValue:[] forKey:@"children"];
-
-    [[windowData mutableArrayValueForKey:@"children"] addObject:vboxData];
-    [_elementsController addObject:vboxData];
-
-
-    // 5. Add the new element inside the VBOX
-    [self addNewElementOfType:elementType atPoint:CGPointMake(0,0) inParent:vboxData];
-
-    // 6. Select the newly added element
-    var newElementData = [[vboxData valueForKey:@"children"] objectAtIndex:0];
-    [_elementsController setSelectedObjects:[CPArray arrayWithObject:newElementData]];
-
-    console.log("UIBuilderController: addNewElementOfType:inNewWindowAtPoint: - Added new element in new window.");
-}
-
-- (CPDictionary)addNewHBoxInParent:(CPDictionary)parentData
-{
-    var hboxData = [CPConservativeDictionary dictionary];
-    var hboxClass = [UIBuilderController classForElementType:@"hbox"];
-    [hboxData setValue:@"hbox" forKey:@"type"];
-    [hboxData setValue:@"id_" + _elementCounter++ forKey:@"id"];
-    [hboxData setValue:[parentData valueForKey:@"id"] forKey:@"parentID"];
-    var defaultHBoxValues = [hboxClass defaultValues];
-
-    for (var key in [defaultHBoxValues allKeys]) {
-        [hboxData setValue:defaultHBoxValues[key] forKey:key];
-    }
-    [hboxData setValue:0 forKey:@"originX"];
-    [hboxData setValue:0 forKey:@"originY"];
-    [hboxData setValue:[parentData valueForKey:@"width"] forKey:@"width"];
-    [hboxData setValue:50 forKey:@"height"]; // Default height
-    [hboxData setValue:[] forKey:@"children"];
-
-    [[parentData mutableArrayValueForKey:@"children"] addObject:hboxData];
-
-    return hboxData;
-}
-
-- (CPDictionary)addNewHBoxInParent:(CPDictionary)parentData atIndex:(int)index
-{
-    var hboxData = [CPConservativeDictionary dictionary];
-    var hboxClass = [UIBuilderController classForElementType:@"hbox"];
-    [hboxData setValue:@"hbox" forKey:@"type"];
-    [hboxData setValue:@"id_" + _elementCounter++ forKey:@"id"];
-    [hboxData setValue:[parentData valueForKey:@"id"] forKey:@"parentID"];
-    var defaultHBoxValues = [hboxClass defaultValues];
-    for (var key in defaultHBoxValues) {
-        [hboxData setValue:defaultHBoxValues[key] forKey:key];
-    }
-    [hboxData setValue:0 forKey:@"originX"];
-    [hboxData setValue:0 forKey:@"originY"]; // VBox will handle layout
-    [hboxData setValue:[parentData valueForKey:@"width"] forKey:@"width"];
-    [hboxData setValue:50 forKey:@"height"]; // Default height
-    [hboxData setValue:[] forKey:@"children"];
-
-    var parentChildren = [parentData mutableArrayValueForKey:@"children"];
-    if (index >= 0 && index <= [parentChildren count]) {
-        [parentChildren insertObject:hboxData atIndex:index];
-    } else {
-        [parentChildren addObject:hboxData]; // Fallback to adding at the end
-    }
-    
-    return hboxData;
-}
-
-- (CPDictionary)addNewHBoxAfterHBox:(CPDictionary)siblingHBoxData inParent:(CPDictionary)parentData
-{
-    var hboxData = [CPConservativeDictionary dictionary];
-    var hboxClass = [UIBuilderController classForElementType:@"hbox"];
-    [hboxData setValue:@"hbox" forKey:@"type"];
-    [hboxData setValue:@"id_" + _elementCounter++ forKey:@"id"];
-    [hboxData setValue:[parentData valueForKey:@"id"] forKey:@"parentID"];
-    var defaultHBoxValues = [hboxClass defaultValues];
-    for (var key in defaultHBoxValues) {
-        [hboxData setValue:defaultHBoxValues[key] forKey:key];
-    }
-    [hboxData setValue:0 forKey:@"originX"];
-    [hboxData setValue:0 forKey:@"originY"];
-    [hboxData setValue:[parentData valueForKey:@"width"] forKey:@"width"];
-    [hboxData setValue:50 forKey:@"height"]; // Default height
-    [hboxData setValue:[] forKey:@"children"];
-
-    var parentChildren = [parentData mutableArrayValueForKey:@"children"];
-    var index = [parentChildren indexOfObject:siblingHBoxData];
-    if (index != CPNotFound)
-    {
-        [parentChildren insertObject:hboxData atIndex:index + 1];
-    }
-    else
-    {
-        [parentChildren addObject:hboxData];
-    }
-    
-    return hboxData;
-}
-
-- (void)addNewElementOfType:(CPString)elementType inWindow:(CPDictionary)windowData atPoint:(CGPoint)aPoint
-{
-    // This method is now deprecated. Use addNewElementOfType:atPoint:inParent: instead.
-    console.error("addNewElementOfType:inWindow:atPoint: is deprecated. Use addNewElementOfType:atPoint:inParent: instead.");
-    [self addNewElementOfType:elementType atPoint:aPoint inParent:windowData];
-}
+#pragma mark -
+#pragma mark Connections
 
 - (void)addConnectionFrom:(CPDictionary)sourceData to:(CPDictionary)targetData atPoint:(CGPoint)atPoint outlet:(CPString)outlet action:(CPString)action
 {
+    var sourceID = [sourceData valueForKey:@"id"],
+        targetID = [targetData valueForKey:@"id"],
+        existing = [self allConnections];
+
+    for (var i = 0; i < existing.length; i++)
+    {
+        var connection = existing[i];
+        if ([connection valueForKey:@"sourceID"] === sourceID && [connection valueForKey:@"targetID"] === targetID &&
+            ([connection valueForKey:@"outlet"] || nil) == (outlet || nil) && ([connection valueForKey:@"action"] || nil) == (action || nil))
+            return;
+    }
+
     var newConnection = [CPConservativeDictionary dictionary];
-    [newConnection setValue:[sourceData valueForKey:@"id"] forKey:@"sourceID"];
-    [newConnection setValue:[targetData valueForKey:@"id"] forKey:@"targetID"];
-    [newConnection setValue:outlet forKey:@"outlet"];
-    [newConnection setValue:action forKey:@"action"];
+    [newConnection setValue:sourceID forKey:@"sourceID"];
+    [newConnection setValue:targetID forKey:@"targetID"];
+    if (outlet)
+        [newConnection setValue:outlet forKey:@"outlet"];
+    if (action)
+        [newConnection setValue:action forKey:@"action"];
     [newConnection setValue:@"connection_" + _elementCounter++ forKey:@"id"];
-    
+
     if (atPoint)
         [newConnection setValue:{x: atPoint.x, y: atPoint.y} forKey:@"atPoint"];
 
-    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_connectionsController] removeObject:newConnection];
-    [[[CPApp keyWindow] undoManager] setActionName:@"Add Connection"];
-
-    [_connectionsController addObject:newConnection];
-
-    console.log("UIBuilderController: addConnectionFrom:to: - Added connection: ", newConnection);
-    console.log("Connections controller count after add: " + [[_connectionsController arrangedObjects] count]);
-}
-
-- (void)removeConnection:(CPDictionary)connection
-{
-    [[[[CPApp keyWindow] undoManager] prepareWithInvocationTarget:_connectionsController] addObject:connection];
-    [[[CPApp keyWindow] undoManager] setActionName:@"Remove Connection"];
-
-    [_connectionsController removeObject:connection];
+    [self addConnection:newConnection];
+    [self _setActionName:action ? @"Connect Action" : @"Connect Outlet"];
 }
 
 #pragma mark -
 #pragma mark UICanvasView Delegate Methods
 
+/*!
+    Applies a list of {data, frame} changes. Inside an interactive drag this
+    is not recorded individually; otherwise every key change is undoable.
+*/
 - (void)applyFrameChanges:(CPArray)changes withActionName:(CPString)actionName
 {
-    var undoManager = [[CPApp keyWindow] undoManager];
-    var undoChanges = [CPMutableArray array];
-
-    [undoManager beginUndoGrouping];
-    [undoManager setActionName:actionName];
-
     for (var i = 0; i < [changes count]; i++)
     {
-        var change = changes[i];
-        var data = change.data;
-        var newFrame = change.frame;
-        var oldValues = { data: data, frame: {} };
+        var change = changes[i],
+            data = change.data,
+            newFrame = change.frame;
 
         if (newFrame.origin)
         {
-            oldValues.frame.origin = {
-                x: [data valueForKey:@"originX"],
-                y: [data valueForKey:@"originY"]
-            };
             [data setValue:newFrame.origin.x forKey:@"originX"];
             [data setValue:newFrame.origin.y forKey:@"originY"];
         }
 
         if (newFrame.size)
         {
-            oldValues.frame.size = {
-                width: [data valueForKey:@"width"],
-                height: [data valueForKey:@"height"]
-            };
             [data setValue:newFrame.size.width forKey:@"width"];
             [data setValue:newFrame.size.height forKey:@"height"];
         }
-        [undoChanges addObject:oldValues];
     }
 
-    [[undoManager prepareWithInvocationTarget:self] applyFrameChanges:undoChanges withActionName:actionName];
-    [undoManager endUndoGrouping];
+    [self _setActionName:actionName];
 }
 
 - (void)canvasView:(UICanvasView)aCanvas didMoveElement:(UIElementView)anElement
@@ -1020,368 +1744,400 @@
 
 - (void)canvasView:(UICanvasView)aCanvas didResizeElement:(UIElementView)anElement
 {
-    var changes = [CPMutableArray array];
-    var frame = [anElement frame];
-    [changes addObject:{ data: [anElement dataObject], frame: { origin: frame.origin, size: frame.size } }];
-    [self applyFrameChanges:changes withActionName:@"Resize"];
+    // The data object was updated while dragging; the drag itself is the undo
+    // step. A resized dimension is fixed in the markup from now on.
+    var data = [anElement dataObject],
+        snapshot = _interactiveSnapshot || [],
+        changedKeys = [];
+
+    for (var i = 0; i < snapshot.length; i++)
+    {
+        if (snapshot[i].element !== data)
+            continue;
+
+        if (snapshot[i].width !== [data valueForKey:@"width"])
+            changedKeys.push("width");
+        if (snapshot[i].height !== [data valueForKey:@"height"])
+            changedKeys.push("height");
+    }
+
+    if (changedKeys.length)
+        [self _markKeys:changedKeys forMarkupOfElement:data];
+
+    [self _relayoutElement:[self parentOfElement:data]];
+    [anElement invalidateLayoutUpwards];
 }
 
 - (void)canvasView:(UICanvasView)aCanvas didConnectElement:(UIElementView)sourceElement toElement:(UIElementView)targetElement asTargetAction:(CPString)actionName
 {
-    var sourceData = [sourceElement dataObject];
-    var targetData = [targetElement dataObject];
-
     // For a target-action, the outlet is typically 'target'
-    var outletName = @"target";
-
-    [self addConnectionFrom:sourceData to:targetData atPoint:nil outlet:outletName action:actionName];
+    [self addConnectionFrom:[sourceElement dataObject] to:[targetElement dataObject] atPoint:nil outlet:@"target" action:actionName];
 }
 
 - (void)canvasView:(UICanvasView)aCanvas didConnectElement:(UIElementView)sourceElement toElement:(UIElementView)targetElement asOutlet:(CPString)outletName
 {
-    var sourceData = [sourceElement dataObject];
-    var targetData = [targetElement dataObject];
-
     // For a simple outlet connection, there is no action.
-    var actionName = nil;
-
-    [self addConnectionFrom:sourceData to:targetData atPoint:nil outlet:outletName action:actionName];
+    [self addConnectionFrom:[sourceElement dataObject] to:[targetElement dataObject] atPoint:nil outlet:outletName action:nil];
 }
 
 - (void)changeValue:(id)newValue forObject:(id)dataObject
 {
-    var oldValue = [dataObject valueForKey:@"value"];
-    if (oldValue != newValue)
-    {
-        var undoManager = [[CPApp keyWindow] undoManager];
-        [[undoManager prepareWithInvocationTarget:self] changeValue:oldValue forObject:dataObject];
-        [undoManager setActionName:@"Change Value"];
-        [dataObject setValue:newValue forKey:@"value"];
-    }
+    [dataObject setValue:newValue forKey:@"value"];
+    [self _setActionName:@"Change Value"];
 }
 
 - (void)changeValueForSelectedObject:(id)newValue
 {
     var selectedObjects = [[self elementsController] selectedObjects];
     if ([selectedObjects count] === 1)
-    {
         [self changeValue:newValue forObject:selectedObjects[0]];
-    }
 }
 
 #pragma mark -
-#pragma mark GSMarkup Parsing
+#pragma mark Document
 
-/**
- * @brief A private recursive helper to parse a DOM node into an element data dictionary.
- *
- * @param elementNode The XML DOM node to parse.
- * @param parentData The data dictionary of the parent element, or nil for top-level elements.
- * @param allParsedElements A mutable array where all created element data dictionaries are stored flatly.
- * @return The data dictionary for the parsed elementNode.
- */
-- (CPDictionary)_parseElementNode:(id)elementNode parentData:(CPDictionary)parentData allParsedElements:(CPMutableArray)allParsedElements
+- (void)_removeEverythingWithoutUndo
 {
-    var type = [elementNode tagName];
-    var newElementData = [CPConservativeDictionary dictionary];
-    var viewClass = [UIBuilderController classForElementType:type];
-    if (!viewClass) {
-        console.warn("GSMarkup Parser: Unknown element type '" + type + "'. Skipping.");
-        return nil;
-    }
-    
-    // 1. Set basic properties
-    [newElementData setValue:type forKey:@"type"];
-    if (parentData) {
-        [newElementData setValue:[parentData valueForKey:@"id"] forKey:@"parentID"];
-    }
-
-    // 2. Parse attributes and convert to appropriate types
-    var attributes = [elementNode attributes];
-    var propTypes = [viewClass propertyTypes];
-
-    for (var i = 0; i < [attributes length]; i++)
-    {
-        var attr = attributes[i];
-        var key = attr.name;
-        var stringValue = attr.value;
-        var value = stringValue; // Default to string
-
-        var propType = [propTypes objectForKey:key];
-
-        if (propType === UIBBoolean) {
-            value = (stringValue.toLowerCase() === 'yes' || stringValue.toLowerCase() === 'true');
-        } else if (propType === UIBNumber) {
-            value = parseFloat(stringValue);
-        }
-        
-        [newElementData setValue:value forKey:key];
-        
-        // Update the global element counter to avoid future ID collisions
-        if (key === 'id' && [stringValue startsWith:'id_']) {
-            var idNumber = parseInt([stringValue substringFromIndex:3], 10);
-            if (!isNaN(idNumber)) {
-                _elementCounter = Math.max(_elementCounter, idNumber + 1);
-            }
-        }
-    }
-    
-    // 3. Initialize children array and add this element to the flat list
-    [newElementData setValue:[] forKey:@"children"];
-    [allParsedElements addObject:newElementData];
-
-    // 4. Recursively parse child nodes
-    var childNodes = [elementNode childNodes];
-    for (var i = 0; i < [childNodes length]; i++)
-    {
-        var childNode = childNodes[i];
-        // We only care about element nodes (type 1), not text nodes (whitespace, etc.)
-        if (childNode.nodeType === 1)
-        {
-            var childData = [self _parseElementNode:childNode parentData:newElementData allParsedElements:allParsedElements];
-            if (childData) {
-                 [[newElementData mutableArrayValueForKey:@"children"] addObject:childData];
-            }
-        }
-    }
-    
-    return newElementData;
+    _elementsByID = {};
+    _ownerElement = nil;
+    _markupOrder = [];
+    _unknownConnectors = [];
+    [_elementsController setSelectionIndexes:[CPIndexSet indexSet]];
+    [_elementsController setContent:[CPMutableArray array]];
+    [_connectionsController setContent:[CPMutableArray array]];
+    [_canvasView setNeedsDisplay:YES];
 }
 
-
-/**
- * @brief Parses a GSMarkup XML string to populate the UI builder's data model.
- *
- * This method clears the current model, then uses the browser's DOMParser
- * to build a DOM tree from the input string. It then traverses this tree
- * to reconstruct the element and connection data.
- *
- * @param gsmarkupString A CPString containing the complete GSMarkup document.
- */
-- (void)parseGSMarkup:(CPString)gsmarkupString
+- (id)_newOwnerElement
 {
-    // 1. Clear the existing data model
-    [_elementsController setContent:nil];
-    [_connectionsController setContent:nil];
-    _elementCounter = 0; // Reset counter
+    var owner = [self _newElementDataOfType:@"owner"];
+    [owner setValue:@"owner" forKey:@"id"];
+    [owner setValue:24 forKey:@"originX"];
+    [owner setValue:16 forKey:@"originY"];
+    return owner;
+}
 
-    if (!gsmarkupString || [gsmarkupString length] === 0) {
-        console.warn("GSMarkup Parser: Input string is empty. Nothing to parse.");
-        return;
-    }
-
-    // 2. Use the browser's DOMParser
-    var parser = new DOMParser();
-    var xmlDoc = parser.parseFromString(gsmarkupString, "application/xml");
-
-    // Check for parsing errors
-    var parseError = xmlDoc.getElementsByTagName("parsererror");
-    if (parseError.length > 0) {
-        console.error("Fatal Error parsing GSMarkup:", parseError[0].textContent);
-        // In a real app, you would show an alert to the user here.
-        return;
-    }
-
-    // --- 3. Parse Objects ---
-    var objectsNode = xmlDoc.getElementsByTagName("objects")[0];
-    var parsedElements = [CPMutableArray array];
-    
-    if (objectsNode) {
-        var topLevelNodes = [objectsNode childNodes];
-        for (var i = 0; i < [topLevelNodes length]; i++) {
-            var node = topLevelNodes[i];
-            if (node.nodeType === 1) { // Is an element node
-                [self _parseElementNode:node parentData:nil allParsedElements:parsedElements];
-            }
+// Inserts complete subtrees in one go (fast for large documents). Not undoable.
+- (void)_insertTopLevelElementsWithoutUndo:(CPArray)elements
+{
+    var all = [];
+    for (var i = 0; i < elements.length; i++)
+    {
+        [elements[i] removeObjectForKey:@"parentID"];
+        var subtree = [self _subtreeOfElement:elements[i] normalizingParents:YES];
+        for (var j = 0; j < subtree.length; j++)
+        {
+            _elementsByID[[subtree[j] valueForKey:@"id"]] = subtree[j];
+            all.push(subtree[j]);
         }
     }
 
-    // --- 4. Parse Connectors ---
-    var connectorsNode = xmlDoc.getElementsByTagName("connectors")[0];
-    var parsedConnections = [CPMutableArray array];
-    
-    if (connectorsNode) {
-        var connectorNodes = [connectorsNode childNodes];
-        for (var i = 0; i < [connectorNodes length]; i++) {
-            var node = connectorNodes[i];
-            if (node.nodeType === 1 && [node tagName] === 'connector') {
-                var connData = [CPConservativeDictionary dictionary];
-                var sourceID = [node getAttribute:'source'];
-                var targetID = [node getAttribute:'target'];
-                
-                // Remove the '#' prefix if it exists
-                if (sourceID && [sourceID startsWith:'#']) sourceID = [sourceID substringFromIndex:1];
-                if (targetID && [targetID startsWith:'#']) targetID = [targetID substringFromIndex:1];
+    [_elementsController addObjects:all];
+}
 
-                [connData setValue:sourceID forKey:'sourceID'];
-                [connData setValue:targetID forKey:'targetID'];
-                
-                if ([node hasAttribute:'outlet']) [connData setValue:[node getAttribute:'outlet'] forKey:'outlet'];
-                if ([node hasAttribute:'action']) [connData setValue:[node getAttribute:'action'] forKey:'action'];
-                
-                [parsedConnections addObject:connData];
-            }
-        }
-    }
-    
-    // --- 5. Populate the controllers ---
-    // This will trigger KVO and cause the UICanvasView to build the views.
-    [_elementsController addObjects:parsedElements];
-    [_connectionsController addObjects:parsedConnections];
-    
-    // Deselect all elements after loading a new file.
-    [_elementsController setSelectedObjects:nil];
+- (void)newDocument
+{
+    UIBPerformWithoutUndo(function()
+    {
+        [self _removeEverythingWithoutUndo];
+        _elementCounter = 0;
+        _ownerElement = [self _newOwnerElement];
+        [self _insertTopLevelElementsWithoutUndo:[_ownerElement]];
+    });
 
-    console.log("GSMarkup parsing complete. Loaded " + [parsedElements count] + " elements and " + [parsedConnections count] + " connections.");
+    [_undoManager removeAllActions];
+    [self setDocumentEdited:NO];
+    [_canvasView setNeedsLayout:YES];
 }
 
 #pragma mark -
-#pragma mark GSMarkup Generation
+#pragma mark Cappusance Import / Export
 
-/*
-    A private helper method to escape special XML characters.
+/*!
+    Replaces the document with the given Cappusance markup.
+    Returns nil on success, otherwise an error message. The current document
+    is left untouched when the markup cannot be read.
 */
-- (CPString)_xmlEscape:(CPString)aString
+- (CPString)loadCappusanceMarkup:(CPString)aString
 {
-    if (!aString)
-        return @"";
+    var owner = [self _newOwnerElement],
+        result = [_codec parseMarkup:aString ownerData:owner];
 
-    var str = String(aString);
+    if (result.error)
+        return result.error;
 
-    return str.replace(/&/g, '&amp;')
-              .replace(/</g, '&lt;')
-              .replace(/>/g, '&gt;')
-              .replace(/"/g, '&quot;')
-              .replace(/'/g, '&#39;');
+    UIBPerformWithoutUndo(function()
+    {
+        [self _removeEverythingWithoutUndo];
+        _ownerElement = owner;
+
+        [owner setValue:result.ownerActions.join(", ") forKey:@"actions"];
+        [owner setValue:result.ownerOutlets.join(", ") forKey:@"outlets"];
+
+        [self _arrangeImportedWindows:result.windows];
+        [self _insertTopLevelElementsWithoutUndo:[owner].concat(result.windows)];
+
+        _markupOrder = result.order;
+        _unknownConnectors = result.unknownConnectors;
+
+        [_connectionsController addObjects:result.connections];
+        [_connectionsController rearrangeObjects];
+    });
+
+    [self _selectElements:[]];
+    [_undoManager removeAllActions];
+    [self setDocumentEdited:NO];
+    [_canvasView setNeedsLayout:YES];
+    [_canvasView setNeedsDisplay:YES];
+
+    return nil;
 }
 
-/*
-    A private recursive helper to generate the markup for a single element
-    and all of its children.
-*/
-- (CPString)_generateMarkupForElement:(CPDictionary)elementData indentLevel:(int)level
+// Places imported windows on the canvas in rows, so none of them overlap.
+// (Their x/y in the markup are separate properties and stay untouched.)
+- (void)_arrangeImportedWindows:(CPArray)windows
 {
-    var indent = [@"    " repeat:level];
-    var type = [elementData valueForKey:@"type"];
-    var viewClass = [UIBuilderController classForElementType:type];
-    var children = [elementData valueForKey:@"children"];
+    var maxWidth = MAX(900, ([_canvasView enclosingScrollView] ? [[[_canvasView enclosingScrollView] contentView] bounds].size.width : 1200) - 40),
+        x = 24, y = 100, rowHeight = 0;
 
-    // 1. Build the attributes string
-    var attributes = [];
-    var propertiesToArchive = [[viewClass persistentProperties] mutableCopy];
-
-    // Ensure 'id' is always included if it exists
-    if ([elementData valueForKey:@"id"] && ![propertiesToArchive containsObject:@"id"]) {
-        [propertiesToArchive addObject:@"id"];
-    }
-    // Also include outlets and actions, as they are key for connections later.
-    if ([elementData valueForKey:@"outlets"] && ![propertiesToArchive containsObject:@"outlets"]) {
-        [propertiesToArchive addObject:@"outlets"];
-    }
-    if ([elementData valueForKey:@"actions"] && ![propertiesToArchive containsObject:@"actions"]) {
-        [propertiesToArchive addObject:@"actions"];
-    }
-
-    for (var i = 0; i < [propertiesToArchive count]; i++) {
-        var key = propertiesToArchive[i];
-        var value = [elementData valueForKey:key];
-
-        // Skip structural keys and null/undefined values
-        if (key === "type" || key === "children" || key === "parentID" || value == null || value === undefined) {
-            continue;
-        }
-
-        var stringValue;
-        if (typeof value === "boolean") {
-            stringValue = value ? "YES" : "NO";
-        } else {
-            stringValue = [self _xmlEscape:value];
-        }
-        
-        if ([stringValue length] > 0) {
-            [attributes addObject:key + '="' + stringValue + '"'];
-        }
-    }
-
-    var attributeString = [attributes count] > 0 ? " " + [attributes componentsJoinedByString:@" "] : "";
-
-    // 2. Generate the final markup for this element
-    var elementMarkup = [];
-    if (children && [children count] > 0)
+    for (var i = 0; i < windows.length; i++)
     {
-        [elementMarkup addObject:indent + "<" + type + attributeString + ">"];
-        for (var i = 0; i < [children count]; i++)
+        var data = windows[i],
+            markupKeys = [data valueForKey:@"markupKeys"] || [];
+
+        // Windows without a size in the markup get a usable default.
+        if (markupKeys.indexOf("width") < 0)
+            [data setValue:[data valueForKey:@"bridge"] ? 1100 : 400 forKey:@"width"];
+        if (markupKeys.indexOf("height") < 0)
+            [data setValue:[data valueForKey:@"bridge"] ? 750 : 300 forKey:@"height"];
+
+        var width = [data valueForKey:@"width"],
+            height = [data valueForKey:@"height"];
+
+        if (x > 24 && x + width > maxWidth)
         {
-            [elementMarkup addObject:[self _generateMarkupForElement:children[i] indentLevel:level + 1]];
+            x = 24;
+            y += rowHeight + 40;
+            rowHeight = 0;
         }
-        [elementMarkup addObject:indent + "</" + type + ">"];
-    }
-    else
-    {
-        [elementMarkup addObject:indent + "<" + type + attributeString + "/>"];
-    }
 
-    return [elementMarkup componentsJoinedByString:@"\n"];
+        [data setValue:x forKey:@"originX"];
+        [data setValue:y forKey:@"originY"];
+
+        // Keep the root vbox in sync with the window size.
+        var children = [data valueForKey:@"children"] || [];
+        for (var j = 0; j < children.length; j++)
+        {
+            if ([children[j] valueForKey:@"isRootVBox"])
+            {
+                var frame = [self _rootFrameForContainer:data];
+                [children[j] setValue:frame.origin.x forKey:@"originX"];
+                [children[j] setValue:frame.origin.y forKey:@"originY"];
+                [children[j] setValue:frame.size.width forKey:@"width"];
+                [children[j] setValue:frame.size.height forKey:@"height"];
+            }
+        }
+
+        x += width + 40;
+        rowHeight = MAX(rowHeight, height);
+    }
 }
 
+- (CPString)cappusanceMarkup
+{
+    var windows = [],
+        all = [_elementsController arrangedObjects];
 
-/**
- * @brief Generates a GSMarkup XML string representing the current UI graph.
- *
- * This method traverses the element and connection controllers to produce
- * a declarative XML-like format that describes the UI hierarchy, properties,
-*  and connections between objects.
- *
- * @return A CPString containing the complete GSMarkup document.
- */
+    for (var i = 0; i < all.length; i++)
+        if (![all[i] valueForKey:@"parentID"] && [all[i] valueForKey:@"type"] === "window")
+            windows.push(all[i]);
+
+    // Keep imported windows in their original order, new ones after them.
+    var ordered = [];
+    for (var i = 0; i < _markupOrder.length; i++)
+        if (_markupOrder[i].element && windows.indexOf(_markupOrder[i].element) >= 0)
+            ordered.push(_markupOrder[i].element);
+    for (var i = 0; i < windows.length; i++)
+        if (ordered.indexOf(windows[i]) < 0)
+            ordered.push(windows[i]);
+
+    return [_codec exportDocumentWithWindows:ordered order:_markupOrder connections:[self allConnections] unknownConnectors:_unknownConnectors];
+}
+
+// Kept for compatibility with the earlier menu commands.
 - (CPString)generateGSMarkup
 {
-    var markup = [
-        '<?xml version="1.0"?>',
-        '<!DOCTYPE gsmarkup>',
-        '<gsmarkup>\n',
-        '    <objects>'
-    ];
+    return [self cappusanceMarkup];
+}
 
-    // --- Generate <objects> ---
-    var allElements = [_elementsController arrangedObjects];
-    for (var i = 0; i < [allElements count]; i++)
+- (CPString)loadGSMarkup:(CPString)aString
+{
+    return [self loadCappusanceMarkup:aString];
+}
+
+- (void)parseGSMarkup:(CPString)aString
+{
+    var error = [self loadCappusanceMarkup:aString];
+    if (error)
+        console.error("Could not load markup:", error);
+}
+
+#pragma mark -
+#pragma mark Inspector Support
+
+// Sets one preserved markup attribute (bindings etc.), undoably.
+- (void)setMarkupAttribute:(CPString)aName value:(CPString)aValue ofElement:(id)anElement
+{
+    if (!aName || ![self containsElement:anElement])
+        return;
+
+    var extras = {},
+        current = [anElement valueForKey:@"extraAttributes"] || {};
+
+    for (var key in current)
+        if (current.hasOwnProperty(key))
+            extras[key] = current[key];
+
+    if (aValue === nil || aValue === undefined)
+        delete extras[aName];
+    else
+        extras[aName] = String(aValue);
+
+    [anElement setValue:extras forKey:@"extraAttributes"];
+    [self _setActionName:@"Change Attribute"];
+}
+
+- (void)renameMarkupAttribute:(CPString)oldName to:(CPString)newName ofElement:(id)anElement
+{
+    newName = String(newName || "").trim();
+    if (!newName || newName === oldName || ![self containsElement:anElement])
+        return;
+
+    var extras = {},
+        current = [anElement valueForKey:@"extraAttributes"] || {};
+
+    for (var key in current)
+        if (current.hasOwnProperty(key))
+            extras[key === oldName ? newName : key] = current[key];
+
+    [anElement setValue:extras forKey:@"extraAttributes"];
+    [self _setActionName:@"Rename Attribute"];
+}
+
+// Whether width/height is fixed in the markup (otherwise the content decides).
+- (void)setExplicitSize:(BOOL)flag forKey:(CPString)aKey ofElement:(id)anElement
+{
+    if (![self containsElement:anElement])
+        return;
+
+    var markupKeys = ([anElement valueForKey:@"markupKeys"] || []).slice(),
+        index = markupKeys.indexOf(aKey);
+
+    if (flag && index < 0)
     {
-        var elementData = allElements[i];
-        // Start recursion only from top-level elements (e.g., windows)
-        if (![elementData valueForKey:@"parentID"]) {
-            [markup addObject:[self _generateMarkupForElement:elementData indentLevel:2]];
+        var view = [_canvasView viewForElementWithID:[anElement valueForKey:@"id"]];
+        markupKeys.push(aKey);
+
+        // Start from what is shown on the canvas.
+        if (view)
+            [anElement setValue:Math.round(aKey === "width" ? [view frame].size.width : [view frame].size.height) forKey:aKey];
+    }
+    else if (!flag && index >= 0)
+        markupKeys.splice(index, 1);
+    else
+        return;
+
+    [anElement setValue:markupKeys forKey:@"markupKeys"];
+    [self _setActionName:flag ? @"Fix Size" : @"Automatic Size"];
+}
+
+- (CPArray)connectionsInvolvingElement:(id)anElement
+{
+    var elementID = [anElement valueForKey:@"id"],
+        result = [],
+        connections = [self allConnections];
+
+    for (var i = 0; i < connections.length; i++)
+        if ([connections[i] valueForKey:@"sourceID"] === elementID || [connections[i] valueForKey:@"targetID"] === elementID)
+            result.push(connections[i]);
+
+    return result;
+}
+
+// A readable name for one end of a connection.
+- (CPString)describeEndpointOfConnection:(id)aConnection prefix:(CPString)aPrefix
+{
+    var elementID = [aConnection valueForKey:aPrefix + "ID"];
+    if (elementID)
+    {
+        var element = _elementsByID[elementID];
+        if (!element)
+            return "(missing)";
+        if ([element valueForKey:@"type"] === "owner")
+            return "#CPOwner";
+
+        var identifier = [element valueForKey:@"identifier"],
+            label = [element valueForKey:@"markupTag"] || [element valueForKey:@"type"],
+            title = [element valueForKey:@"value"] || [element valueForKey:@"title"];
+
+        return (identifier ? "#" + identifier + " " : "") + label + (title && typeof title === "string" ? " “" + title + "”" : "");
+    }
+
+    return [aConnection valueForKey:aPrefix + "Ref"] || "(first responder)";
+}
+
+/*!
+    Adds a connection from an element to a reference typed in the inspector:
+    "CPOwner", "#someID", or anything else (e.g. "#CPOwner.listsController"),
+    which is written as is.
+*/
+- (void)addConnectionFromElement:(id)anElement toReference:(CPString)aReference outlet:(CPString)anOutlet action:(CPString)anAction
+{
+    if (![self containsElement:anElement])
+        return;
+
+    var reference = String(aReference || "").trim(),
+        name = reference.replace(/^#/, ""),
+        target = nil;
+
+    if (name === UIBOwnerReference)
+        target = _ownerElement;
+    else if (name.length)
+    {
+        var all = [_elementsController arrangedObjects];
+        for (var i = 0; i < all.length && !target; i++)
+            if ([all[i] valueForKey:@"identifier"] === name)
+                target = all[i];
+    }
+
+    var connection = [CPConservativeDictionary dictionary];
+    [connection setValue:[anElement valueForKey:@"id"] forKey:@"sourceID"];
+
+    if (target)
+        [connection setValue:[target valueForKey:@"id"] forKey:@"targetID"];
+    else
+        [connection setValue:(reference.length && reference.charAt(0) !== "#" ? "#" + reference : reference) forKey:@"targetRef"];
+
+    if (anOutlet)
+        [connection setValue:anOutlet forKey:@"outlet"];
+    if (anAction)
+        [connection setValue:anAction forKey:@"action"];
+
+    [connection setValue:@"connection_" + _elementCounter++ forKey:@"id"];
+
+    [self addConnection:connection];
+    [self _setActionName:anAction ? @"Connect Action" : @"Connect Outlet"];
+
+    // Actions sent to the owner become part of its action list.
+    if (anAction && target === _ownerElement)
+    {
+        var actions = UIBSplitList([_ownerElement valueForKey:@"actions"]);
+        if (actions.indexOf(anAction) < 0)
+        {
+            actions.push(anAction);
+            [_ownerElement setValue:actions.join(", ") forKey:@"actions"];
         }
     }
-    [markup addObject:'    </objects>\n'];
-
-    // --- Generate <connectors> ---
-    [markup addObject:'    <connectors>'];
-    var connections = [_connectionsController arrangedObjects];
-    for (var i = 0; i < [connections count]; i++)
-    {
-        var conn = connections[i];
-        var sourceID = [conn valueForKey:@"sourceID"];
-        var targetID = [conn valueForKey:@"targetID"];
-        var outlet = [conn valueForKey:@"outlet"];
-        var action = [conn valueForKey:@"action"];
-
-        var connectorTag = '        <connector source="#' + sourceID + '" target="#' + targetID + '"';
-        if (outlet) {
-            connectorTag += ' outlet="' + [self _xmlEscape:outlet] + '"';
-        }
-        if (action) {
-            connectorTag += ' action="' + [self _xmlEscape:action] + '"';
-        }
-        connectorTag += '/>';
-        [markup addObject:connectorTag];
-    }
-    [markup addObject:'    </connectors>\n'];
-
-    // --- Finalize ---
-    [markup addObject:'</gsmarkup>'];
-
-    return [markup componentsJoinedByString:@"\n"];
 }
 
 @end
@@ -1390,36 +2146,21 @@
 
 /**
  * @brief Returns a new string containing the receiver's characters repeated a given number of times.
- *
- * @param aCount An integer specifying the number of times to repeat the string. Must be non-negative.
- *
- * @return A new CPString object. Returns an empty string if aCount is 0.
- *         Returns the receiver itself if aCount is 1.
- *         Returns nil and logs an error if aCount is negative.
  */
 - (CPString)repeat:(int)aCount
 {
-    // --- Input Validation ---
     if (aCount < 0)
     {
         CPLog.warn("CPString -repeat: count must be a non-negative integer.");
-        return @""; // Or you could raise an exception. An empty string is safer.
-    }
-
-    if (aCount === 0)
-    {
         return @"";
     }
 
-    if (aCount === 1)
-    {
-        return self;
-    }
+    if (aCount === 0)
+        return @"";
 
-    // --- Implementation ---
-    // A classic and efficient way to repeat a string is using Array.join().
-    // We create an array with `aCount + 1` empty slots and then join them
-    // using the receiver string as the separator.
+    if (aCount === 1)
+        return self;
+
     return new Array(aCount + 1).join(self);
 }
 

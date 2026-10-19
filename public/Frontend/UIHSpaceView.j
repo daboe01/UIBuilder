@@ -99,7 +99,8 @@
     if (aFloat !== [self width])
     {
         [super setWidth:aFloat];
-        [[self dataObject] setValue:aFloat forKey:@"width"];
+        var data = [self dataObject];
+        UIBPerformWithoutUndo(function() { [data setValue:aFloat forKey:@"width"]; });
     }
 }
 

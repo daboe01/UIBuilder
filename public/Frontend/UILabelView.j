@@ -113,4 +113,28 @@
     }
 }
 
+- (id)nativeUIElementWithMap:(CPMutableDictionary)aMap
+{
+    var data = [self dataObject],
+        label = [[CPTextField alloc] initWithFrame:[self frame]],
+        alignments = { "left": CPLeftTextAlignment, "center": CPCenterTextAlignment, "right": CPRightTextAlignment },
+        color = [data valueForKey:@"color"];
+
+    [label setStringValue:[data valueForKey:@"value"] || @""];
+    [label setBezeled:NO];
+    [label setDrawsBackground:NO];
+    [label setEditable:NO];
+    [label setSelectable:NO];
+    [label setAlignment:alignments[[data valueForKey:@"horizontalTextAlign"]] || CPLeftTextAlignment];
+    [label setVerticalAlignment:CPCenterVerticalTextAlignment];
+
+    if (color && [color hasPrefix:@"#"])
+        [label setTextColor:[CPColor colorWithHexString:[color substringFromIndex:1]]];
+
+    if (aMap)
+        [aMap setObject:label forKey:[data valueForKey:@"id"]];
+
+    return label;
+}
+
 @end

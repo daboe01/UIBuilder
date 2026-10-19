@@ -51,63 +51,67 @@
     return self;
 }
 
-- (void)sizeToFit
+- (float)_titleHeight
 {
-    var subviews = [self subviews];
-    var count = [subviews count];
-    if (count === 0) {
-        [self setFrameSize:CGSizeMake(20, 20)]; // Minimal size for an empty box
-        return;
-    }
+    var title = [[self dataObject] valueForKey:@"title"];
+    return (title && String(title).length) ? 18 : 0;
+}
 
-    const PADDING = 10;
-    var boundingBox = CGRectZero();
+// A box holds its content view below the title, like CPBox.
+- (CGRect)contentRect
+{
+    var bounds = [self bounds],
+        inset = [[self dataObject] valueForKey:@"hasBorder"] ? 6 : 2,
+        titleHeight = [self _titleHeight];
 
-    for (var i = 0; i < count; i++)
-    {
-        var subview = subviews[i];
-        if (i === 0) {
-            boundingBox = [subview frame];
-        } else {
-            boundingBox = CGRectUnion(boundingBox, [subview frame]);
-        }
-    }
+    return CGRectMake(inset, titleHeight + inset, MAX(0, bounds.size.width - 2 * inset), MAX(0, bounds.size.height - titleHeight - 2 * inset));
+}
 
-    var newWidth = boundingBox.size.width + (2 * PADDING);
-    var newHeight = boundingBox.size.height + (2 * PADDING);
+- (void)layoutSubviews
+{
+    [super layoutSubviews];
+    UIBLayoutStack([self subviews], [self contentRect], YES);
+}
 
-    // Adjust children's origins to be relative to the new padded box
-    for (var i = 0; i < count; i++)
-    {
-        var subview = subviews[i];
-        var frame = [subview frame];
-        frame.origin.x = frame.origin.x - boundingBox.origin.x + PADDING;
-        frame.origin.y = frame.origin.y - boundingBox.origin.y + PADDING;
-        [subview setFrameOrigin:frame.origin];
-    }
+- (CGSize)intrinsicContentSize
+{
+    var size = UIBFittingStackSize([self subviews], YES),
+        inset = [[self dataObject] valueForKey:@"hasBorder"] ? 6 : 2;
 
-    [self setFrameSize:CGSizeMake(newWidth, newHeight)];
-    var data = [self dataObject];
-    [data setValue:newWidth forKey:@"width"];
-    [data setValue:newHeight forKey:@"height"];
+    if (size.width === 0 && size.height === 0)
+        return CGSizeMake(120, 60);
+
+    return CGSizeMake(size.width + 2 * inset, size.height + [self _titleHeight] + 2 * inset);
 }
 
 - (void)drawSkeleton:(CGRect)rect
 {
     var bounds = [self bounds];
     var hasBorder = [[self dataObject] valueForKey:@"hasBorder"];
+    var titleHeight = [self _titleHeight];
 
     if (hasBorder) {
-        [[CPColor controlColor] setFill];
-        [CPBezierPath fillRect:bounds];
-        [[CPColor darkGrayColor] setStroke];
-        [CPBezierPath strokeRect:bounds];
+        var frameRect = CGRectMake(0.5, titleHeight ? titleHeight / 2 : 0.5, bounds.size.width - 1, bounds.size.height - (titleHeight ? titleHeight / 2 : 0) - 1);
+        var path = [CPBezierPath bezierPathWithRoundedRect:frameRect radius:4];
+        [[CPColor colorWithCalibratedWhite:0.0 alpha:0.04] setFill];
+        [path fill];
+        [[CPColor colorWithCalibratedWhite:0.55 alpha:1.0] setStroke];
+        [path stroke];
+    }
+    else
+    {
+        var dashed = [CPBezierPath bezierPathWithRect:CGRectInset(bounds, 0.5, 0.5)];
+        [[[CPColor grayColor] colorWithAlphaComponent:0.4] setStroke];
+        [dashed setLineDash:[3,3] count:2 phase:0];
+        [dashed stroke];
     }
 
     var title = [[self dataObject] valueForKey:@"title"];
-    if (title) {
-        var titleSize = [title sizeWithAttributes:_stringAttributes];
-        [title drawAtPoint:CGPointMake(10, 5) withAttributes:_stringAttributes];
+    if (titleHeight) {
+        var titleSize = [title sizeWithFont:[CPFont boldSystemFontOfSize:11]];
+        [[CPColor colorWithCalibratedWhite:0.93 alpha:1.0] setFill];
+        [CPBezierPath fillRect:CGRectMake(8, 0, titleSize.width + 8, titleHeight)];
+        [title drawAtPoint:CGPointMake(12, 2) withAttributes:@{ CPFontAttributeName: [CPFont boldSystemFontOfSize:11], CPForegroundColorAttributeName: [CPColor darkGrayColor] }];
     }
 }
 

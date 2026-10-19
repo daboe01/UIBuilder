@@ -141,7 +141,8 @@ var CGSizeZero = CGSizeMake(0, 0);
 
     var pasteboard = [CPPasteboard pasteboardWithName:CPDragPboard];
     [pasteboard declareTypes:[_dragType] owner:nil];
-    [pasteboard setString:@"1" forType:_dragType];
+    // The element type travels with the drag, so the canvas knows exactly what to create.
+    [pasteboard setString:_elementType || @"" forType:_dragType];
 
     [self dragView:dragPlaceholder
                 at:[self bounds].origin
@@ -448,6 +449,7 @@ var CGSizeZero = CGSizeMake(0, 0);
     UIBuilderController _builderController;
     UICanvasView _canvasView;
     InspectorController _inspectorController;
+    CPPanel _inspectorPanel;
 }
 
 - (void)applicationDidFinishLaunching:(CPNotification)aNotification
@@ -457,13 +459,29 @@ var CGSizeZero = CGSizeMake(0, 0);
     [_window setTitle:@"Cappuccino UI Builder"];
     [_window setAcceptsMouseMovedEvents:YES];
 
-    _canvasView = [[UICanvasView alloc] initWithFrame:[[_window contentView] bounds]];
-    [_canvasView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
-    [[_window contentView] addSubview:_canvasView];
+    // The canvas scrolls: imported documents can have dozens of windows.
+    var scrollView = [[CPScrollView alloc] initWithFrame:[[_window contentView] bounds]];
+    [scrollView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+    [scrollView setHasHorizontalScroller:YES];
+    [scrollView setHasVerticalScroller:YES];
+    [scrollView setAutohidesScrollers:YES];
+    [scrollView setBackgroundColor:[CPColor colorWithCalibratedWhite:0.97 alpha:1.0]];
+    [[_window contentView] addSubview:scrollView];
+
+    _canvasView = [[UICanvasView alloc] initWithFrame:[[scrollView contentView] bounds]];
+    [scrollView setDocumentView:_canvasView];
+
+    var clipView = [scrollView contentView];
+    [clipView setPostsFrameChangedNotifications:YES];
+    [[CPNotificationCenter defaultCenter] addObserver:self selector:@selector(_canvasClipViewDidResize:) name:CPViewFrameDidChangeNotification object:clipView];
     console.log("AppController: _canvasView.window after addSubview:", [_canvasView window]);
 
     // 2. Create the controllers
     _builderController = [[UIBuilderController alloc] init];
+
+    // One undo manager for the whole document, whichever window is key.
+    [_window setDelegate:self];
+    [_builderController addObserver:self forKeyPath:@"documentEdited" options:CPKeyValueObservingOptionNew context:nil];
 
     // 3. Wire everything together
     [_canvasView setDelegate:_builderController];
@@ -478,11 +496,40 @@ var CGSizeZero = CGSizeMake(0, 0);
     [self createPalette];
     [self createInspector];
 
+    // 4. An empty document (with its File's Owner)
+    [_builderController newDocument];
+    [_canvasView updateDocumentSize];
+
     // 5. Create the main menu
+    [self createMainMenu];
+    [self _updateWindowTitle];
+
+    [_window makeKeyAndOrderFront:self];
+    [_window makeFirstResponder:_canvasView];
+}
+
+- (void)_canvasClipViewDidResize:(CPNotification)aNotification
+{
+    [_canvasView updateDocumentSize];
+}
+
+- (void)createMainMenu
+{
     var mainMenuBar = [[CPMenu alloc] initWithTitle:@"MainMenu"];
+
+    // File
+    var fileMenuItem = [[CPMenuItem alloc] initWithTitle:@"File" action:nil keyEquivalent:@""];
+    var fileMenu = [[CPMenu alloc] initWithTitle:@"File"];
+    [fileMenu addItemWithTitle:@"New" action:@selector(newDocument:) keyEquivalent:@""];
+    [fileMenu addItemWithTitle:@"Import Cappusance Markup…" action:@selector(load:) keyEquivalent:@"l"];
+    [fileMenu addItemWithTitle:@"Save as Cappusance Markup…" action:@selector(save:) keyEquivalent:@"s"];
+    [fileMenu addItem:[CPMenuItem separatorItem]];
+    [fileMenu addItemWithTitle:@"Run" action:@selector(run:) keyEquivalent:@"r"];
+    [fileMenuItem setSubmenu:fileMenu];
+    [mainMenuBar addItem:fileMenuItem];
+
+    // Edit
     var editMenuItem = [[CPMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
-
-
     var editMenu = [[CPMenu alloc] initWithTitle:@"Edit"];
     [editMenu addItemWithTitle:@"Undo" action:@selector(undo:) keyEquivalent:@"z"];
     [editMenu addItemWithTitle:@"Redo" action:@selector(redo:) keyEquivalent:@"Z"];
@@ -490,32 +537,140 @@ var CGSizeZero = CGSizeMake(0, 0);
     [editMenu addItemWithTitle:@"Cut" action:@selector(cut:) keyEquivalent:@"x"];
     [editMenu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
     [editMenu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
+    [editMenu addItemWithTitle:@"Duplicate" action:@selector(duplicate:) keyEquivalent:@"d"];
     [editMenu addItemWithTitle:@"Delete" action:@selector(delete:) keyEquivalent:@""];
-
+    [editMenu addItem:[CPMenuItem separatorItem]];
+    [editMenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
+    [editMenu addItemWithTitle:@"Select Parent" action:@selector(selectParent:) keyEquivalent:@""];
     [editMenuItem setSubmenu:editMenu];
-
-    var fileMenuItem = [[CPMenuItem alloc] initWithTitle:@"File" action:nil keyEquivalent:@""];
-    var fileMenu = [[CPMenu alloc] initWithTitle:@"File"];
-    [fileMenu addItemWithTitle:@"Run" action:@selector(run:) keyEquivalent:@"r"];
-    [fileMenu addItem:[CPMenuItem separatorItem]];
-    [fileMenu addItemWithTitle:@"Save..." action:@selector(save:) keyEquivalent:@"s"];
-    [fileMenu addItemWithTitle:@"Load..." action:@selector(load:) keyEquivalent:@"l"];
-    [fileMenuItem setSubmenu:fileMenu];
-    [mainMenuBar addItem:fileMenuItem];
-
     [mainMenuBar addItem:editMenuItem];
 
+    // Arrange
     var arrangeMenuItem = [[CPMenuItem alloc] initWithTitle:@"Arrange" action:nil keyEquivalent:@""];
     var arrangeMenu = [[CPMenu alloc] initWithTitle:@"Arrange"];
-    [arrangeMenu addItemWithTitle:@"Group in HBox" action:@selector(groupInHBox:) keyEquivalent:@""];
+    [arrangeMenu addItemWithTitle:@"Group in HBox" action:@selector(groupInHBox:) keyEquivalent:@"g"];
     [arrangeMenu addItemWithTitle:@"Group in VBox" action:@selector(groupInVBox:) keyEquivalent:@""];
+    [arrangeMenu addItemWithTitle:@"Ungroup" action:@selector(ungroup:) keyEquivalent:@"G"];
+    [arrangeMenu addItem:[CPMenuItem separatorItem]];
+    [arrangeMenu addItemWithTitle:@"Move Earlier" action:@selector(moveEarlier:) keyEquivalent:@"["];
+    [arrangeMenu addItemWithTitle:@"Move Later" action:@selector(moveLater:) keyEquivalent:@"]"];
     [arrangeMenuItem setSubmenu:arrangeMenu];
     [mainMenuBar addItem:arrangeMenuItem];
 
     [CPApp setMainMenu:mainMenuBar];
     [CPMenu setMenuBarVisible:YES];
+}
 
-    [_window makeKeyAndOrderFront:self];
+#pragma mark -
+#pragma mark Undo
+
+// Every window of the app shares the document's undo manager.
+- (CPUndoManager)windowWillReturnUndoManager:(CPWindow)aWindow
+{
+    return [_builderController undoManager];
+}
+
+- (void)undo:(id)sender
+{
+    [self _commitInspectorEditing];
+
+    var undoManager = [_builderController undoManager];
+    if ([undoManager canUndo])
+        [undoManager undo];
+
+    [_canvasView setNeedsDisplay:YES];
+}
+
+- (void)redo:(id)sender
+{
+    [self _commitInspectorEditing];
+
+    var undoManager = [_builderController undoManager];
+    if ([undoManager canRedo])
+        [undoManager redo];
+
+    [_canvasView setNeedsDisplay:YES];
+}
+
+// Ends a pending text edit in the inspector so it lands on the undo stack first.
+- (void)_commitInspectorEditing
+{
+    if (_inspectorPanel && [_inspectorPanel isKeyWindow])
+        [_inspectorPanel makeFirstResponder:nil];
+}
+
+- (BOOL)validateMenuItem:(CPMenuItem)aMenuItem
+{
+    var action = [aMenuItem action],
+        undoManager = [_builderController undoManager];
+
+    if (action == @selector(undo:))
+    {
+        [aMenuItem setTitle:[undoManager undoMenuItemTitle] || @"Undo"];
+        return [undoManager canUndo];
+    }
+
+    if (action == @selector(redo:))
+    {
+        [aMenuItem setTitle:[undoManager redoMenuItemTitle] || @"Redo"];
+        return [undoManager canRedo];
+    }
+
+    // Editing commands reach us when another window is key: route them to the canvas.
+    if ([_canvasView respondsToSelector:action])
+        return [_canvasView validateMenuItem:aMenuItem];
+
+    return YES;
+}
+
+- (void)observeValueForKeyPath:(CPString)keyPath ofObject:(id)object change:(CPDictionary)change context:(id)context
+{
+    if (keyPath === @"documentEdited")
+        [self _updateWindowTitle];
+}
+
+- (void)_updateWindowTitle
+{
+    var title = @"Cappuccino UI Builder";
+    if ([_builderController isDocumentEdited])
+        title += @" — Edited";
+
+    [_window setTitle:title];
+    document.title = title;
+}
+
+// Editing commands from the menu bar while the palette or inspector is key.
+- (void)cut:(id)sender          { [_canvasView cut:sender]; }
+- (void)copy:(id)sender         { [_canvasView copy:sender]; }
+- (void)paste:(id)sender        { [_canvasView paste:sender]; }
+- (void)duplicate:(id)sender    { [_canvasView duplicate:sender]; }
+- (void)delete:(id)sender       { [_canvasView delete:sender]; }
+- (void)selectAll:(id)sender    { [_canvasView selectAll:sender]; }
+- (void)selectParent:(id)sender { [_canvasView selectParent:sender]; }
+- (void)groupInHBox:(id)sender  { [_canvasView groupInHBox:sender]; }
+- (void)groupInVBox:(id)sender  { [_canvasView groupInVBox:sender]; }
+- (void)ungroup:(id)sender      { [_canvasView ungroup:sender]; }
+- (void)moveEarlier:(id)sender  { [_canvasView moveEarlier:sender]; }
+- (void)moveLater:(id)sender    { [_canvasView moveLater:sender]; }
+
+#pragma mark -
+#pragma mark Document
+
+- (BOOL)_confirmDiscardingChanges
+{
+    if (![_builderController isDocumentEdited])
+        return YES;
+
+    return window.confirm("The current interface has unsaved changes. Discard them?");
+}
+
+- (void)newDocument:(id)sender
+{
+    if (![self _confirmDiscardingChanges])
+        return;
+
+    [_builderController newDocument];
+    [_canvasView setNeedsDisplay:YES];
 }
 
 - (void)createPalette
@@ -565,19 +720,22 @@ var CGSizeZero = CGSizeMake(0, 0);
         // Row 5: Other
         [
             {dragType: UIImageViewDragType, elementType: "imageView", label: "Image View"},
-            {dragType: UIProgressIndicatorDragType, elementType: "progresIndicator", label: "Progress"}
+            {dragType: UIProgressIndicatorDragType, elementType: "progresIndicator", label: "Progress"},
+            {dragType: UITabViewDragType, elementType: "tabView", label: "Tab View"},
+            {dragType: UICustomViewDragType, elementType: "custom", label: "Custom"}
         ]
     ];
 
     var paletteWidth = padding + itemsPerRow * (itemWidth + padding);
     var paletteHeight = padding + [paletteItems count] * (itemHeight + padding) + 20;
-    var paletteX = (screenWidth - paletteWidth) / 2;
-    var paletteY = 50;
+    var paletteX = MAX(360, screenWidth - paletteWidth - 20);
+    var paletteY = 40;
 
     _palette = [[CPPanel alloc] initWithContentRect:CGRectMake(paletteX, paletteY, paletteWidth, paletteHeight)
                                           styleMask:CPHUDBackgroundWindowMask | CPTitledWindowMask | CPClosableWindowMask];
     [_palette setTitle:@"Elements"];
     [_palette setFloatingPanel:YES];
+    [_palette setDelegate:self];
     [_palette setAcceptsMouseMovedEvents:NO];
 
     var contentView = [_palette contentView];
@@ -619,10 +777,12 @@ var CGSizeZero = CGSizeMake(0, 0);
 
 - (void)createInspector
 {
-    var inspectorPanel = [[CPPanel alloc] initWithContentRect:CGRectMake(20, 200, 300, 150)
+    var inspectorPanel = [[CPPanel alloc] initWithContentRect:CGRectMake(20, 40, 330, 580)
                                                   styleMask:CPTitledWindowMask | CPClosableWindowMask];
     [inspectorPanel setTitle:@"Inspector"];
     [inspectorPanel setFloatingPanel:YES];
+    [inspectorPanel setDelegate:self];
+    _inspectorPanel = inspectorPanel;
 
     var contentView = [inspectorPanel contentView];
 
@@ -701,9 +861,9 @@ var CGSizeZero = CGSizeMake(0, 0);
     console.log("Run: Finished.");
 }
 
-- (void)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint inParent:(id)parent atIndex:(int)index
+- (id)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint inParent:(id)parent atIndex:(int)index
 {
-    [_builderController addNewElementOfType:elementType atPoint:aPoint inParent:parent atIndex:index];
+    return [_builderController addNewElementOfType:elementType atPoint:aPoint inParent:parent atIndex:index];
 }
 
 - (void)deleteElement:(UIElementView)elementView
@@ -711,84 +871,189 @@ var CGSizeZero = CGSizeMake(0, 0);
     [_builderController deleteElement:[elementView dataObject]];
 }
 
-- (void)save:(id)sender
+#pragma mark -
+#pragma mark Cappusance Markup Panels
+
+- (CPPanel)_markupPanelWithTitle:(CPString)aTitle textView:(Function)textViewRef
 {
-    var markup = [_builderController generateGSMarkup];
-    
-    var savePanel = [[CPPanel alloc] initWithContentRect:CGRectMake(0, 0, 500, 600) styleMask:CPTitledWindowMask | CPClosableWindowMask | CPResizableWindowMask];
-    [savePanel center];
-    [savePanel setTitle:@"Save GSMarkup"];
-    
-    var contentView = [savePanel contentView];
-    var bounds = [contentView bounds];
-    
-    var scrollView = [[CPScrollView alloc] initWithFrame:bounds];
+    var panel = [[CPPanel alloc] initWithContentRect:CGRectMake(0, 0, 720, 640) styleMask:CPTitledWindowMask | CPClosableWindowMask | CPResizableWindowMask];
+    [panel setTitle:aTitle];
+    [panel center];
+    [panel setDelegate:self];
+
+    var contentView = [panel contentView],
+        bounds = [contentView bounds];
+
+    var scrollView = [[CPScrollView alloc] initWithFrame:CGRectMake(0, 0, bounds.size.width, bounds.size.height - 44)];
     [scrollView setHasVerticalScroller:YES];
     [scrollView setHasHorizontalScroller:YES];
     [scrollView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
-    
-    var textView = [[CPTextView alloc] initWithFrame:[scrollView bounds]];
-    [textView setString:markup];
-    [textView setSelectedRange:CPMakeRange(0, [markup length])];
-    [textView setFont:[CPFont fontWithName:@"Monaco" size:12]];
-    [textView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
-    
+
+    var textView = [[CPTextView alloc] initWithFrame:[[scrollView contentView] bounds]];
+    [textView setFont:[CPFont fontWithName:@"Menlo, Monaco, monospace" size:12]];
+    [textView setAutoresizingMask:CPViewWidthSizable];
+
     [scrollView setDocumentView:textView];
     [contentView addSubview:scrollView];
-    
-    [savePanel makeKeyAndOrderFront:self];
+
+    textViewRef(textView);
+    return panel;
 }
 
+- (CPButton)_panelButton:(CPString)aTitle x:(float)x inPanel:(CPPanel)aPanel action:(SEL)anAction
+{
+    var bounds = [[aPanel contentView] bounds],
+        button = [[CPButton alloc] initWithFrame:CGRectMake(x, bounds.size.height - 34, 140, 24)];
+
+    [button setTitle:aTitle];
+    [button setTarget:self];
+    [button setAction:anAction];
+    [button setAutoresizingMask:CPViewMinYMargin | (x > bounds.size.width / 2 ? CPViewMinXMargin : CPViewMaxXMargin)];
+    [[aPanel contentView] addSubview:button];
+    return button;
+}
+
+/*!
+    Shows the document as Cappusance markup, all of it selected, ready to be
+    copied out with ⌘C (or with the Copy button).
+*/
+- (void)save:(id)sender
+{
+    var markup = [_builderController cappusanceMarkup],
+        textView = nil,
+        panel = [self _markupPanelWithTitle:@"Cappusance Markup — select all is active, press ⌘C" textView:function(aTextView) { textView = aTextView; }];
+
+    [textView setString:markup];
+
+    var copyButton = [self _panelButton:@"Copy to Clipboard" x:10 inPanel:panel action:@selector(copyMarkup:)];
+    copyButton._markup = markup;
+
+    var downloadButton = [self _panelButton:@"Download…" x:[[panel contentView] bounds].size.width - 150 inPanel:panel action:@selector(downloadMarkup:)];
+    downloadButton._markup = markup;
+
+    [panel makeKeyAndOrderFront:self];
+    [panel makeFirstResponder:textView];
+    [textView setSelectedRange:CPMakeRange(0, [markup length])];
+
+    // The user has the markup now; treat the document as saved.
+    [_builderController setDocumentEdited:NO];
+}
+
+- (void)copyMarkup:(id)sender
+{
+    var markup = sender._markup;
+
+    if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText)
+    {
+        navigator.clipboard.writeText(markup).then(function()
+        {
+            [sender setTitle:@"Copied ✓"];
+            [[CPRunLoop currentRunLoop] limitDateForMode:CPDefaultRunLoopMode];
+        }, function()
+        {
+            [sender setTitle:@"Use ⌘C instead"];
+            [[CPRunLoop currentRunLoop] limitDateForMode:CPDefaultRunLoopMode];
+        });
+    }
+    else
+    {
+        var pasteboard = [CPPasteboard generalPasteboard];
+        [pasteboard declareTypes:[CPStringPboardType] owner:nil];
+        [pasteboard setString:markup forType:CPStringPboardType];
+        [sender setTitle:@"Copied ✓"];
+    }
+}
+
+- (void)downloadMarkup:(id)sender
+{
+    var blob = new Blob([sender._markup], { type: "application/xml" }),
+        url = URL.createObjectURL(blob),
+        link = document.createElement("a");
+
+    link.href = url;
+    link.download = "interface.gsmarkup";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+}
+
+/*!
+    Import: paste Cappusance markup (or open a .gsmarkup file) and replace
+    the current document with it.
+*/
 - (void)load:(id)sender
 {
-    var loadPanel = [[CPPanel alloc] initWithContentRect:CGRectMake(0, 0, 500, 600) styleMask:CPTitledWindowMask | CPClosableWindowMask | CPResizableWindowMask];
-    [loadPanel center];
-    [loadPanel setTitle:@"Load GSMarkup"];
+    if (![self _confirmDiscardingChanges])
+        return;
 
-    var contentView = [loadPanel contentView];
-    var bounds = [contentView bounds];
+    var textView = nil,
+        panel = [self _markupPanelWithTitle:@"Import Cappusance Markup — paste the markup below" textView:function(aTextView) { textView = aTextView; }];
 
-    var scrollView = [[CPScrollView alloc] initWithFrame:CGRectMake(0, 40, bounds.size.width, bounds.size.height - 40)];
-    [scrollView setHasVerticalScroller:YES];
-    [scrollView setHasHorizontalScroller:YES];
-    [scrollView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+    var fileButton = [self _panelButton:@"Open File…" x:10 inPanel:panel action:@selector(chooseMarkupFile:)];
+    fileButton._textView = textView;
 
-    var textView = [[CPTextView alloc] initWithFrame:[scrollView bounds]];
-    [textView setFont:[CPFont fontWithName:@"Monaco" size:12]];
-    [textView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
-    [textView setTag:100]; // Tag to find it later
+    var importButton = [self _panelButton:@"Import" x:[[panel contentView] bounds].size.width - 150 inPanel:panel action:@selector(performLoad:)];
+    importButton._textView = textView;
+    [importButton setKeyEquivalent:CPCarriageReturnCharacter];
+    [importButton setKeyEquivalentModifierMask:CPCommandKeyMask];
 
-    [scrollView setDocumentView:textView];
-    [contentView addSubview:scrollView];
+    [panel makeKeyAndOrderFront:self];
+    [panel makeFirstResponder:textView];
+}
 
-    var loadButton = [[CPButton alloc] initWithFrame:CGRectMake(bounds.size.width - 110, 10, 100, 24)];
-    [loadButton setTitle:@"Load"];
-    [loadButton setTarget:self];
-    [loadButton setAction:@selector(performLoad:)];
-    [loadButton setAutoresizingMask:CPViewMinXMargin];
-    [contentView addSubview:loadButton];
-    
-    // Store the text view in the button's ivar for easy access
-    loadButton._textView = textView;
+- (void)chooseMarkupFile:(id)sender
+{
+    var textView = sender._textView,
+        input = document.createElement("input");
 
-    [loadPanel makeKeyAndOrderFront:self];
+    input.type = "file";
+    input.accept = ".gsmarkup,.xml,.txt,text/xml,application/xml";
+    input.style.display = "none";
+    input.onchange = function()
+    {
+        var file = input.files && input.files[0];
+        if (!file)
+            return;
+
+        var reader = new FileReader();
+        reader.onload = function()
+        {
+            [textView setString:reader.result];
+            [[CPRunLoop currentRunLoop] limitDateForMode:CPDefaultRunLoopMode];
+        };
+        reader.readAsText(file);
+        document.body.removeChild(input);
+    };
+
+    document.body.appendChild(input);
+    input.click();
 }
 
 - (void)performLoad:(id)sender
 {
-    var textView = sender._textView;
-    var markup = [textView string];
-    
-    if (markup && [markup length] > 0)
+    var markup = [sender._textView string];
+
+    if (!markup || !String(markup).trim().length)
     {
-        [_builderController parseGSMarkup:markup];
-        [[sender window] close];
-    }
-    else
-    {
-        var alert = [CPAlert alertWithMessageText:@"Nothing to Load" defaultButton:@"OK" alternateButton:nil otherButton:nil informativeTextWithFormat:@"The text view is empty. Please paste GSMarkup to load."];
+        var alert = [CPAlert alertWithMessageText:@"Nothing to Import" defaultButton:@"OK" alternateButton:nil otherButton:nil informativeTextWithFormat:@"Paste Cappusance markup (a <gsmarkup> document) into the text view first."];
         [alert runModal];
+        return;
     }
+
+    var error = [_builderController loadCappusanceMarkup:markup];
+    if (error)
+    {
+        var errorAlert = [CPAlert alertWithMessageText:@"Could Not Import" defaultButton:@"OK" alternateButton:nil otherButton:nil informativeTextWithFormat:@"%@", error];
+        [errorAlert runModal];
+        return;
+    }
+
+    [[sender window] close];
+    [_canvasView updateDocumentSize];
+    [[[_canvasView enclosingScrollView] contentView] scrollToPoint:CGPointMake(0, 0)];
+    [_canvasView setNeedsDisplay:YES];
+    [_window makeFirstResponder:_canvasView];
 }
 
 @end

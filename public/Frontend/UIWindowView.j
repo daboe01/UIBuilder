@@ -16,33 +16,39 @@ var _windowChildrenObservationContext = 1094;
 + (CPDictionary)propertyTypes
 {
     var types = [[super propertyTypes] copy];
-    [types setObject:UIBBoolean forKey:@"CPHUDBackgroundWindowMask"];
-    [types setObject:UIBBoolean forKey:@"CPTitledWindowMask"];
-    [types setObject:UIBBoolean forKey:@"CPClosableWindowMask"];
+    [types setObject:UIBNumber forKey:@"x"];
+    [types setObject:UIBNumber forKey:@"y"];
+    [types setObject:UIBBoolean forKey:@"closable"];
+    [types setObject:UIBBoolean forKey:@"resizable"];
+    [types setObject:UIBBoolean forKey:@"miniaturizable"];
+    [types setObject:UIBBoolean forKey:@"visible"];
+    [types setObject:UIBBoolean forKey:@"bridge"];
+    [types setObject:UIBString forKey:@"autosaveName"];
     return types;
 }
 
 + (CPDictionary)propertyGroups
 {
     var groups = [[super propertyGroups] copy];
-    [groups setObject:UIBPropertyTabProperties forKey:@"CPHUDBackgroundWindowMask"];
-    [groups setObject:UIBPropertyTabProperties forKey:@"CPTitledWindowMask"];
-    [groups setObject:UIBPropertyTabProperties forKey:@"CPClosableWindowMask"];
+    [groups setObject:UIBPropertyTabLayout forKey:@"x"];
+    [groups setObject:UIBPropertyTabLayout forKey:@"y"];
     return groups;
 }
 
 + (CPArray)persistentProperties
 {
-    return [super persistentProperties].concat(["CPHUDBackgroundWindowMask", "CPTitledWindowMask", "CPClosableWindowMask"]);
+    return [super persistentProperties].concat(["x", "y", "closable", "resizable", "miniaturizable", "visible", "bridge", "autosaveName"]);
 }
 
 + (CPDictionary)defaultValues
 {
     return @{
-                "value": "Untitled Window",
-                "CPHUDBackgroundWindowMask": true,
-                "CPTitledWindowMask": true,
-                "CPClosableWindowMask": true,
+                "value": "Window",
+                "closable": true,
+                "resizable": true,
+                "miniaturizable": true,
+                "visible": true,
+                "bridge": false,
                 "outlets": "delegate",
                 "actions": "makeKeyAndOrderFront:, orderOut:"
             };
@@ -236,6 +242,31 @@ var _windowChildrenObservationContext = 1094;
     [CPBezierPath fillRect:CGRectMake(startX + 18, startY - circleRadius, circleRadius*2, circleRadius*2)];
     [[CPColor greenColor] setFill];
     [CPBezierPath fillRect:CGRectMake(startX + 36, startY - circleRadius, circleRadius*2, circleRadius*2)];
+
+    // Badges for things that are not visible on the canvas.
+    var data = [self dataObject],
+        badges = [];
+
+    if ([data valueForKey:@"bridge"])
+        badges.push("bridge");
+    if ([data valueForKey:@"visible"] === false)
+        badges.push("hidden");
+    if ([data valueForKey:@"identifier"])
+        badges.push("#" + [data valueForKey:@"identifier"]);
+
+    if (badges.length)
+    {
+        var badge = badges.join("  ");
+        var badgeWidth = [badge sizeWithFont:[CPFont systemFontOfSize:10]].width;
+        [badge drawAtPoint:CGPointMake(bounds.size.width - badgeWidth - 8, 5) withAttributes:@{ CPFontAttributeName: [CPFont systemFontOfSize:10], CPForegroundColorAttributeName: [CPColor colorWithCalibratedWhite:0.25 alpha:1.0] }];
+    }
+}
+
+// The root vbox fills everything below the title bar.
+- (CGRect)rootContainerFrame
+{
+    var bounds = [self bounds];
+    return CGRectMake(0, 22, bounds.size.width, MAX(0, bounds.size.height - 22));
 }
 
 - (CPDragOperation)draggingUpdated:(id <CPDraggingInfo>)sender
@@ -257,12 +288,14 @@ var _windowChildrenObservationContext = 1094;
 {
     var newPlatformWindow = [[CPPlatformWindow alloc] initWithContentRect:[self frame]];
 
-    var styleMask = 0;
-    if ([[self dataObject] valueForKey:@"CPHUDBackgroundWindowMask"]) styleMask |= CPHUDBackgroundWindowMask;
-    if ([[self dataObject] valueForKey:@"CPTitledWindowMask"]) styleMask |= CPTitledWindowMask;
-    if ([[self dataObject] valueForKey:@"CPClosableWindowMask"]) styleMask |= CPClosableWindowMask;
+    var styleMask = CPTitledWindowMask;
+    if ([[self dataObject] valueForKey:@"closable"]) styleMask |= CPClosableWindowMask;
+    if ([[self dataObject] valueForKey:@"resizable"]) styleMask |= CPResizableWindowMask;
+    if ([[self dataObject] valueForKey:@"miniaturizable"]) styleMask |= CPMiniaturizableWindowMask;
 
-    var theNewWindow = [[CPWindow alloc] initWithContentRect:CGRectMake(0, 0, [self frame].size.width, [self frame].size.height) styleMask:styleMask];
+    var titleBarHeight = 22.0;
+    var theNewWindow = [[CPWindow alloc] initWithContentRect:CGRectMake(0, 0, [self frame].size.width, MAX(0, [self frame].size.height - titleBarHeight)) styleMask:styleMask];
+    [theNewWindow setTitle:[[self dataObject] valueForKey:@"value"] || @""];
     [theNewWindow setPlatformWindow:newPlatformWindow];
 
     if (aMap)
@@ -279,6 +312,15 @@ var _windowChildrenObservationContext = 1094;
         if ([subview isKindOfClass:[UIElementView class]])
         {
             var nativeSubview = [subview nativeUIElementWithMap:aMap];
+
+            // The canvas draws a title bar; the native window has its own.
+            var nativeFrame = [nativeSubview frame];
+            nativeFrame.origin.y -= titleBarHeight;
+            [nativeSubview setFrame:nativeFrame];
+
+            if ([[subview dataObject] valueForKey:@"isRootVBox"])
+                [nativeSubview setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+
             [contentView addSubview:nativeSubview];
         }
     }

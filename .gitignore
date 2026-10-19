@@ -1,12 +1,26 @@
-# Cappuccino build files
-build/
+# Cappuccino frameworks (symlink or copy created by capp / jake)
+public/Frontend/Frameworks
+**/Frameworks/Debug
+**/Frameworks/Source
 
-# Xcode
-xcuserdata/
-*.xcuserstate
+# Build output
+Build/
+*.sj
+!public/Frontend/Resources/**/*.sj
 
-# OS X files
+# Patch leftovers
+*.orig
+*.rej
+
+# macOS
 .DS_Store
 ._*
-secrets.pm
-hypnotoad.pid
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*~
+
+# Node (if you use the npm tooling)
+node_modules/

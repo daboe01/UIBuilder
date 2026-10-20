@@ -13,36 +13,36 @@ var UIBPaletteTileWidth = 76,
     UIBPalettePadding = 10;
 
 var UIBPaletteSections = [
-    { title: "Fenster & Container", items: [
-        ["window", UIWindowDragType, "Fenster", "Ein Fenster (<window>)"],
-        ["box", UIBoxDragType, "Box", "Rahmen mit Titel (<box>)"],
-        ["tabView", UITabViewDragType, "Tab View", "Register mit Seiten (<tabView>)"],
-        ["splitView", UISplitViewDragType, "Split View", "Geteilte Ansicht (<splitView>)"],
-        ["scrollView", UIScrollViewDragType, "Scroll View", "Rollbarer Bereich (<scrollView>)"] ] },
+    { title: "Windows & Containers", items: [
+        ["window", UIWindowDragType, "Window", "A window (<window>)"],
+        ["box", UIBoxDragType, "Box", "A titled frame (<box>)"],
+        ["tabView", UITabViewDragType, "Tab View", "Tabbed pages (<tabView>)"],
+        ["splitView", UISplitViewDragType, "Split View", "Split view (<splitView>)"],
+        ["scrollView", UIScrollViewDragType, "Scroll View", "Scrollable area (<scrollView>)"] ] },
     { title: "Layout", items: [
-        ["vbox", UIVBoxDragType, "VBox", "Untereinander anordnen (<vbox>)"],
-        ["hbox", UIHBoxDragType, "HBox", "Nebeneinander anordnen (<hbox>)"],
-        ["hspace", UIHSpaceDragType, "HSpace", "Horizontaler Abstand (<hspace>)"],
-        ["vspace", UIVSpaceDragType, "VSpace", "Vertikaler Abstand (<vspace>)"] ] },
+        ["vbox", UIVBoxDragType, "VBox", "Stacks views vertically (<vbox>)"],
+        ["hbox", UIHBoxDragType, "HBox", "Arranges views side by side (<hbox>)"],
+        ["hspace", UIHSpaceDragType, "HSpace", "Horizontal space (<hspace>)"],
+        ["vspace", UIVSpaceDragType, "VSpace", "Vertical space (<vspace>)"] ] },
     { title: "Text", items: [
-        ["label", UILabelDragType, "Label", "Beschriftung (<label>)"],
-        ["textField", UITextFieldDragType, "Textfeld", "Eingabefeld (<textField>)"],
-        ["searchField", UISearchFieldDragType, "Suchfeld", "Suchfeld (<searchField>)"],
-        ["secureField", UISecureFieldDragType, "Passwort", "Passwortfeld (<secureTextField>)"],
-        ["comboBox", UIComboBoxDragType, "Combo Box", "Eingabe mit Liste (<comboBox>)"],
-        ["textView", UITextViewDragType, "Text View", "Mehrzeiliger Text (<textView>)"] ] },
-    { title: "Steuerelemente", items: [
-        ["button", UIButtonDragType, "Button", "Schaltfläche (<button>)"],
-        ["checkBox", UICheckBoxDragType, "Checkbox", "Ankreuzfeld (<switchButton>)"],
-        ["popUpButton", UIPopUpButtonDragType, "Pop-Up", "Auswahlmenü (<popUpButton>)"],
-        ["slider", UISliderDragType, "Slider", "Schieberegler (<slider>)"],
-        ["stepper", UIStepperDragType, "Stepper", "Auf/Ab-Schalter (<stepper>)"],
-        ["datePicker", UIDatePickerDragType, "Datum", "Datumsauswahl (<datePicker>)"],
-        ["progresIndicator", UIProgressIndicatorDragType, "Fortschritt", "Fortschrittsanzeige (<progresIndicator>)"] ] },
-    { title: "Daten & Sonstiges", items: [
-        ["tableView", UITableViewDragType, "Tabelle", "Tabelle (<tableView>), mit Array Controller verbinden"],
-        ["imageView", UIImageViewDragType, "Bild", "Bild (<imageView>)"],
-        ["custom", UICustomViewDragType, "Eigenes", "Beliebiges Element (eigener Tag)"] ] }
+        ["label", UILabelDragType, "Label", "Static text (<label>)"],
+        ["textField", UITextFieldDragType, "Text Field", "Text input (<textField>)"],
+        ["searchField", UISearchFieldDragType, "Search Field", "Search field (<searchField>)"],
+        ["secureField", UISecureFieldDragType, "Password", "Password field (<secureTextField>)"],
+        ["comboBox", UIComboBoxDragType, "Combo Box", "Text input with a list (<comboBox>)"],
+        ["textView", UITextViewDragType, "Text View", "Multi-line text (<textView>)"] ] },
+    { title: "Controls", items: [
+        ["button", UIButtonDragType, "Button", "Push button (<button>)"],
+        ["checkBox", UICheckBoxDragType, "Checkbox", "Check box (<switchButton>)"],
+        ["popUpButton", UIPopUpButtonDragType, "Pop-Up", "Pop-up menu (<popUpButton>)"],
+        ["slider", UISliderDragType, "Slider", "Slider (<slider>)"],
+        ["stepper", UIStepperDragType, "Stepper", "Up/down stepper (<stepper>)"],
+        ["datePicker", UIDatePickerDragType, "Date", "Date picker (<datePicker>)"],
+        ["progresIndicator", UIProgressIndicatorDragType, "Progress", "Progress indicator (<progresIndicator>)"] ] },
+    { title: "Data & Other", items: [
+        ["tableView", UITableViewDragType, "Table", "Table (<tableView>), bind it to an array controller"],
+        ["imageView", UIImageViewDragType, "Image", "Image (<imageView>)"],
+        ["custom", UICustomViewDragType, "Custom", "Any element (your own tag)"] ] }
 ];
 
 
@@ -142,7 +142,7 @@ var UIBPaletteSections = [
             var section = UIBPaletteSections[s],
                 header = [[CPTextField alloc] initWithFrame:CGRectMake(UIBPalettePadding, 0, 300, 16)];
 
-            [header setStringValue:section.title.toUpperCase()];
+            [header setStringValue:UIBLocalized(section.title).toUpperCase()];
             [header setFont:UIBFont(10, YES)];
             [header setTextColor:UIBTheme("secondaryText")];
             [header setBezeled:NO];
@@ -155,9 +155,9 @@ var UIBPaletteSections = [
             for (var i = 0; i < section.items.length; i++)
             {
                 var item = section.items[i],
-                    tile = [[UIBPaletteTile alloc] initWithElementType:item[0] dragType:item[1] title:item[2]];
+                    tile = [[UIBPaletteTile alloc] initWithElementType:item[0] dragType:item[1] title:UIBLocalized(item[2])];
                 if ([tile respondsToSelector:@selector(setToolTip:)])
-                    [tile setToolTip:item[3]];
+                    [tile setToolTip:UIBLocalized(item[3])];
                 [self addSubview:tile];
                 tiles.push(tile);
             }
@@ -234,7 +234,7 @@ UIBCreatePalette = function()
 
     var panel = [[CPPanel alloc] initWithContentRect:CGRectMake(MAX(360, screenWidth - width - 20), 40, width, height)
                                            styleMask:CPTitledWindowMask | CPClosableWindowMask | CPResizableWindowMask];
-    [panel setTitle:@"Elemente"];
+    [panel setTitle:UIBLocalized(@"Elements")];
     [panel setFloatingPanel:YES];
     if ([panel respondsToSelector:@selector(setBecomesKeyOnlyIfNeeded:)])
         [panel setBecomesKeyOnlyIfNeeded:YES];
@@ -245,7 +245,7 @@ UIBCreatePalette = function()
     [contentView setBackgroundColor:UIBRGB(246, 246, 248)];
 
     var search = [[CPSearchField alloc] initWithFrame:CGRectMake(10, 8, bounds.size.width - 20, 28)];
-    [search setPlaceholderString:@"Element suchen"];
+    [search setPlaceholderString:UIBLocalized(@"Search elements")];
     [search setAutoresizingMask:CPViewWidthSizable];
     [search setSendsSearchStringImmediately:YES];
     [contentView addSubview:search];

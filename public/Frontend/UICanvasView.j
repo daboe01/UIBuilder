@@ -40,6 +40,8 @@
 @import "UICustomView.j";
 @import "UIOwnerView.j";
 @import "UIBSkeletons.j";
+@import "UIBNativeElements.j";
+@import "UIBCodeGenerator.j";
 @import "CappusanceCodec.j";
 
 
@@ -521,7 +523,7 @@ var _selectedConnectionsObservationContext = 1095;
 
     // 2. Prepare the text content
     var title = @"Cappuccino JS";
-    var subtitle = @"Desktop-Quality Applications in the Browser";
+    var subtitle = UIBLocalized(@"Desktop-Quality Applications in the Browser");
     var features = [
         @"• Drag-and-Drop UI Creation",
         @"• Direct Manipulation: Move & Resize (Keyboard / Mouse)",
@@ -553,7 +555,7 @@ var _selectedConnectionsObservationContext = 1095;
 
     // Draw Feature List
     for (var i = 0; i < [features count]; i++) {
-        var feature = features[i];
+        var feature = UIBLocalized(features[i]);
         var featureSize = [feature sizeWithAttributes:featureAttributes];
         var featurePoint = CGPointMake(bounds.origin.x + (bounds.size.width - featureSize.width) / 2.0, currentY);
         [feature drawAtPoint:featurePoint withAttributes:featureAttributes];
@@ -1036,13 +1038,13 @@ var _selectedConnectionsObservationContext = 1095;
 
     if (action == @selector(undo:))
     {
-        [aMenuItem setTitle:[undoManager undoMenuItemTitle] || @"Undo"];
+        [aMenuItem setTitle:[undoManager undoMenuItemTitle] || UIBLocalized(@"Undo")];
         return [undoManager canUndo];
     }
 
     if (action == @selector(redo:))
     {
-        [aMenuItem setTitle:[undoManager redoMenuItemTitle] || @"Redo"];
+        [aMenuItem setTitle:[undoManager redoMenuItemTitle] || UIBLocalized(@"Redo")];
         return [undoManager canRedo];
     }
 
@@ -1545,7 +1547,7 @@ var _selectedConnectionsObservationContext = 1095;
     _connectionTarget = targetView;
     _connectionMade = NO;
 
-    var menu = [[CPMenu alloc] initWithTitle:@"Connection Menu"];
+    var menu = [[CPMenu alloc] initWithTitle:UIBLocalized(@"Connection Menu")];
     [menu setDelegate:self];
 
     // 1. Add Target's Actions

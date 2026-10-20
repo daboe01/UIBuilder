@@ -544,7 +544,7 @@ UIBBindingHint = function(aData)
     if (hasValue)
         UIBDrawTextInRect(value, textRect, UIBFont(13), UIBTheme("text"), "left");
     else
-        UIBDrawTextInRect(UIBBindingHint(data) || ({ searchField: "Suchen", secureField: "Passwort", comboBox: "" }[type] || ""), textRect, UIBFont(12), UIBTheme("placeholder"), "left");
+        UIBDrawTextInRect(UIBBindingHint(data) || UIBLocalized({ searchField: "Search", secureField: "Password", comboBox: "" }[type] || ""), textRect, UIBFont(12), UIBTheme("placeholder"), "left");
 }
 
 @end
@@ -705,7 +705,7 @@ UIBBindingHint = function(aData)
     {
         var body = CGRectInset(bounds, 1, 1);
         UIBFillStroke(UIBRoundedPath(body, 6), UIBTheme("controlFill"), UIBTheme("fieldBorder"), 1);
-        UIBDrawTextInRect("Oktober 2026", CGRectMake(8, 4, body.size.width - 16, 16), UIBFont(11, YES), UIBTheme("text"), "left");
+        UIBDrawTextInRect(UIBLocalized("October 2026"), CGRectMake(8, 4, body.size.width - 16, 16), UIBFont(11, YES), UIBTheme("text"), "left");
 
         var cell = MIN((body.size.width - 12) / 7, (body.size.height - 28) / 6);
         for (var row = 0; row < 6; row++)
@@ -727,7 +727,7 @@ UIBBindingHint = function(aData)
         field = CGRectMake(1, (bounds.size.height - height) / 2, bounds.size.width - 2, height);
 
     UIBDrawFieldBezel(field, 4);
-    UIBDrawTextInRect(UIBBindingHint(data) || "19.10.2026", CGRectMake(7, field.origin.y, field.size.width - 30, height), UIBFont(13), UIBBindingHint(data) ? UIBTheme("placeholder") : UIBTheme("text"), "left");
+    UIBDrawTextInRect(UIBBindingHint(data) || "10/19/2026", CGRectMake(7, field.origin.y, field.size.width - 30, height), UIBFont(13), UIBBindingHint(data) ? UIBTheme("placeholder") : UIBTheme("text"), "left");
 
     // Calendar glyph
     var icon = CGRectMake(field.origin.x + field.size.width - 19, field.origin.y + (height - 12) / 2, 13, 12);
@@ -1117,7 +1117,7 @@ UIBDrawElementIcon = function(aType, aRect)
             }
             else
             {
-                UIBDrawTextInRect("19.10.", CGRectMake(x + 5, cy - 8, w - 20, 16), UIBFont(8), UIBTheme("text"), "left");
+                UIBDrawTextInRect("10/19", CGRectMake(x + 5, cy - 8, w - 20, 16), UIBFont(8), UIBTheme("text"), "left");
                 UIBFillStroke(UIBRoundedPath(CGRectMake(x + w - 13, cy - 4, 8, 8), 1.5), nil, UIBTheme("secondaryText"), 1);
             }
             break;

@@ -11,8 +11,13 @@
 @import "InspectorController.j";
 @import "DataModelEditorController.j";
 @import "UIBPalette.j";
+@import "UIBNativeElements.j";
+@import "UIBCodeGenerator.j";
 
 var CGSizeZero = CGSizeMake(0, 0);
+
+var UIBAutosaveKey = "UIBuilder.autosave.v1",
+    UIBOwnerClassNameKey = "UIBuilder.ownerClassName";
 
 @implementation CPColor (StandardColors)
 
@@ -453,13 +458,19 @@ var CGSizeZero = CGSizeMake(0, 0);
     InspectorController _inspectorController;
     CPPanel _inspectorPanel;
     DataModelEditorController _dataModelEditor;
+    int _lastMarkupMode;
+    CPArray _previewWindows;
+    CPPanel _runLogPanel;
+    CPTextView _runLogTextView;
+    CPArray _runLogLines;
+    CPString _lastAutosavedMarkup;
 }
 
 - (void)applicationDidFinishLaunching:(CPNotification)aNotification
 {
     // 1. Create the main window and canvas
     _window = [[CPWindow alloc] initWithContentRect:CGRectMakeZero() styleMask:CPBorderlessBridgeWindowMask];
-    [_window setTitle:@"Cappuccino UI Builder"];
+    [_window setTitle:UIBLocalized(@"Cappuccino UI Builder")];
     [_window setAcceptsMouseMovedEvents:YES];
 
     // The canvas scrolls: imported documents can have dozens of windows.
@@ -499,8 +510,10 @@ var CGSizeZero = CGSizeMake(0, 0);
     [self createPalette];
     [self createInspector];
 
-    // 4. An empty document (with its File's Owner)
+    // 4. An empty document (with its File's Owner), or the autosaved one
     [_builderController newDocument];
+    [self _restoreAutosave];
+    [self _startAutosave];
     [_canvasView updateDocumentSize];
 
     // 5. Create the main menu
@@ -511,6 +524,49 @@ var CGSizeZero = CGSizeMake(0, 0);
     [_window makeFirstResponder:_canvasView];
 }
 
+#pragma mark -
+#pragma mark Autosave
+
+// The whole document (interface and data model) is kept in the browser,
+// so a reload or a crash does not lose work (see UIBAutosaveKey).
+- (void)_restoreAutosave
+{
+    var markup = nil;
+    try { markup = window.localStorage.getItem(UIBAutosaveKey); } catch (e) { }
+
+    if (!markup)
+        return;
+
+    var error = [_builderController loadCappusanceMarkup:markup];
+    if (error)
+        console.warn("Autosave could not be restored:", error);
+
+    _lastAutosavedMarkup = markup;
+}
+
+- (void)_autosave
+{
+    try
+    {
+        var markup = [_builderController cappusanceMarkupIncludingInterface:YES model:YES];
+        if (markup !== _lastAutosavedMarkup)
+        {
+            window.localStorage.setItem(UIBAutosaveKey, markup);
+            _lastAutosavedMarkup = markup;
+        }
+    }
+    catch (e)
+    {
+        console.warn("Autosave failed:", e);
+    }
+}
+
+- (void)_startAutosave
+{
+    window.setInterval(function() { [self _autosave]; }, 4000);
+    window.addEventListener("beforeunload", function() { [self _autosave]; });
+}
+
 - (void)_canvasClipViewDidResize:(CPNotification)aNotification
 {
     [_canvasView updateDocumentSize];
@@ -518,64 +574,66 @@ var CGSizeZero = CGSizeMake(0, 0);
 
 - (void)createMainMenu
 {
-    var mainMenuBar = [[CPMenu alloc] initWithTitle:@"MainMenu"];
+    var mainMenuBar = [[CPMenu alloc] initWithTitle:UIBLocalized(@"MainMenu")];
 
     // File
-    var fileMenuItem = [[CPMenuItem alloc] initWithTitle:@"File" action:nil keyEquivalent:@""];
-    var fileMenu = [[CPMenu alloc] initWithTitle:@"File"];
-    [fileMenu addItemWithTitle:@"New" action:@selector(newDocument:) keyEquivalent:@""];
-    [fileMenu addItemWithTitle:@"Import Cappusance Markup…" action:@selector(load:) keyEquivalent:@"l"];
-    [fileMenu addItemWithTitle:@"Save as Cappusance Markup…" action:@selector(save:) keyEquivalent:@"s"];
+    var fileMenuItem = [[CPMenuItem alloc] initWithTitle:UIBLocalized(@"File") action:nil keyEquivalent:@""];
+    var fileMenu = [[CPMenu alloc] initWithTitle:UIBLocalized(@"File")];
+    [fileMenu addItemWithTitle:UIBLocalized(@"New") action:@selector(newDocument:) keyEquivalent:@""];
+    [fileMenu addItemWithTitle:UIBLocalized(@"Import Cappusance Markup…") action:@selector(load:) keyEquivalent:@"l"];
+    [fileMenu addItemWithTitle:UIBLocalized(@"Save as Cappusance Markup…") action:@selector(save:) keyEquivalent:@"s"];
     [fileMenu addItem:[CPMenuItem separatorItem]];
-    [fileMenu addItemWithTitle:@"Run" action:@selector(run:) keyEquivalent:@"r"];
+    [fileMenu addItemWithTitle:UIBLocalized(@"Run") action:@selector(run:) keyEquivalent:@"r"];
+    [fileMenu addItem:[CPMenuItem separatorItem]];
+    [fileMenu addItemWithTitle:UIBLocalized(@"Generate File's Owner Code…") action:@selector(generateOwnerCode:) keyEquivalent:@""];
     [fileMenuItem setSubmenu:fileMenu];
     [mainMenuBar addItem:fileMenuItem];
 
     // Edit
-    var editMenuItem = [[CPMenuItem alloc] initWithTitle:@"Edit" action:nil keyEquivalent:@""];
-    var editMenu = [[CPMenu alloc] initWithTitle:@"Edit"];
-    [editMenu addItemWithTitle:@"Undo" action:@selector(undo:) keyEquivalent:@"z"];
-    [editMenu addItemWithTitle:@"Redo" action:@selector(redo:) keyEquivalent:@"Z"];
+    var editMenuItem = [[CPMenuItem alloc] initWithTitle:UIBLocalized(@"Edit") action:nil keyEquivalent:@""];
+    var editMenu = [[CPMenu alloc] initWithTitle:UIBLocalized(@"Edit")];
+    [editMenu addItemWithTitle:UIBLocalized(@"Undo") action:@selector(undo:) keyEquivalent:@"z"];
+    [editMenu addItemWithTitle:UIBLocalized(@"Redo") action:@selector(redo:) keyEquivalent:@"Z"];
     [editMenu addItem:[CPMenuItem separatorItem]];
-    [editMenu addItemWithTitle:@"Cut" action:@selector(cut:) keyEquivalent:@"x"];
-    [editMenu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];
-    [editMenu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];
-    [editMenu addItemWithTitle:@"Duplicate" action:@selector(duplicate:) keyEquivalent:@"d"];
-    [editMenu addItemWithTitle:@"Delete" action:@selector(delete:) keyEquivalent:@""];
+    [editMenu addItemWithTitle:UIBLocalized(@"Cut") action:@selector(cut:) keyEquivalent:@"x"];
+    [editMenu addItemWithTitle:UIBLocalized(@"Copy") action:@selector(copy:) keyEquivalent:@"c"];
+    [editMenu addItemWithTitle:UIBLocalized(@"Paste") action:@selector(paste:) keyEquivalent:@"v"];
+    [editMenu addItemWithTitle:UIBLocalized(@"Duplicate") action:@selector(duplicate:) keyEquivalent:@"d"];
+    [editMenu addItemWithTitle:UIBLocalized(@"Delete") action:@selector(delete:) keyEquivalent:@""];
     [editMenu addItem:[CPMenuItem separatorItem]];
-    [editMenu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
-    [editMenu addItemWithTitle:@"Select Parent" action:@selector(selectParent:) keyEquivalent:@""];
+    [editMenu addItemWithTitle:UIBLocalized(@"Select All") action:@selector(selectAll:) keyEquivalent:@"a"];
+    [editMenu addItemWithTitle:UIBLocalized(@"Select Parent") action:@selector(selectParent:) keyEquivalent:@""];
     [editMenuItem setSubmenu:editMenu];
     [mainMenuBar addItem:editMenuItem];
 
     // Arrange
-    var arrangeMenuItem = [[CPMenuItem alloc] initWithTitle:@"Arrange" action:nil keyEquivalent:@""];
-    var arrangeMenu = [[CPMenu alloc] initWithTitle:@"Arrange"];
-    [arrangeMenu addItemWithTitle:@"Group in HBox" action:@selector(groupInHBox:) keyEquivalent:@"g"];
-    [arrangeMenu addItemWithTitle:@"Group in VBox" action:@selector(groupInVBox:) keyEquivalent:@""];
-    [arrangeMenu addItemWithTitle:@"Ungroup" action:@selector(ungroup:) keyEquivalent:@"G"];
+    var arrangeMenuItem = [[CPMenuItem alloc] initWithTitle:UIBLocalized(@"Arrange") action:nil keyEquivalent:@""];
+    var arrangeMenu = [[CPMenu alloc] initWithTitle:UIBLocalized(@"Arrange")];
+    [arrangeMenu addItemWithTitle:UIBLocalized(@"Group in HBox") action:@selector(groupInHBox:) keyEquivalent:@"g"];
+    [arrangeMenu addItemWithTitle:UIBLocalized(@"Group in VBox") action:@selector(groupInVBox:) keyEquivalent:@""];
+    [arrangeMenu addItemWithTitle:UIBLocalized(@"Ungroup") action:@selector(ungroup:) keyEquivalent:@"G"];
     [arrangeMenu addItem:[CPMenuItem separatorItem]];
-    [arrangeMenu addItemWithTitle:@"Move Earlier" action:@selector(moveEarlier:) keyEquivalent:@"["];
-    [arrangeMenu addItemWithTitle:@"Move Later" action:@selector(moveLater:) keyEquivalent:@"]"];
+    [arrangeMenu addItemWithTitle:UIBLocalized(@"Move Earlier") action:@selector(moveEarlier:) keyEquivalent:@"["];
+    [arrangeMenu addItemWithTitle:UIBLocalized(@"Move Later") action:@selector(moveLater:) keyEquivalent:@"]"];
     [arrangeMenuItem setSubmenu:arrangeMenu];
     [mainMenuBar addItem:arrangeMenuItem];
 
     // Data model
-    var dataMenuItem = [[CPMenuItem alloc] initWithTitle:@"Daten" action:nil keyEquivalent:@""];
-    var dataMenu = [[CPMenu alloc] initWithTitle:@"Daten"];
-    [dataMenu addItemWithTitle:@"Datenmodell-Editor…" action:@selector(showDataModelEditor:) keyEquivalent:@""];
+    var dataMenuItem = [[CPMenuItem alloc] initWithTitle:UIBLocalized(@"Data") action:nil keyEquivalent:@""];
+    var dataMenu = [[CPMenu alloc] initWithTitle:UIBLocalized(@"Data")];
+    [dataMenu addItemWithTitle:UIBLocalized(@"Data Model Editor…") action:@selector(showDataModelEditor:) keyEquivalent:@""];
     [dataMenu addItem:[CPMenuItem separatorItem]];
-    [dataMenu addItemWithTitle:@"Datenmodell importieren…" action:@selector(importDataModel:) keyEquivalent:@""];
-    [dataMenu addItemWithTitle:@"Datenmodell sichern…" action:@selector(saveDataModel:) keyEquivalent:@""];
+    [dataMenu addItemWithTitle:UIBLocalized(@"Import Data Model…") action:@selector(importDataModel:) keyEquivalent:@""];
+    [dataMenu addItemWithTitle:UIBLocalized(@"Save Data Model…") action:@selector(saveDataModel:) keyEquivalent:@""];
     [dataMenuItem setSubmenu:dataMenu];
     [mainMenuBar addItem:dataMenuItem];
 
     // Window
-    var windowMenuItem = [[CPMenuItem alloc] initWithTitle:@"Fenster" action:nil keyEquivalent:@""];
-    var windowMenu = [[CPMenu alloc] initWithTitle:@"Fenster"];
-    [windowMenu addItemWithTitle:@"Elemente" action:@selector(showPalette:) keyEquivalent:@""];
-    [windowMenu addItemWithTitle:@"Inspector" action:@selector(showInspector:) keyEquivalent:@""];
-    [windowMenu addItemWithTitle:@"Datenmodell" action:@selector(showDataModelEditor:) keyEquivalent:@""];
+    var windowMenuItem = [[CPMenuItem alloc] initWithTitle:UIBLocalized(@"Window") action:nil keyEquivalent:@""];
+    var windowMenu = [[CPMenu alloc] initWithTitle:UIBLocalized(@"Window")];
+    [windowMenu addItemWithTitle:UIBLocalized(@"Elements") action:@selector(showPalette:) keyEquivalent:@""];
+    [windowMenu addItemWithTitle:UIBLocalized(@"Inspector") action:@selector(showInspector:) keyEquivalent:@""];
+    [windowMenu addItemWithTitle:UIBLocalized(@"Data Model") action:@selector(showDataModelEditor:) keyEquivalent:@""];
     [windowMenuItem setSubmenu:windowMenu];
     [mainMenuBar addItem:windowMenuItem];
 
@@ -628,13 +686,13 @@ var CGSizeZero = CGSizeMake(0, 0);
 
     if (action == @selector(undo:))
     {
-        [aMenuItem setTitle:[undoManager undoMenuItemTitle] || @"Undo"];
+        [aMenuItem setTitle:[undoManager undoMenuItemTitle] || UIBLocalized(@"Undo")];
         return [undoManager canUndo];
     }
 
     if (action == @selector(redo:))
     {
-        [aMenuItem setTitle:[undoManager redoMenuItemTitle] || @"Redo"];
+        [aMenuItem setTitle:[undoManager redoMenuItemTitle] || UIBLocalized(@"Redo")];
         return [undoManager canRedo];
     }
 
@@ -653,9 +711,9 @@ var CGSizeZero = CGSizeMake(0, 0);
 
 - (void)_updateWindowTitle
 {
-    var title = @"Cappuccino UI Builder";
+    var title = UIBLocalized(@"Cappuccino UI Builder");
     if ([_builderController isDocumentEdited])
-        title += @" — Edited";
+        title += " — " + UIBLocalized(@"Edited");
 
     [_window setTitle:title];
     document.title = title;
@@ -683,7 +741,7 @@ var CGSizeZero = CGSizeMake(0, 0);
     if (![_builderController isDocumentEdited])
         return YES;
 
-    return window.confirm("The current interface has unsaved changes. Discard them?");
+    return window.confirm(UIBLocalized("The current interface has unsaved changes. Discard them?"));
 }
 
 - (void)newDocument:(id)sender
@@ -724,7 +782,7 @@ var CGSizeZero = CGSizeMake(0, 0);
 {
     var inspectorPanel = [[CPPanel alloc] initWithContentRect:CGRectMake(20, 40, 330, 580)
                                                   styleMask:CPTitledWindowMask | CPClosableWindowMask];
-    [inspectorPanel setTitle:@"Inspector"];
+    [inspectorPanel setTitle:UIBLocalized(@"Inspector")];
     [inspectorPanel setFloatingPanel:YES];
     [inspectorPanel setDelegate:self];
     _inspectorPanel = inspectorPanel;
@@ -741,69 +799,339 @@ var CGSizeZero = CGSizeMake(0, 0);
     [inspectorPanel orderFront:self];
 }
 
+#pragma mark -
+#pragma mark File's Owner Code
+
+- (CPTextField)_codeBarField:(CPString)aValue frame:(CGRect)aFrame
+{
+    var field = [[CPTextField alloc] initWithFrame:aFrame];
+    [field setStringValue:aValue];
+    [field setEditable:YES];
+    [field setBezeled:YES];
+    [field setTarget:self];
+    [field setAction:@selector(regenerateOwnerCode:)];
+    return field;
+}
+
+- (CPTextField)_codeBarLabel:(CPString)aString frame:(CGRect)aFrame
+{
+    var label = [[CPTextField alloc] initWithFrame:aFrame];
+    [label setStringValue:aString];
+    [label setFont:[CPFont boldSystemFontOfSize:12]];
+    [label setBezeled:NO];
+    [label setDrawsBackground:NO];
+    [label setEditable:NO];
+    return label;
+}
+
+/*!
+    Shows the Objective-J class of File's Owner: outlets, array controllers,
+    properties used by bindings, and an action method per action. The code
+    can be copied, downloaded, or merged into an existing class.
+*/
+- (void)generateOwnerCode:(id)sender
+{
+    var textView = nil,
+        panel = [self _markupPanelWithTitle:UIBLocalized(@"File's Owner Code") textView:function(aTextView) { textView = aTextView; }],
+        contentView = [panel contentView],
+        bounds = [contentView bounds],
+        savedName = nil;
+
+    try { savedName = window.localStorage.getItem(UIBOwnerClassNameKey); } catch (e) { }
+
+    var topBar = [[CPView alloc] initWithFrame:CGRectMake(0, 0, bounds.size.width, 70)];
+    [topBar setBackgroundColor:[CPColor colorWithCalibratedWhite:0.95 alpha:1.0]];
+    [topBar setAutoresizingMask:CPViewWidthSizable];
+    [contentView addSubview:topBar];
+
+    [topBar addSubview:[self _codeBarLabel:UIBLocalized(@"Class:") frame:CGRectMake(10, 12, 50, 20)]];
+    var classField = [self _codeBarField:savedName || @"AppController" frame:CGRectMake(60, 6, 200, 28)];
+    [topBar addSubview:classField];
+
+    [topBar addSubview:[self _codeBarLabel:UIBLocalized(@"Superclass:") frame:CGRectMake(272, 12, 80, 20)]];
+    var superclassField = [self _codeBarField:@"CPObject" frame:CGRectMake(352, 6, 160, 28)];
+    [topBar addSubview:superclassField];
+
+    var mergeButton = [[CPButton alloc] initWithFrame:CGRectMake(bounds.size.width - 230, 8, 220, 24)];
+    [mergeButton setTitle:UIBLocalized(@"Merge into Existing Class…")];
+    [mergeButton setTarget:self];
+    [mergeButton setAction:@selector(mergeOwnerCode:)];
+    [mergeButton setAutoresizingMask:CPViewMinXMargin];
+    [topBar addSubview:mergeButton];
+
+    var summary = [[CPTextField alloc] initWithFrame:CGRectMake(10, 44, bounds.size.width - 20, 18)];
+    [summary setFont:[CPFont systemFontOfSize:11]];
+    [summary setTextColor:[CPColor grayColor]];
+    [summary setBezeled:NO];
+    [summary setDrawsBackground:NO];
+    [summary setEditable:NO];
+    [summary setAutoresizingMask:CPViewWidthSizable];
+    [topBar addSubview:summary];
+
+    var subviews = [contentView subviews];
+    for (var i = 0; i < subviews.length; i++)
+        if ([subviews[i] isKindOfClass:[CPScrollView class]])
+            [subviews[i] setFrame:CGRectMake(0, 70, bounds.size.width, bounds.size.height - 114)];
+
+    var copyButton = [self _panelButton:UIBLocalized(@"Copy to Clipboard") x:10 inPanel:panel action:@selector(copyMarkup:)],
+        downloadButton = [self _panelButton:UIBLocalized(@"Download…") x:bounds.size.width - 150 inPanel:panel action:@selector(downloadMarkup:)];
+
+    // Everything the actions need, kept on the class field.
+    classField._uib = { textView: textView, classField: classField, superclassField: superclassField, summary: summary, buttons: [copyButton, downloadButton] };
+    superclassField._uib = classField._uib;
+    mergeButton._uib = classField._uib;
+
+    [panel makeKeyAndOrderFront:self];
+    [self regenerateOwnerCode:classField];
+}
+
+- (void)_showOwnerCode:(CPString)aSource context:(JSObject)aContext summary:(CPString)aSummary
+{
+    var className = String([aContext.classField stringValue] || "AppController").trim();
+
+    [aContext.textView setString:aSource];
+    [aContext.summary setStringValue:aSummary];
+
+    for (var i = 0; i < aContext.buttons.length; i++)
+    {
+        aContext.buttons[i]._markup = aSource;
+        aContext.buttons[i]._fileName = className + ".j";
+    }
+    [aContext.buttons[0] setTitle:UIBLocalized(@"Copy to Clipboard")];
+
+    [[aContext.textView window] makeFirstResponder:aContext.textView];
+    [aContext.textView setSelectedRange:CPMakeRange(0, [aSource length])];
+}
+
+- (void)regenerateOwnerCode:(id)sender
+{
+    var context = sender._uib,
+        className = String([context.classField stringValue] || "").trim() || "AppController",
+        superclass = String([context.superclassField stringValue] || "").trim() || "CPObject",
+        description = [UIBCodeGenerator ownerInterfaceForController:_builderController];
+
+    try { window.localStorage.setItem(UIBOwnerClassNameKey, className); } catch (e) { }
+
+    [self _showOwnerCode:[UIBCodeGenerator ownerClassSourceForInterface:description className:className superclass:superclass] context:context
+                 summary:UIBLocalizedFormat(@"%@ outlets, %@ properties for bindings, %@ actions", description.outlets.length, description.properties.length, description.actions.length)];
+}
+
+- (void)mergeOwnerCode:(id)sender
+{
+    var context = sender._uib,
+        textView = nil,
+        panel = [self _markupPanelWithTitle:UIBLocalized(@"Paste your existing class — missing outlets and actions are added") textView:function(aTextView) { textView = aTextView; }];
+
+    var mergeButton = [self _panelButton:UIBLocalized(@"Merge") x:[[panel contentView] bounds].size.width - 150 inPanel:panel action:@selector(performOwnerCodeMerge:)];
+    mergeButton._uib = context;
+    mergeButton._sourceView = textView;
+
+    var fileButton = [self _panelButton:UIBLocalized(@"Open File…") x:10 inPanel:panel action:@selector(chooseMarkupFile:)];
+    fileButton._textView = textView;
+
+    [panel makeKeyAndOrderFront:self];
+    [panel makeFirstResponder:textView];
+}
+
+- (void)performOwnerCodeMerge:(id)sender
+{
+    var result = [UIBCodeGenerator mergeOwnerClassSource:[sender._sourceView string] withInterface:[UIBCodeGenerator ownerInterfaceForController:_builderController]];
+
+    if (result.error)
+    {
+        var alert = [CPAlert alertWithMessageText:UIBLocalized(@"Could Not Merge") defaultButton:UIBLocalized(@"OK") alternateButton:nil otherButton:nil informativeTextWithFormat:@"%@", UIBLocalized(result.error)];
+        [alert runModal];
+        return;
+    }
+
+    var summary = (result.addedVariables.length || result.addedActions.length)
+        ? UIBLocalizedFormat(@"Added %@ variables (%@) and %@ actions (%@).", result.addedVariables.length, result.addedVariables.join(", ") || "–", result.addedActions.length, result.addedActions.join(", ") || "–")
+        : UIBLocalized(@"Nothing to add — the class already has all outlets and actions.");
+
+    var className = /@implementation\s+(\w+)/.exec(result.source);
+    if (className)
+        [sender._uib.classField setStringValue:className[1]];
+
+    [[sender window] close];
+    [self _showOwnerCode:result.source context:sender._uib summary:summary];
+}
+
+#pragma mark -
+#pragma mark Run (preview with native views)
+
+- (void)_closePreview
+{
+    for (var i = 0; _previewWindows && i < _previewWindows.length; i++)
+        [_previewWindows[i] orderOut:self];
+
+    _previewWindows = [];
+}
+
+- (void)closePreview:(id)sender
+{
+    [self _closePreview];
+    [_runLogPanel orderOut:self];
+}
+
+- (void)_appendRunLog:(CPString)aMessage
+{
+    var time = new Date().toTimeString().substring(0, 8);
+    _runLogLines.push(time + "  " + aMessage);
+    if (_runLogLines.length > 300)
+        _runLogLines.shift();
+
+    [_runLogTextView setString:_runLogLines.join("\n")];
+    [_runLogTextView scrollRangeToVisible:CPMakeRange([[_runLogTextView string] length], 0)];
+}
+
+- (void)_showRunLog
+{
+    if (!_runLogPanel)
+    {
+        var width = 460, height = 230;
+        _runLogPanel = [[CPPanel alloc] initWithContentRect:CGRectMake(window.innerWidth - width - 30, window.innerHeight - height - 40, width, height)
+                                                  styleMask:CPHUDBackgroundWindowMask | CPTitledWindowMask | CPClosableWindowMask | CPResizableWindowMask];
+        [_runLogPanel setTitle:UIBLocalized(@"Run Log")];
+        [_runLogPanel setFloatingPanel:YES];
+
+        var contentView = [_runLogPanel contentView],
+            bounds = [contentView bounds],
+            scrollView = [[CPScrollView alloc] initWithFrame:CGRectMake(0, 0, bounds.size.width, bounds.size.height - 38)];
+
+        [scrollView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+        [scrollView setHasHorizontalScroller:NO];
+
+        _runLogTextView = [[CPTextView alloc] initWithFrame:[[scrollView contentView] bounds]];
+        [_runLogTextView setEditable:NO];
+        [_runLogTextView setFont:[CPFont fontWithName:@"Menlo, Monaco, monospace" size:11]];
+        [_runLogTextView setAutoresizingMask:CPViewWidthSizable];
+        [scrollView setDocumentView:_runLogTextView];
+        [contentView addSubview:scrollView];
+
+        var closeButton = [[CPButton alloc] initWithFrame:CGRectMake(bounds.size.width - 150, bounds.size.height - 32, 140, 24)];
+        [closeButton setTitle:UIBLocalized(@"Close Preview")];
+        [closeButton setTarget:self];
+        [closeButton setAction:@selector(closePreview:)];
+        [closeButton setAutoresizingMask:CPViewMinXMargin | CPViewMinYMargin];
+        [contentView addSubview:closeButton];
+    }
+
+    [_runLogPanel orderFront:self];
+}
+
+/*!
+    Builds real Cappuccino views from the design and shows the visible
+    windows. Actions sent to File's Owner (or to references outside the
+    document) are shown in the run log.
+*/
 - (void)run:(id)sender
 {
-    console.log("Run: Starting native UI generation...");
-    var canvasSubviews = [_canvasView subviews];
-    var nativeElementMap = [CPMutableDictionary dictionary];
+    [self _closePreview];
 
-    // First pass: create all native elements and map them by their ID
-    console.log("Run: Creating native elements and building map...");
-    for (var i = 0; i < [canvasSubviews count]; i++)
+    _runLogLines = [];
+    [UIBRunOwner resetWithLogger:function(aMessage) { [self _appendRunLog:aMessage]; }];
+    [self _showRunLog];
+
+    var map = [CPMutableDictionary dictionary],
+        canvasSubviews = [_canvasView subviews],
+        windowViews = [];
+
+    // 1. Natives for every element
+    for (var i = 0; i < canvasSubviews.length; i++)
     {
-        var view = [canvasSubviews objectAtIndex:i];
-        if ([view isKindOfClass:[UIElementView class]])
-        {
-            console.log("Run: Processing element: " + [[view dataObject] valueForKey:@"id"]);
-            // This will now recursively build the map
-            [view nativeUIElementWithMap:nativeElementMap];
-        }
-    }
-
-    // Second pass: connect the native elements
-    console.log("Run: Processing connections...");
-    var connections = [[_builderController connectionsController] content];
-    for (var i = 0; i < [connections count]; i++)
-    {
-        var connection = [connections objectAtIndex:i];
-        var sourceID = [connection valueForKey:@"sourceID"];
-        var targetID = [connection valueForKey:@"targetID"];
-        var action = [connection valueForKey:@"action"];
-
-        console.log(" - Connecting: " + sourceID + " -> " + targetID + " (Action: " + action + ")");
-
-        var nativeSource = [nativeElementMap objectForKey:sourceID];
-        var nativeTarget = [nativeElementMap objectForKey:targetID];
-
-        if (nativeSource && nativeTarget && action)
-        {
-            console.log("   - Found native source and target. Applying connection.");
-            [nativeSource setTarget:nativeTarget];
-            [nativeSource setAction:CPSelectorFromString(action)];
-        }
-        else
-        {
-            console.log("   - WARNING: Could not find native source or target for connection.");
-        }
-    }
-
-    // Third pass: show the windows
-    console.log("Run: Showing windows...");
-    for (var i = 0; i < [canvasSubviews count]; i++)
-    {
-        var view = [canvasSubviews objectAtIndex:i];
+        var view = canvasSubviews[i];
         if ([view isKindOfClass:[UIWindowView class]])
         {
-            var elementID = [[view dataObject] valueForKey:@"id"];
-            var nativeWindow = [nativeElementMap objectForKey:elementID];
+            var nativeWindow = [view nativeUIElementWithMap:map];
             if (nativeWindow)
             {
-                console.log(" - Showing window for ID: " + elementID);
-                [nativeWindow makeKeyAndOrderFront:self];
+                windowViews.push(view);
+                _previewWindows.push(nativeWindow);
             }
         }
     }
-    console.log("Run: Finished.");
+
+    // 2. Connections
+    var connections = [_builderController allConnections],
+        actionsToOwner = 0,
+        applied = 0,
+        ownerElement = [_builderController ownerElement],
+        ownerID = ownerElement ? [ownerElement valueForKey:@"id"] : nil;
+
+    var resolve = function(aConnection, aPrefix)
+    {
+        var elementID = [aConnection valueForKey:aPrefix + "ID"];
+        if (elementID)
+            return elementID === ownerID ? [UIBRunOwner ownerForReference:"#CPOwner"] : [map objectForKey:elementID];
+
+        var reference = [aConnection valueForKey:aPrefix + "Ref"];
+        return reference ? [UIBRunOwner ownerForReference:reference] : nil;
+    };
+
+    for (var i = 0; i < connections.length; i++)
+    {
+        var connection = connections[i],
+            source = resolve(connection, "source"),
+            target = resolve(connection, "target"),
+            action = [connection valueForKey:@"action"],
+            outlet = [connection valueForKey:@"outlet"];
+
+        if (!source)
+            continue;
+
+        if (action)
+        {
+            if (!target || [target isKindOfClass:[UIBRunOwner class]])
+            {
+                target = target || [UIBRunOwner ownerForReference:"#CPOwner"];
+                [UIBRunOwner selectorForAction:action];
+                actionsToOwner++;
+            }
+
+            if ([source respondsToSelector:@selector(setTarget:)])
+            {
+                [source setTarget:target];
+                [source setAction:CPSelectorFromString(action)];
+                applied++;
+            }
+            continue;
+        }
+
+        if (!outlet || !target || [source isKindOfClass:[UIBRunOwner class]] || [target isKindOfClass:[UIBRunOwner class]])
+            continue;
+
+        var setter = CPSelectorFromString("set" + outlet.charAt(0).toUpperCase() + outlet.substring(1) + ":");
+        if ([source respondsToSelector:setter])
+        {
+            [source performSelector:setter withObject:target];
+            applied++;
+        }
+    }
+
+    // 3. Show the visible windows (hidden ones can still be opened by actions)
+    var shown = 0;
+    for (var i = 0; i < windowViews.length; i++)
+    {
+        var data = [windowViews[i] dataObject],
+            nativeWindow = [map objectForKey:[data valueForKey:@"id"]];
+
+        if ([data valueForKey:@"visible"] === false)
+            continue;
+
+        var x = [data valueForKey:@"x"],
+            y = [data valueForKey:@"y"];
+
+        [nativeWindow setFrameOrigin:CGPointMake((x === nil || x === undefined) ? 80 + 30 * shown : x,
+                                                 (y === nil || y === undefined) ? 80 + 30 * shown : y)];
+        [nativeWindow makeKeyAndOrderFront:self];
+        shown++;
+    }
+
+    [self _appendRunLog:UIBLocalizedFormat(@"Preview: %@ of %@ windows shown, %@ connections applied, %@ actions go to #CPOwner.",
+                                           shown, windowViews.length, applied, actionsToOwner)];
+    if (shown < windowViews.length)
+        [self _appendRunLog:UIBLocalized(@"Windows with visible=\"NO\" are created but not shown.")];
+    [self _appendRunLog:UIBLocalized(@"Bindings are not connected in the preview (there is no data store).")];
 }
 
 - (id)addNewElementOfType:(CPString)elementType atPoint:(CGPoint)aPoint inParent:(id)parent atIndex:(int)index
@@ -825,6 +1153,9 @@ var CGSizeZero = CGSizeMake(0, 0);
     [panel setTitle:aTitle];
     [panel center];
     [panel setDelegate:self];
+
+    // Same level as the floating inspector and element library (see DataModelEditorController).
+    [panel setFloatingPanel:YES];
 
     var contentView = [panel contentView],
         bounds = [contentView bounds];
@@ -864,8 +1195,15 @@ var CGSizeZero = CGSizeMake(0, 0);
 */
 - (void)save:(id)sender
 {
-    // Interface by default; only the data model if there is no interface.
-    [self _showMarkupForMode:([_builderController hasInterface] || ![_builderController hasDataModel]) ? 0 : 1];
+    var hasInterface = [_builderController hasInterface],
+        hasModel = [_builderController hasDataModel],
+        mode = hasModel ? (hasInterface ? 2 : 1) : 0;
+
+    // The last choice wins, as long as it does not leave out the data model.
+    if (_lastMarkupMode !== undefined && _lastMarkupMode !== nil && !(hasModel && _lastMarkupMode === 0))
+        mode = _lastMarkupMode;
+
+    [self _showMarkupForMode:mode];
 }
 
 - (void)saveDataModel:(id)sender
@@ -889,19 +1227,49 @@ var CGSizeZero = CGSizeMake(0, 0);
 - (void)_showMarkupForMode:(int)aMode
 {
     var textView = nil,
-        panel = [self _markupPanelWithTitle:@"Cappusance Markup — alles markiert, ⌘C kopiert" textView:function(aTextView) { textView = aTextView; }],
-        bounds = [[panel contentView] bounds];
+        panel = [self _markupPanelWithTitle:UIBLocalized(@"Cappusance Markup — everything is selected, press ⌘C to copy") textView:function(aTextView) { textView = aTextView; }],
+        contentView = [panel contentView],
+        bounds = [contentView bounds];
 
-    var modePopUp = [[CPPopUpButton alloc] initWithFrame:CGRectMake(160, bounds.size.height - 35, 220, 26) pullsDown:NO];
-    [modePopUp addItemsWithTitles:["Oberfläche (gui)", "Datenmodell (model)", "Beides in einer Datei"]];
+    // A bar at the top: what to write.
+    var topBar = [[CPView alloc] initWithFrame:CGRectMake(0, 0, bounds.size.width, 44)];
+    [topBar setBackgroundColor:[CPColor colorWithCalibratedWhite:0.95 alpha:1.0]];
+    [topBar setAutoresizingMask:CPViewWidthSizable];
+    [contentView addSubview:topBar];
+
+    var modeLabel = [[CPTextField alloc] initWithFrame:CGRectMake(10, 13, 60, 20)];
+    [modeLabel setStringValue:UIBLocalized(@"Content:")];
+    [modeLabel setFont:[CPFont boldSystemFontOfSize:12]];
+    [modeLabel setBezeled:NO];
+    [modeLabel setDrawsBackground:NO];
+    [modeLabel setEditable:NO];
+    [topBar addSubview:modeLabel];
+
+    var modePopUp = [[CPPopUpButton alloc] initWithFrame:CGRectMake(70, 9, 240, 26) pullsDown:NO];
+    [modePopUp addItemsWithTitles:["Interface (gui.gsmarkup)", "Data model (model.gsmarkup)", "Both in one file"].map(UIBLocalized)];
     [modePopUp selectItemAtIndex:aMode];
     [modePopUp setTarget:self];
     [modePopUp setAction:@selector(markupModeChanged:)];
-    [modePopUp setAutoresizingMask:CPViewMinYMargin | CPViewMaxXMargin];
-    [[panel contentView] addSubview:modePopUp];
+    [topBar addSubview:modePopUp];
 
-    var copyButton = [self _panelButton:@"In Zwischenablage" x:10 inPanel:panel action:@selector(copyMarkup:)],
-        downloadButton = [self _panelButton:@"Download…" x:bounds.size.width - 150 inPanel:panel action:@selector(downloadMarkup:)];
+    var modeHint = [[CPTextField alloc] initWithFrame:CGRectMake(322, 14, bounds.size.width - 332, 18)];
+    [modeHint setFont:[CPFont systemFontOfSize:11]];
+    [modeHint setTextColor:[CPColor colorWithCalibratedRed:0.75 green:0.35 blue:0.0 alpha:1.0]];
+    [modeHint setBezeled:NO];
+    [modeHint setDrawsBackground:NO];
+    [modeHint setEditable:NO];
+    [modeHint setAutoresizingMask:CPViewWidthSizable];
+    [topBar addSubview:modeHint];
+    modePopUp._hint = modeHint;
+
+    // Make room for the bar above the text.
+    var subviews = [contentView subviews];
+    for (var i = 0; i < subviews.length; i++)
+        if ([subviews[i] isKindOfClass:[CPScrollView class]])
+            [subviews[i] setFrame:CGRectMake(0, 44, bounds.size.width, bounds.size.height - 88)];
+
+    var copyButton = [self _panelButton:UIBLocalized(@"Copy to Clipboard") x:10 inPanel:panel action:@selector(copyMarkup:)],
+        downloadButton = [self _panelButton:UIBLocalized(@"Download…") x:bounds.size.width - 150 inPanel:panel action:@selector(downloadMarkup:)];
 
     modePopUp._textView = textView;
     modePopUp._buttons = [copyButton, downloadButton];
@@ -917,7 +1285,20 @@ var CGSizeZero = CGSizeMake(0, 0);
 {
     var mode = [sender indexOfSelectedItem],
         markup = [self _markupForMode:mode],
-        textView = sender._textView;
+        textView = sender._textView,
+        hasModel = [_builderController hasDataModel],
+        hasInterface = [_builderController hasInterface];
+
+    _lastMarkupMode = mode;
+
+    var hint = "";
+    if (mode === 0 && hasModel)
+        hint = "The data model is not included – choose “Data model” or “Both”.";
+    else if (mode === 1 && hasInterface)
+        hint = "The interface is not included.";
+    else if (mode !== 0 && !hasModel)
+        hint = "There is no data model yet (Data ▸ Data Model Editor).";
+    [sender._hint setStringValue:UIBLocalized(hint)];
 
     [textView setString:markup];
 
@@ -927,7 +1308,7 @@ var CGSizeZero = CGSizeMake(0, 0);
         sender._buttons[i]._fileName = (mode === 1) ? "model.gsmarkup" : "gui.gsmarkup";
     }
 
-    [sender._buttons[0] setTitle:@"In Zwischenablage"];
+    [sender._buttons[0] setTitle:UIBLocalized(@"Copy to Clipboard")];
     [[textView window] makeFirstResponder:textView];
     [textView setSelectedRange:CPMakeRange(0, [markup length])];
 }
@@ -940,11 +1321,11 @@ var CGSizeZero = CGSizeMake(0, 0);
     {
         navigator.clipboard.writeText(markup).then(function()
         {
-            [sender setTitle:@"Copied ✓"];
+            [sender setTitle:UIBLocalized(@"Copied ✓")];
             [[CPRunLoop currentRunLoop] limitDateForMode:CPDefaultRunLoopMode];
         }, function()
         {
-            [sender setTitle:@"Use ⌘C instead"];
+            [sender setTitle:UIBLocalized(@"Use ⌘C instead")];
             [[CPRunLoop currentRunLoop] limitDateForMode:CPDefaultRunLoopMode];
         });
     }
@@ -953,7 +1334,7 @@ var CGSizeZero = CGSizeMake(0, 0);
         var pasteboard = [CPPasteboard generalPasteboard];
         [pasteboard declareTypes:[CPStringPboardType] owner:nil];
         [pasteboard setString:markup forType:CPStringPboardType];
-        [sender setTitle:@"Copied ✓"];
+        [sender setTitle:UIBLocalized(@"Copied ✓")];
     }
 }
 
@@ -991,17 +1372,17 @@ var CGSizeZero = CGSizeMake(0, 0);
 - (void)_showImportPanelModelOnly:(BOOL)modelOnly
 {
     var textView = nil,
-        panel = [self _markupPanelWithTitle:@"Import Cappusance Markup — paste the markup below" textView:function(aTextView) { textView = aTextView; }];
+        panel = [self _markupPanelWithTitle:UIBLocalized(@"Import Cappusance Markup — paste the markup below") textView:function(aTextView) { textView = aTextView; }];
 
-    var fileButton = [self _panelButton:@"Open File…" x:10 inPanel:panel action:@selector(chooseMarkupFile:)];
+    var fileButton = [self _panelButton:UIBLocalized(@"Open File…") x:10 inPanel:panel action:@selector(chooseMarkupFile:)];
     fileButton._textView = textView;
 
-    var importButton = [self _panelButton:@"Importieren" x:[[panel contentView] bounds].size.width - 150 inPanel:panel action:@selector(performLoad:)];
+    var importButton = [self _panelButton:UIBLocalized(@"Import") x:[[panel contentView] bounds].size.width - 150 inPanel:panel action:@selector(performLoad:)];
     importButton._textView = textView;
     importButton._modelOnly = modelOnly;
 
     if (modelOnly)
-        [panel setTitle:@"Datenmodell importieren — model.gsmarkup einfügen (die Oberfläche bleibt erhalten)"];
+        [panel setTitle:UIBLocalized(@"Import Data Model — paste model.gsmarkup (the interface is kept)")];
     [importButton setKeyEquivalent:CPCarriageReturnCharacter];
     [importButton setKeyEquivalentModifierMask:CPCommandKeyMask];
 
@@ -1043,7 +1424,7 @@ var CGSizeZero = CGSizeMake(0, 0);
 
     if (!markup || !String(markup).trim().length)
     {
-        var alert = [CPAlert alertWithMessageText:@"Nothing to Import" defaultButton:@"OK" alternateButton:nil otherButton:nil informativeTextWithFormat:@"Paste Cappusance markup (a <gsmarkup> document) into the text view first."];
+        var alert = [CPAlert alertWithMessageText:UIBLocalized(@"Nothing to Import") defaultButton:UIBLocalized(@"OK") alternateButton:nil otherButton:nil informativeTextWithFormat:UIBLocalized(@"Paste Cappusance markup (a <gsmarkup> document) into the text view first.")];
         [alert runModal];
         return;
     }
@@ -1057,7 +1438,7 @@ var CGSizeZero = CGSizeMake(0, 0);
 
     if (error)
     {
-        var errorAlert = [CPAlert alertWithMessageText:@"Could Not Import" defaultButton:@"OK" alternateButton:nil otherButton:nil informativeTextWithFormat:@"%@", error];
+        var errorAlert = [CPAlert alertWithMessageText:UIBLocalized(@"Could Not Import") defaultButton:UIBLocalized(@"OK") alternateButton:nil otherButton:nil informativeTextWithFormat:@"%@", UIBLocalized(error)];
         [errorAlert runModal];
         return;
     }

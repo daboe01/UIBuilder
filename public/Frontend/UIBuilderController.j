@@ -238,6 +238,12 @@ function UIBIsVerticalStackType(aType)
     return _ownerElement;
 }
 
+// Every element of the interface (windows and their contents).
+- (CPArray)allElements
+{
+    return [_elementsController arrangedObjects] || [];
+}
+
 - (CPUndoManager)undoManager
 {
     return _undoManager;
@@ -272,7 +278,7 @@ function UIBIsVerticalStackType(aType)
     if ([_undoManager respondsToSelector:@selector(groupingLevel)] && [_undoManager groupingLevel] === 0)
         return;
 
-    [_undoManager setActionName:anActionName];
+    [_undoManager setActionName:UIBLocalized(anActionName)];
 }
 
 - (CPString)_actionNameForKey:(CPString)aKey
@@ -2444,7 +2450,7 @@ function UIBIsVerticalStackType(aType)
 
     var columns = [self columnNamesForArrayController:controller];
     if (!columns.length)
-        return "The entity of " + [controller valueForKey:@"name"] + " has no columns.";
+        return UIBLocalizedFormat("The entity of %@ has no columns.", [controller valueForKey:@"name"]);
 
     [anElement setValue:columns.join(", ") forKey:@"columns"];
     [self _setActionName:@"Columns from Entity"];

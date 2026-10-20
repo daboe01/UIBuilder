@@ -154,3 +154,40 @@ UIBBindingKeysForType = {
     "button":           ["enabledBinding"],
     "progresIndicator": ["valueBinding"]
 };
+
+// --- Localization ---
+// Every user-visible string goes through this. The English text is the key;
+// translations come from the "UIBuilder" strings table of the main bundle
+// (CPLocalizedStringFromTable). Without a table, the English text is shown.
+UIBLocalizationTable = "UIBuilder";
+
+UIBLocalized = function(aString)
+{
+    if (aString === nil || aString === undefined || aString === "")
+        return aString;
+
+    try
+    {
+        if (typeof CPLocalizedStringFromTable === "function")
+        {
+            var localized = CPLocalizedStringFromTable(aString, UIBLocalizationTable, "");
+            if (localized)
+                return localized;
+        }
+    }
+    catch (e)
+    {
+    }
+
+    return aString;
+};
+
+// UIBLocalizedFormat("Columns of “%@”", name)
+UIBLocalizedFormat = function(aFormat)
+{
+    var args = Array.prototype.slice.call(arguments, 1),
+        result = UIBLocalized(aFormat),
+        index = 0;
+
+    return String(result).replace(/%@/g, function() { return String(args[index++]); });
+};

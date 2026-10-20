@@ -12,6 +12,76 @@
 
 var UIBCheckMark = "✓";
 
+// A view that lays out its subviews with a function, from its real size.
+@implementation UIBLayoutView : CPView
+{
+    Function _layoutHandler;
+}
+
+- (void)setLayoutHandler:(Function)aFunction
+{
+    _layoutHandler = aFunction;
+    [self resizeSubviewsWithOldSize:[self frame].size];
+}
+
+- (void)resizeSubviewsWithOldSize:(CGSize)aSize
+{
+    if (_layoutHandler)
+        _layoutHandler([self bounds].size);
+    else
+        [super resizeSubviewsWithOldSize:aSize];
+}
+
+@end
+
+// Makes a table at least as large as the visible area of its scroll view and
+// lets the last column use the remaining width. Called after every layout.
+function UIBFitTable(aTable)
+{
+    var clipView = [aTable superview];
+    if (!clipView)
+        return;
+
+    var visible = [clipView bounds].size,
+        columns = [aTable tableColumns],
+        total = 0;
+
+    for (var i = 0; i < [columns count]; i++)
+        total += [columns[i] width];
+
+    [aTable setFrameSize:CGSizeMake(MAX(visible.width, total), MAX(visible.height, [aTable frame].size.height))];
+
+    if ([aTable respondsToSelector:@selector(sizeLastColumnToFit)])
+        [aTable sizeLastColumnToFit];
+}
+
+// A native +/− bar attached under a table.
+function UIBNewButtonBar(aTarget, addAction, removeAction)
+{
+    var bar = [[CPButtonBar alloc] initWithFrame:CGRectMake(0, 0, 100, 26)],
+        plus = [CPButtonBar plusButton],
+        minus = [CPButtonBar minusButton];
+
+    [plus setTarget:aTarget];
+    [plus setAction:addAction];
+    [minus setTarget:aTarget];
+    [minus setAction:removeAction];
+
+    if ([bar respondsToSelector:@selector(setHasResizeControl:)])
+        [bar setHasResizeControl:NO];
+
+    [bar setButtons:[plus, minus]];
+    bar._uibPlus = plus;
+    bar._uibMinus = minus;
+    return bar;
+}
+
+function UIBSetButtonBarEnabled(aBar, canAdd, canRemove)
+{
+    [aBar._uibPlus setEnabled:!!canAdd];
+    [aBar._uibMinus setEnabled:!!canRemove];
+}
+
 @implementation DataModelEditorController : CPObject
 {
     UIBuilderController _builderController;
@@ -34,6 +104,14 @@ var UIBCheckMark = "✓";
 
     // Sort descriptors
     CPTableView         _sortDescriptorsTable;
+
+    // +/− bars (enabled according to the selection)
+    CPButtonBar         _entitiesBar;
+    CPButtonBar         _columnsBar;
+    CPButtonBar         _relationshipsBar;
+    CPButtonBar         _controllersBar;
+    CPButtonBar         _sortBar;
+    CPButton            _addControllerButton;
 }
 
 - (id)initWithBuilderController:(UIBuilderController)aController
@@ -92,6 +170,11 @@ var UIBCheckMark = "✓";
 // columns: [[identifier, title, width, isBoolean], ...]
 - (CPTableView)_tableInView:(CPView)aView frame:(CGRect)aFrame columns:(CPArray)columns autoresizingMask:(unsigned)aMask
 {
+    // Start with a real size: a table created with an empty frame draws its
+    // rows but never receives clicks (hit testing uses the frame).
+    if (CGRectIsEmpty(aFrame))
+        aFrame = CGRectMake(0, 0, 400, 300);
+
     var scrollView = [[CPScrollView alloc] initWithFrame:aFrame];
     [scrollView setAutoresizingMask:aMask];
     [scrollView setHasHorizontalScroller:YES];
@@ -104,9 +187,11 @@ var UIBCheckMark = "✓";
     for (var i = 0; i < columns.length; i++)
     {
         var column = [[CPTableColumn alloc] initWithIdentifier:columns[i][0]];
-        [[column headerView] setStringValue:columns[i][1]];
+        [[column headerView] setStringValue:UIBLocalized(columns[i][1])];
         [column setWidth:columns[i][2]];
-        [column setEditable:!columns[i][3]];
+        // Not editable on a single click (that selects the row); double-click edits.
+        [column setEditable:NO];
+        column._uibIsEditable = !columns[i][3] && columns[i][0] !== "other";
         column._uibIsBoolean = !!columns[i][3];
         [table addTableColumn:column];
     }
@@ -118,132 +203,174 @@ var UIBCheckMark = "✓";
 
     [scrollView setDocumentView:table];
     [aView addSubview:scrollView];
+    UIBFitTable(table);
     return table;
+}
+
+- (UIBLayoutView)_newTabView
+{
+    var view = [[UIBLayoutView alloc] initWithFrame:CGRectMake(0, 0, 980, 590)];
+    [view setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+    return view;
 }
 
 - (void)_buildPanel
 {
     _panel = [[CPPanel alloc] initWithContentRect:CGRectMake(0, 0, 1000, 640) styleMask:CPTitledWindowMask | CPClosableWindowMask | CPResizableWindowMask];
-    [_panel setTitle:@"Datenmodell"];
+    [_panel setTitle:UIBLocalized(@"Data Model")];
     [_panel setDelegate:self];
-    [_panel center];
+
+    // Same window level as the inspector and the element library: Cappuccino
+    // sends a click to the highest level under the mouse, so an ordinary
+    // panel below a floating one would lose its clicks there.
+    [_panel setFloatingPanel:YES];
+
+    // Open next to the inspector, not on top of it.
+    var panelFrame = [_panel frame];
+    panelFrame.origin.x = MAX(370, (window.innerWidth - panelFrame.size.width) / 2);
+    panelFrame.origin.y = 60;
+    [_panel setFrame:panelFrame];
 
     _tabView = [[CPTabView alloc] initWithFrame:[[_panel contentView] bounds]];
     [_tabView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
 
-    var size = CGSizeMake(980, 590);
+    var margin = 10,
+        barHeight = 26,
+        leftWidth = 280;
 
     // --- Entities ---
-    var entitiesView = [[CPView alloc] initWithFrame:CGRectMake(0, 0, size.width, size.height)];
-    [entitiesView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+    var entitiesView = [self _newTabView];
 
-    _entitySearchField = [[CPSearchField alloc] initWithFrame:CGRectMake(8, 8, 270, 28)];
-    [_entitySearchField setPlaceholderString:@"Entity suchen"];
+    _entitySearchField = [[CPSearchField alloc] initWithFrame:CGRectMakeZero()];
+    [_entitySearchField setPlaceholderString:UIBLocalized(@"Search entities")];
     [_entitySearchField setTarget:self];
     [_entitySearchField setAction:@selector(filterChanged:)];
     [_entitySearchField setSendsSearchStringImmediately:YES];
     [entitiesView addSubview:_entitySearchField];
 
-    _entitiesTable = [self _tableInView:entitiesView frame:CGRectMake(8, 42, 270, size.height - 82)
-                                columns:[["name", "Entity", 150], ["store", "Store", 110]]
-                       autoresizingMask:CPViewHeightSizable];
+    _entitiesTable = [self _tableInView:entitiesView frame:CGRectMakeZero() columns:[["name", "Entity", 160], ["store", "Store", 110]] autoresizingMask:0];
+    var entitiesBar = UIBNewButtonBar(self, @selector(addEntity:), @selector(removeEntity:));
+    [entitiesView addSubview:entitiesBar];
+    _entitiesBar = entitiesBar;
 
-    var addEntity = [self _button:@"+" frame:CGRectMake(8, size.height - 34, 30, 24) action:@selector(addEntity:)],
-        removeEntity = [self _button:@"−" frame:CGRectMake(42, size.height - 34, 30, 24) action:@selector(removeEntity:)];
-    [addEntity setAutoresizingMask:CPViewMinYMargin];
-    [removeEntity setAutoresizingMask:CPViewMinYMargin];
-    [entitiesView addSubview:addEntity];
-    [entitiesView addSubview:removeEntity];
-
-    var addController = [self _button:@"Array Controller anlegen" frame:CGRectMake(80, size.height - 34, 198, 24) action:@selector(addControllerForEntity:)];
-    [addController setAutoresizingMask:CPViewMinYMargin];
-    [entitiesView addSubview:addController];
-
-    var rightX = 294,
-        rightWidth = size.width - rightX - 8,
-        columnsHeight = Math.round((size.height - 120) * 0.6);
-
-    _entityHeader = [self _label:@"Spalten" frame:CGRectMake(rightX, 12, rightWidth, 20) bold:YES];
-    [_entityHeader setAutoresizingMask:CPViewWidthSizable];
+    _entityHeader = [self _label:UIBLocalized(@"Columns") frame:CGRectMakeZero() bold:YES];
     [entitiesView addSubview:_entityHeader];
 
-    _columnsTable = [self _tableInView:entitiesView frame:CGRectMake(rightX, 36, rightWidth, columnsHeight)
-                               columns:[["name", "Spalte", 220], ["primaryKey", "Primärschlüssel", 110, YES], ["optimistic", "Optimistic", 90, YES], ["other", "Weitere Attribute", 250]]
-                      autoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+    var addController = [self _button:UIBLocalized(@"Create Array Controller") frame:CGRectMakeZero() action:@selector(addControllerForEntity:)];
+    [entitiesView addSubview:addController];
+    _addControllerButton = addController;
 
-    var y = 36 + columnsHeight + 6,
-        addColumn = [self _button:@"+" frame:CGRectMake(rightX, y, 30, 24) action:@selector(addColumn:)],
-        removeColumn = [self _button:@"−" frame:CGRectMake(rightX + 34, y, 30, 24) action:@selector(removeColumn:)],
-        hint = [self _label:@"Doppelklick auf ✓-Spalten schaltet um." frame:CGRectMake(rightX + 74, y + 4, 300, 18) bold:NO];
+    _columnsTable = [self _tableInView:entitiesView frame:CGRectMakeZero()
+                               columns:[["name", "Column", 220], ["primaryKey", "Primary Key", 110, YES], ["optimistic", "Optimistic", 90, YES], ["other", "Other Attributes", 250]]
+                      autoresizingMask:0];
+    var columnsBar = UIBNewButtonBar(self, @selector(addColumn:), @selector(removeColumn:));
+    [entitiesView addSubview:columnsBar];
+    _columnsBar = columnsBar;
 
-    [addColumn setAutoresizingMask:CPViewMaxYMargin];
-    [removeColumn setAutoresizingMask:CPViewMaxYMargin];
-    [entitiesView addSubview:addColumn];
-    [entitiesView addSubview:removeColumn];
+    var hint = [self _label:UIBLocalized(@"Double-click a ✓ column to toggle it") frame:CGRectMakeZero() bold:NO];
+    [hint setAlignment:CPRightTextAlignment];
     [entitiesView addSubview:hint];
 
-    y += 34;
-    [entitiesView addSubview:[self _label:@"Beziehungen" frame:CGRectMake(rightX, y, 200, 20) bold:YES]];
-    y += 24;
+    var relationshipsHeader = [self _label:UIBLocalized(@"Relationships") frame:CGRectMakeZero() bold:YES];
+    [entitiesView addSubview:relationshipsHeader];
 
-    _relationshipsTable = [self _tableInView:entitiesView frame:CGRectMake(rightX, y, rightWidth, size.height - y - 40)
-                                     columns:[["name", "Name", 150], ["type", "Typ", 80], ["target", "Ziel-Entity", 170], ["bindingColumn", "bindingColumn", 130], ["targetColumn", "targetColumn", 130]]
-                            autoresizingMask:CPViewWidthSizable | CPViewMinYMargin];
+    _relationshipsTable = [self _tableInView:entitiesView frame:CGRectMakeZero()
+                                     columns:[["name", "Name", 150], ["type", "Type", 80], ["target", "Target Entity", 170], ["bindingColumn", "bindingColumn", 130], ["targetColumn", "targetColumn", 130]]
+                            autoresizingMask:0];
+    var relationshipsBar = UIBNewButtonBar(self, @selector(addRelationship:), @selector(removeRelationship:));
+    [entitiesView addSubview:relationshipsBar];
+    _relationshipsBar = relationshipsBar;
 
-    var addRelationship = [self _button:@"+" frame:CGRectMake(rightX, size.height - 34, 30, 24) action:@selector(addRelationship:)],
-        removeRelationship = [self _button:@"−" frame:CGRectMake(rightX + 34, size.height - 34, 30, 24) action:@selector(removeRelationship:)];
-    [addRelationship setAutoresizingMask:CPViewMinYMargin];
-    [removeRelationship setAutoresizingMask:CPViewMinYMargin];
-    [entitiesView addSubview:addRelationship];
-    [entitiesView addSubview:removeRelationship];
+    var entitiesTable = _entitiesTable, columnsTable = _columnsTable, relationshipsTable = _relationshipsTable,
+        entitySearch = _entitySearchField, entityHeader = _entityHeader;
+
+    [entitiesView setLayoutHandler:function(size)
+    {
+        var w = size.width, h = size.height;
+
+        [entitySearch setFrame:CGRectMake(margin, margin, leftWidth, 28)];
+        [[entitiesTable enclosingScrollView] setFrame:CGRectMake(margin, margin + 36, leftWidth, h - 2 * margin - 36 - barHeight)];
+        UIBFitTable(entitiesTable);
+        [entitiesBar setFrame:CGRectMake(margin, h - margin - barHeight, leftWidth, barHeight)];
+
+        var x = margin + leftWidth + 16,
+            rw = MAX(200, w - x - margin),
+            top = margin + 36,
+            available = h - top - margin,
+            columnsHeight = Math.round(available * 0.55) - barHeight;
+
+        [entityHeader setFrame:CGRectMake(x, margin + 6, rw - 230, 20)];
+        [addController setFrame:CGRectMake(x + rw - 220, margin + 1, 220, 26)];
+
+        [[columnsTable enclosingScrollView] setFrame:CGRectMake(x, top, rw, columnsHeight)];
+        UIBFitTable(columnsTable);
+        [columnsBar setFrame:CGRectMake(x, top + columnsHeight, rw, barHeight)];
+        [hint setFrame:CGRectMake(x + 80, top + columnsHeight + 5, rw - 90, 18)];
+
+        var relationshipsTop = top + columnsHeight + barHeight + 16;
+        [relationshipsHeader setFrame:CGRectMake(x, relationshipsTop, 200, 20)];
+        [[relationshipsTable enclosingScrollView] setFrame:CGRectMake(x, relationshipsTop + 24, rw, MAX(40, h - margin - barHeight - relationshipsTop - 24))];
+        UIBFitTable(relationshipsTable);
+        [relationshipsBar setFrame:CGRectMake(x, h - margin - barHeight, rw, barHeight)];
+    }];
 
     // --- Array controllers ---
-    var controllersView = [[CPView alloc] initWithFrame:CGRectMake(0, 0, size.width, size.height)];
-    [controllersView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+    var controllersView = [self _newTabView];
 
-    _controllerSearchField = [[CPSearchField alloc] initWithFrame:CGRectMake(8, 8, 300, 28)];
-    [_controllerSearchField setPlaceholderString:@"Controller oder Entity suchen"];
+    _controllerSearchField = [[CPSearchField alloc] initWithFrame:CGRectMakeZero()];
+    [_controllerSearchField setPlaceholderString:UIBLocalized(@"Search controllers or entities")];
     [_controllerSearchField setTarget:self];
     [_controllerSearchField setAction:@selector(filterChanged:)];
     [_controllerSearchField setSendsSearchStringImmediately:YES];
     [controllersView addSubview:_controllerSearchField];
 
-    _controllersTable = [self _tableInView:controllersView frame:CGRectMake(8, 42, size.width - 16, size.height - 82)
-                                   columns:[["name", "id", 200], ["entity", "Entity", 170], ["ownerOutlet", "Outlet in #CPOwner", 170], ["sortDescriptor", "sortDescriptor", 120],
-                                            ["valueBinding", "valueBinding (Master)", 220], ["autoFetch", "autoFetch", 70, YES], ["autoFetchSync", "autoFetchSync", 90, YES]]
-                          autoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
-
-    var addCtrl = [self _button:@"+" frame:CGRectMake(8, size.height - 34, 30, 24) action:@selector(addArrayController:)],
-        removeCtrl = [self _button:@"−" frame:CGRectMake(42, size.height - 34, 30, 24) action:@selector(removeArrayController:)];
-    [addCtrl setAutoresizingMask:CPViewMinYMargin];
-    [removeCtrl setAutoresizingMask:CPViewMinYMargin];
-    [controllersView addSubview:addCtrl];
-    [controllersView addSubview:removeCtrl];
-
-    _insertTableButton = [self _button:@"Tabelle in die Oberfläche einfügen" frame:CGRectMake(size.width - 268, size.height - 34, 260, 24) action:@selector(insertTable:)];
-    [_insertTableButton setAutoresizingMask:CPViewMinYMargin | CPViewMinXMargin];
+    _insertTableButton = [self _button:UIBLocalized(@"Insert Table into Interface") frame:CGRectMakeZero() action:@selector(insertTable:)];
     [controllersView addSubview:_insertTableButton];
 
+    _controllersTable = [self _tableInView:controllersView frame:CGRectMakeZero()
+                                   columns:[["name", "id", 200], ["entity", "Entity", 170], ["ownerOutlet", "Outlet in #CPOwner", 170], ["sortDescriptor", "sortDescriptor", 120],
+                                            ["valueBinding", "valueBinding (Master)", 220], ["autoFetch", "autoFetch", 70, YES], ["autoFetchSync", "autoFetchSync", 90, YES]]
+                          autoresizingMask:0];
+    var controllersBar = UIBNewButtonBar(self, @selector(addArrayController:), @selector(removeArrayController:));
+    [controllersView addSubview:controllersBar];
+    _controllersBar = controllersBar;
+
+    var controllersTable = _controllersTable, controllerSearch = _controllerSearchField, insertButton = _insertTableButton;
+
+    [controllersView setLayoutHandler:function(size)
+    {
+        var w = size.width, h = size.height;
+        [controllerSearch setFrame:CGRectMake(margin, margin, 320, 28)];
+        [insertButton setFrame:CGRectMake(w - margin - 270, margin + 1, 270, 26)];
+        [[controllersTable enclosingScrollView] setFrame:CGRectMake(margin, margin + 36, w - 2 * margin, h - 2 * margin - 36 - barHeight)];
+        UIBFitTable(controllersTable);
+        [controllersBar setFrame:CGRectMake(margin, h - margin - barHeight, w - 2 * margin, barHeight)];
+    }];
+
     // --- Sort descriptors ---
-    var sortView = [[CPView alloc] initWithFrame:CGRectMake(0, 0, size.width, size.height)];
-    [sortView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+    var sortView = [self _newTabView];
 
-    _sortDescriptorsTable = [self _tableInView:sortView frame:CGRectMake(8, 8, size.width - 16, size.height - 48)
+    _sortDescriptorsTable = [self _tableInView:sortView frame:CGRectMakeZero()
                                        columns:[["name", "id", 260], ["key", "key", 260], ["ascending", "ascending", 100, YES], ["numeric", "numeric", 100, YES]]
-                              autoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+                              autoresizingMask:0];
+    var sortBar = UIBNewButtonBar(self, @selector(addSortDescriptor:), @selector(removeSortDescriptor:));
+    [sortView addSubview:sortBar];
+    _sortBar = sortBar;
 
-    var addSort = [self _button:@"+" frame:CGRectMake(8, size.height - 34, 30, 24) action:@selector(addSortDescriptor:)],
-        removeSort = [self _button:@"−" frame:CGRectMake(42, size.height - 34, 30, 24) action:@selector(removeSortDescriptor:)];
-    [addSort setAutoresizingMask:CPViewMinYMargin];
-    [removeSort setAutoresizingMask:CPViewMinYMargin];
-    [sortView addSubview:addSort];
-    [sortView addSubview:removeSort];
+    var sortTable = _sortDescriptorsTable;
+    [sortView setLayoutHandler:function(size)
+    {
+        var w = size.width, h = size.height;
+        [[sortTable enclosingScrollView] setFrame:CGRectMake(margin, margin, w - 2 * margin, h - 2 * margin - barHeight)];
+        UIBFitTable(sortTable);
+        [sortBar setFrame:CGRectMake(margin, h - margin - barHeight, w - 2 * margin, barHeight)];
+    }];
 
-    var tabs = [["entities", "Entities", entitiesView], ["controllers", "Array Controller", controllersView], ["sort", "Sort Descriptors", sortView]];
+    var tabs = [["entities", "Entities", entitiesView], ["controllers", "Array Controllers", controllersView], ["sort", "Sort Descriptors", sortView]];
     for (var i = 0; i < tabs.length; i++)
     {
         var item = [[CPTabViewItem alloc] initWithIdentifier:tabs[i][0]];
-        [item setLabel:tabs[i][1]];
+        [item setLabel:UIBLocalized(tabs[i][1])];
         [item setView:tabs[i][2]];
         [_tabView addTabViewItem:item];
     }
@@ -326,9 +453,25 @@ var UIBCheckMark = "✓";
 - (void)_reloadEntityDetails
 {
     var entity = [self selectedEntity];
-    [_entityHeader setStringValue:entity ? @"Spalten von „" + [entity valueForKey:@"name"] + "“" : @"Spalten (keine Entity ausgewählt)"];
+    [_entityHeader setStringValue:entity ? UIBLocalizedFormat(@"Columns of “%@”", [entity valueForKey:@"name"]) : UIBLocalized(@"Columns (no entity selected)")];
     [_columnsTable reloadData];
     [_relationshipsTable reloadData];
+    [self _updateButtonStates];
+}
+
+// Detail tables can only be edited while their master row is selected;
+// "−" needs a selected row.
+- (void)_updateButtonStates
+{
+    var hasEntity = !![self selectedEntity];
+
+    UIBSetButtonBarEnabled(_entitiesBar, YES, [_entitiesTable numberOfSelectedRows] > 0);
+    UIBSetButtonBarEnabled(_columnsBar, hasEntity, hasEntity && [_columnsTable numberOfSelectedRows] > 0);
+    UIBSetButtonBarEnabled(_relationshipsBar, hasEntity, hasEntity && [_relationshipsTable numberOfSelectedRows] > 0);
+    UIBSetButtonBarEnabled(_controllersBar, YES, [_controllersTable numberOfSelectedRows] > 0);
+    UIBSetButtonBarEnabled(_sortBar, YES, [_sortDescriptorsTable numberOfSelectedRows] > 0);
+
+    [_addControllerButton setEnabled:hasEntity];
     [_insertTableButton setEnabled:[_controllersTable numberOfSelectedRows] === 1];
 }
 
@@ -347,7 +490,7 @@ var UIBCheckMark = "✓";
     [self reloadAll];
     [self _select:[entity] inTable:_entitiesTable from:_visibleEntities];
     [self _reloadEntityDetails];
-    [_entitiesTable editColumn:0 row:_visibleEntities.indexOf(entity) withEvent:nil select:YES];
+    [self _editTable:_entitiesTable column:0 row:_visibleEntities.indexOf(entity)];
 }
 
 - (void)removeEntity:(id)sender
@@ -383,7 +526,7 @@ var UIBCheckMark = "✓";
     var controller = [_builderController addModelObjectOfKind:@"arrayController"];
     [self reloadAll];
     [self _select:[controller] inTable:_controllersTable from:_visibleControllers];
-    [_controllersTable editColumn:0 row:_visibleControllers.indexOf(controller) withEvent:nil select:YES];
+    [self _editTable:_controllersTable column:0 row:_visibleControllers.indexOf(controller)];
 }
 
 - (void)removeArrayController:(id)sender
@@ -397,7 +540,7 @@ var UIBCheckMark = "✓";
         list = [_builderController sortDescriptors];
     [self reloadAll];
     [self _select:[descriptor] inTable:_sortDescriptorsTable from:list];
-    [_sortDescriptorsTable editColumn:0 row:list.indexOf(descriptor) withEvent:nil select:YES];
+    [self _editTable:_sortDescriptorsTable column:0 row:list.indexOf(descriptor)];
 }
 
 - (void)removeSortDescriptor:(id)sender
@@ -433,7 +576,7 @@ var UIBCheckMark = "✓";
     if (newIndex >= 0)
     {
         [_columnsTable selectRowIndexes:[CPIndexSet indexSetWithIndex:newIndex] byExtendingSelection:NO];
-        [_columnsTable editColumn:0 row:newIndex withEvent:nil select:YES];
+        [self _editTable:_columnsTable column:0 row:newIndex];
     }
 }
 
@@ -462,7 +605,7 @@ var UIBCheckMark = "✓";
     if (newIndex >= 0)
     {
         [_relationshipsTable selectRowIndexes:[CPIndexSet indexSetWithIndex:newIndex] byExtendingSelection:NO];
-        [_relationshipsTable editColumn:0 row:newIndex withEvent:nil select:YES];
+        [self _editTable:_relationshipsTable column:0 row:newIndex];
     }
 }
 
@@ -488,7 +631,20 @@ var UIBCheckMark = "✓";
     [_builderController insertTableForArrayController:selected[0]];
 }
 
-// Double-click toggles ✓ columns (and relationship types).
+// Starts editing a cell: the column is editable only for this editing session.
+- (void)_editTable:(CPTableView)aTable column:(int)aColumnIndex row:(int)aRow
+{
+    var column = [[aTable tableColumns] objectAtIndex:aColumnIndex];
+    if (aRow < 0 || !column || !column._uibIsEditable)
+        return;
+
+    [aTable selectRowIndexes:[CPIndexSet indexSetWithIndex:aRow] byExtendingSelection:NO];
+    [column setEditable:YES];
+    [aTable editColumn:aColumnIndex row:aRow withEvent:nil select:YES];
+    [column setEditable:NO];
+}
+
+// Double-click edits text cells and toggles ✓ columns (and relationship types).
 - (void)tableDoubleClicked:(id)sender
 {
     var row = [sender clickedRow],
@@ -501,7 +657,10 @@ var UIBCheckMark = "✓";
         identifier = [column identifier];
 
     if (!column._uibIsBoolean && !(sender === _relationshipsTable && identifier === "type"))
+    {
+        [self _editTable:sender column:columnIndex row:row];
         return;
+    }
 
     if (sender === _columnsTable || sender === _relationshipsTable)
     {
@@ -638,7 +797,7 @@ var UIBCheckMark = "✓";
 
 - (BOOL)tableView:(CPTableView)aTable shouldEditTableColumn:(CPTableColumn)aColumn row:(int)aRow
 {
-    return !aColumn._uibIsBoolean && [aColumn identifier] !== "other" && !(aTable === _relationshipsTable && [aColumn identifier] === "type");
+    return !!aColumn._uibIsEditable && !(aTable === _relationshipsTable && [aColumn identifier] === "type");
 }
 
 - (void)tableViewSelectionDidChange:(CPNotification)aNotification
@@ -647,8 +806,8 @@ var UIBCheckMark = "✓";
 
     if (table === _entitiesTable)
         [self _reloadEntityDetails];
-    else if (table === _controllersTable)
-        [_insertTableButton setEnabled:[_controllersTable numberOfSelectedRows] === 1];
+    else
+        [self _updateButtonStates];
 }
 
 @end

@@ -250,7 +250,7 @@ var UIBKeyLabels = {
     for (var i = 0; i < tabs.length; i++)
     {
         var item = [[CPTabViewItem alloc] initWithIdentifier:tabs[i][0]];
-        [item setLabel:tabs[i][1]];
+        [item setLabel:UIBLocalized(tabs[i][1])];
         [item setView:tabs[i][2]];
         [_tabView addTabViewItem:item];
     }
@@ -267,14 +267,14 @@ var UIBKeyLabels = {
 {
     var bounds = [_attributesView bounds];
 
-    var hint = [self _labelWithString:@"Markup attributes the builder has no field for (bindings, autosaveName, …). Double-click to edit." frame:CGRectMake(8, 4, bounds.size.width - 16, 32)];
+    var hint = [self _labelWithString:UIBLocalized(@"Markup attributes the builder has no field for (bindings, autosaveName, …). Double-click to edit.") frame:CGRectMake(8, 4, bounds.size.width - 16, 32)];
     [hint setAlignment:CPLeftTextAlignment];
     [hint setLineBreakMode:CPLineBreakByWordWrapping];
     [hint setFont:[CPFont systemFontOfSize:11]];
     [hint setAutoresizingMask:CPViewWidthSizable];
     [_attributesView addSubview:hint];
 
-    var scrollView = [[CPScrollView alloc] initWithFrame:CGRectMake(4, 40, bounds.size.width - 8, bounds.size.height - 76)];
+    var scrollView = [[CPScrollView alloc] initWithFrame:CGRectMake(4, 40, bounds.size.width - 8, bounds.size.height - 74)];
     [scrollView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
     [scrollView setHasHorizontalScroller:NO];
 
@@ -282,28 +282,38 @@ var UIBKeyLabels = {
     [_attributesTableView setUsesAlternatingRowBackgroundColors:YES];
 
     var nameColumn = [[CPTableColumn alloc] initWithIdentifier:@"name"];
-    [[nameColumn headerView] setStringValue:@"Attribute"];
+    [[nameColumn headerView] setStringValue:UIBLocalized(@"Attribute")];
     [nameColumn setWidth:110];
-    [nameColumn setEditable:YES];
+    [nameColumn setEditable:NO];   // double-click edits (see attributeTableDoubleClicked:)
     [_attributesTableView addTableColumn:nameColumn];
 
     var valueColumn = [[CPTableColumn alloc] initWithIdentifier:@"value"];
-    [[valueColumn headerView] setStringValue:@"Value"];
+    [[valueColumn headerView] setStringValue:UIBLocalized(@"Value")];
     [valueColumn setWidth:bounds.size.width - 140];
-    [valueColumn setEditable:YES];
+    [valueColumn setEditable:NO];
     [_attributesTableView addTableColumn:valueColumn];
 
     [_attributesTableView setDataSource:self];
     [_attributesTableView setDelegate:self];
+    [_attributesTableView setTarget:self];
+    [_attributesTableView setDoubleAction:@selector(attributeTableDoubleClicked:)];
     [scrollView setDocumentView:_attributesTableView];
     [_attributesView addSubview:scrollView];
 
-    var addButton = [self _smallButtonWithTitle:@"+" frame:CGRectMake(4, bounds.size.height - 30, 30, 24) action:@selector(addMarkupAttribute:)];
-    var removeButton = [self _smallButtonWithTitle:@"−" frame:CGRectMake(38, bounds.size.height - 30, 30, 24) action:@selector(removeMarkupAttribute:)];
-    [addButton setAutoresizingMask:CPViewMinYMargin];
-    [removeButton setAutoresizingMask:CPViewMinYMargin];
-    [_attributesView addSubview:addButton];
-    [_attributesView addSubview:removeButton];
+    // A native +/− bar attached under the table
+    var bar = [[CPButtonBar alloc] initWithFrame:CGRectMake(4, bounds.size.height - 34, bounds.size.width - 8, 26)],
+        plus = [CPButtonBar plusButton],
+        minus = [CPButtonBar minusButton];
+
+    [plus setTarget:self];
+    [plus setAction:@selector(addMarkupAttribute:)];
+    [minus setTarget:self];
+    [minus setAction:@selector(removeMarkupAttribute:)];
+    if ([bar respondsToSelector:@selector(setHasResizeControl:)])
+        [bar setHasResizeControl:NO];
+    [bar setButtons:[plus, minus]];
+    [bar setAutoresizingMask:CPViewWidthSizable | CPViewMinYMargin];
+    [_attributesView addSubview:bar];
 }
 
 - (void)_buildConnectionsTab
@@ -321,7 +331,7 @@ var UIBKeyLabels = {
     for (var i = 0; i < columns.length; i++)
     {
         var column = [[CPTableColumn alloc] initWithIdentifier:columns[i][0]];
-        [[column headerView] setStringValue:columns[i][1]];
+        [[column headerView] setStringValue:UIBLocalized(columns[i][1])];
         [column setWidth:columns[i][2]];
         [column setEditable:NO];
         [_connectionsTableView addTableColumn:column];
@@ -340,7 +350,7 @@ var UIBKeyLabels = {
     [_connectionsView addSubview:_connectionRemoveButton];
 
     y += 34;
-    var newLabel = [self _labelWithString:@"New connection from this element:" frame:CGRectMake(4, y, bounds.size.width - 8, 20)];
+    var newLabel = [self _labelWithString:UIBLocalized(@"New connection from this element:") frame:CGRectMake(4, y, bounds.size.width - 8, 20)];
     [newLabel setAlignment:CPLeftTextAlignment];
     [newLabel setFont:[CPFont boldSystemFontOfSize:11]];
     [newLabel setAutoresizingMask:CPViewMinYMargin];
@@ -348,7 +358,7 @@ var UIBKeyLabels = {
 
     y += 22;
     _connectionKindPopUp = [[CPPopUpButton alloc] initWithFrame:CGRectMake(4, y, 90, 26) pullsDown:NO];
-    [_connectionKindPopUp addItemsWithTitles:["Action", "Outlet"]];
+    [_connectionKindPopUp addItemsWithTitles:["Action", "Outlet"].map(UIBLocalized)];
     [_connectionKindPopUp setTarget:self];
     [_connectionKindPopUp setAction:@selector(connectionKindChanged:)];
     [_connectionKindPopUp setAutoresizingMask:CPViewMinYMargin];
@@ -357,20 +367,20 @@ var UIBKeyLabels = {
     _connectionNameField = [[CPTextField alloc] initWithFrame:CGRectMake(98, y, bounds.size.width - 102, 28)];
     [_connectionNameField setBezeled:YES];
     [_connectionNameField setEditable:YES];
-    [_connectionNameField setPlaceholderString:@"doSomething:"];
+    [_connectionNameField setPlaceholderString:UIBLocalized(@"doSomething:")];
     [_connectionNameField setAutoresizingMask:CPViewWidthSizable | CPViewMinYMargin];
     [_connectionsView addSubview:_connectionNameField];
 
     y += 32;
-    var toLabel = [self _labelWithString:@"to" frame:CGRectMake(4, y + 4, 20, 20)];
+    var toLabel = [self _labelWithString:UIBLocalized(@"to") frame:CGRectMake(4, y + 4, 20, 20)];
     [toLabel setAutoresizingMask:CPViewMinYMargin];
     [_connectionsView addSubview:toLabel];
 
     _connectionTargetField = [[CPTextField alloc] initWithFrame:CGRectMake(28, y, bounds.size.width - 120, 28)];
     [_connectionTargetField setBezeled:YES];
     [_connectionTargetField setEditable:YES];
-    [_connectionTargetField setStringValue:@"#CPOwner"];
-    [_connectionTargetField setPlaceholderString:@"#CPOwner, #someID, #CPOwner.controller"];
+    [_connectionTargetField setStringValue:UIBLocalized(@"#CPOwner")];
+    [_connectionTargetField setPlaceholderString:UIBLocalized(@"#CPOwner, #someID, #CPOwner.controller")];
     [_connectionTargetField setAutoresizingMask:CPViewWidthSizable | CPViewMinYMargin];
     [_connectionsView addSubview:_connectionTargetField];
 
@@ -513,11 +523,11 @@ var UIBKeyLabels = {
         _boundControls.push([control, CPValueBinding]);
 
         if (aKey === "items" || aKey === "columns")
-            [control setPlaceholderString:@"comma separated"];
+            [control setPlaceholderString:UIBLocalized(@"comma separated")];
         if (aKey === "actions")
-            [control setPlaceholderString:@"save:, cancel:"];
+            [control setPlaceholderString:UIBLocalized(@"save:, cancel:")];
         if (aKey === "outlets")
-            [control setPlaceholderString:@"delegate, dataSource"];
+            [control setPlaceholderString:UIBLocalized(@"delegate, dataSource")];
     }
 
     [control setAutoresizingMask:CPViewWidthSizable];
@@ -528,7 +538,7 @@ var UIBKeyLabels = {
 - (CPControl)_addRowForKey:(CPString)aKey label:(CPString)aLabel type:(CPString)aType inView:(CPView)aView y:(float)y
 {
     var width = [aView bounds].size.width,
-        label = [self _labelWithString:aLabel frame:CGRectMake(4, y + 5, UIBInspectorLabelWidth, 20)];
+        label = [self _labelWithString:UIBLocalized(aLabel) frame:CGRectMake(4, y + 5, UIBInspectorLabelWidth, 20)];
 
     [aView addSubview:label];
 
@@ -550,7 +560,7 @@ var UIBKeyLabels = {
 - (CPString)_labelForKey:(CPString)aKey type:(CPString)elementType
 {
     if (UIBKeyLabels[aKey])
-        return UIBKeyLabels[aKey];
+        return UIBLocalized(UIBKeyLabels[aKey]);
 
     // Show the markup attribute name.
     var map = UIBAttributeMapForType(elementType);
@@ -569,8 +579,8 @@ var UIBKeyLabels = {
 
     if ([selectedObjects count] !== 1)
     {
-        [_panel setTitle:@"Inspector"];
-        var message = ([selectedObjects count] === 0) ? @"No Selection" : @"Multiple Selection (" + [selectedObjects count] + @")";
+        [_panel setTitle:UIBLocalized(@"Inspector")];
+        var message = ([selectedObjects count] === 0) ? UIBLocalized(@"No Selection") : UIBLocalizedFormat(@"Multiple Selection (%@)", [selectedObjects count]);
         [self _addMessage:message toView:_propertiesView];
         [self _addMessage:message toView:_layoutView];
         [self _reloadAttributes];
@@ -585,7 +595,7 @@ var UIBKeyLabels = {
         defaults = [CappusanceCodec defaultsForType:elementType],
         tag = [_inspectedObject valueForKey:@"markupTag"] || (UIBSchemaForType(elementType).tags[0] || elementType);
 
-    [_panel setTitle:@"Inspector – <" + tag + ">"];
+    [_panel setTitle:UIBLocalized(@"Inspector") + " – <" + tag + ">"];
 
     // --- Properties ---
     var y = 8;
@@ -616,7 +626,7 @@ var UIBKeyLabels = {
             width = [_propertiesView bounds].size.width;
 
         y += 8;
-        [self _addSectionTitle:@"Bindings (Datenmodell)" inView:_propertiesView y:y];
+        [self _addSectionTitle:UIBLocalized(@"Bindings (Data Model)") inView:_propertiesView y:y];
         y += 22;
 
         for (var i = 0; i < bindingKeys.length; i++)
@@ -629,7 +639,7 @@ var UIBKeyLabels = {
             [combo setCompletes:YES];
             [combo setNumberOfVisibleItems:14];
             [combo setStringValue:extras[bindingKey] || @""];
-            [combo setPlaceholderString:@"#CPOwner.controller…"];
+            [combo setPlaceholderString:UIBLocalized(@"#CPOwner.controller…")];
             [combo setTarget:self];
             [combo setAction:@selector(commitBinding:)];
             [combo setDelegate:self];
@@ -643,7 +653,7 @@ var UIBKeyLabels = {
         if (elementType === "tableView")
         {
             var columnsButton = [[CPButton alloc] initWithFrame:CGRectMake(UIBInspectorLabelWidth + 10, y + 2, width - UIBInspectorLabelWidth - 18, 24)];
-            [columnsButton setTitle:@"Spalten aus Entity übernehmen"];
+            [columnsButton setTitle:UIBLocalized(@"Take Columns from Entity")];
             [columnsButton setTarget:self];
             [columnsButton setAction:@selector(takeColumnsFromEntity:)];
             [columnsButton setAutoresizingMask:CPViewWidthSizable];
@@ -651,7 +661,7 @@ var UIBKeyLabels = {
             y += UIBInspectorRowHeight;
         }
 
-        _bindingMessage = [self _labelWithString:([[_builderController arrayControllers] count] ? @"" : @"Noch kein Datenmodell – Daten ▸ Datenmodell-Editor") frame:CGRectMake(8, y, width - 16, 18)];
+        _bindingMessage = [self _labelWithString:([[_builderController arrayControllers] count] ? @"" : @"No data model yet – Data ▸ Data Model Editor") frame:CGRectMake(8, y, width - 16, 18)];
         [_bindingMessage setAlignment:CPLeftTextAlignment];
         [_bindingMessage setFont:[CPFont systemFontOfSize:10]];
         [_bindingMessage setAutoresizingMask:CPViewWidthSizable];
@@ -661,7 +671,7 @@ var UIBKeyLabels = {
 
     // What control-dragging offers for this element.
     y += 8;
-    [self _addSectionTitle:(elementType === "owner" ? @"Owner methods and outlets" : @"Offered when control-dragging") inView:_propertiesView y:y];
+    [self _addSectionTitle:UIBLocalized(elementType === "owner" ? @"Owner methods and outlets" : @"Offered when control-dragging") inView:_propertiesView y:y];
     y += 22;
     [self _addRowForKey:@"actions" label:@"Actions" type:UIBString inView:_propertiesView y:y];
     y += UIBInspectorRowHeight;
@@ -670,7 +680,7 @@ var UIBKeyLabels = {
 
     if ([_inspectedObject valueForKey:@"rawChildren"] && UIBSchemaForType(elementType).items)
     {
-        var note = [self _labelWithString:@"Items keep their imported attributes as long as the list is unchanged." frame:CGRectMake(8, y + 4, [_propertiesView bounds].size.width - 16, 30)];
+        var note = [self _labelWithString:UIBLocalized(@"Items keep their imported attributes as long as the list is unchanged.") frame:CGRectMake(8, y + 4, [_propertiesView bounds].size.width - 16, 30)];
         [note setAlignment:CPLeftTextAlignment];
         [note setLineBreakMode:CPLineBreakByWordWrapping];
         [note setFont:[CPFont systemFontOfSize:10]];
@@ -686,7 +696,7 @@ var UIBKeyLabels = {
 
     if (elementType === "window")
     {
-        [self _addSectionTitle:@"Position in the running app (empty: automatic)" inView:_layoutView y:y];
+        [self _addSectionTitle:UIBLocalized(@"Position in the running app (empty: automatic)") inView:_layoutView y:y];
         y += 22;
         [self _addRowForKey:@"x" label:@"x" type:UIBNumber inView:_layoutView y:y];
         y += UIBInspectorRowHeight;
@@ -704,10 +714,10 @@ var UIBKeyLabels = {
         [self _addRowForKey:@"valign" label:@"valign" type:UIBEnumeration inView:_layoutView y:y];
         y += UIBInspectorRowHeight + 8;
 
-        [self _addSectionTitle:@"Size (unchecked: determined by the content)" inView:_layoutView y:y];
+        [self _addSectionTitle:UIBLocalized(@"Size (unchecked: determined by the content)") inView:_layoutView y:y];
         y += 22;
 
-        _fixedWidthBox = [CPCheckBox checkBoxWithTitle:@"Fixed"];
+        _fixedWidthBox = [CPCheckBox checkBoxWithTitle:UIBLocalized(@"Fixed")];
         [_fixedWidthBox setFrameOrigin:CGPointMake(8, y + 4)];
         [_fixedWidthBox setTarget:self];
         [_fixedWidthBox setAction:@selector(toggleFixedSize:)];
@@ -716,7 +726,7 @@ var UIBKeyLabels = {
         _widthControl = [self _addRowForKey:@"width" label:@"width" type:UIBNumber inView:_layoutView y:y];
         y += UIBInspectorRowHeight;
 
-        _fixedHeightBox = [CPCheckBox checkBoxWithTitle:@"Fixed"];
+        _fixedHeightBox = [CPCheckBox checkBoxWithTitle:UIBLocalized(@"Fixed")];
         [_fixedHeightBox setFrameOrigin:CGPointMake(8, y + 4)];
         [_fixedHeightBox setTarget:self];
         [_fixedHeightBox setAction:@selector(toggleFixedSize:)];
@@ -726,7 +736,7 @@ var UIBKeyLabels = {
         y += UIBInspectorRowHeight;
     }
     else
-        [self _addMessage:@"This element fills its container." toView:_layoutView];
+        [self _addMessage:UIBLocalized(@"This element fills its container.") toView:_layoutView];
 
     // Observe everything shown, so undo/redo and canvas edits show up here.
     _observedKeys = ["identifier", "extraAttributes", "markupKeys", "actions", "outlets", "halign", "valign", "width", "height", "x", "y"].concat(keys);
@@ -817,7 +827,7 @@ var UIBKeyLabels = {
         [self commitBinding:_bindingFields[i]];
 
     var error = [_builderController takeTableColumnsFromEntityForElement:_inspectedObject];
-    [_bindingMessage setStringValue:error || @"Spalten übernommen."];
+    [_bindingMessage setStringValue:UIBLocalized(error || @"Columns updated.")];
 }
 
 #pragma mark -
@@ -855,8 +865,31 @@ var UIBKeyLabels = {
     if (row >= 0)
     {
         [_attributesTableView selectRowIndexes:[CPIndexSet indexSetWithIndex:row] byExtendingSelection:NO];
-        [_attributesTableView editColumn:0 row:row withEvent:nil select:YES];
+        [self _editAttributeColumn:0 row:row];
     }
+}
+
+// A single click selects; editing starts on double-click (the column is
+// editable only for that editing session).
+- (void)_editAttributeColumn:(int)aColumnIndex row:(int)aRow
+{
+    var column = [[_attributesTableView tableColumns] objectAtIndex:aColumnIndex];
+    if (aRow < 0 || !column)
+        return;
+
+    [_attributesTableView selectRowIndexes:[CPIndexSet indexSetWithIndex:aRow] byExtendingSelection:NO];
+    [column setEditable:YES];
+    [_attributesTableView editColumn:aColumnIndex row:aRow withEvent:nil select:YES];
+    [column setEditable:NO];
+}
+
+- (void)attributeTableDoubleClicked:(id)sender
+{
+    var row = [sender clickedRow],
+        column = [sender clickedColumn];
+
+    if (row >= 0 && column >= 0)
+        [self _editAttributeColumn:column row:row];
 }
 
 - (void)removeMarkupAttribute:(id)sender
@@ -889,7 +922,7 @@ var UIBKeyLabels = {
 
             _connectionRows.push({
                 connection: connection,
-                kind: isSource ? kind + " ▸" : "◂ " + kind,
+                kind: isSource ? UIBLocalized(kind) + " ▸" : "◂ " + UIBLocalized(kind),
                 name: action || [connection valueForKey:@"outlet"] || "",
                 other: [_builderController describeEndpointOfConnection:connection prefix:(isSource ? @"target" : @"source")]
             });

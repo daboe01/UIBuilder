@@ -138,4 +138,4 @@ EspressoUI is a regular Cappuccino application in `public/Frontend`.
 
 ## License
 
-© 2025 Daniel Boehringer. All rights reserved.
+© 2025-2026 Daniel Boehringer. All rights reserved.

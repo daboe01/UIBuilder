@@ -1,74 +1,141 @@
+<img width="1328" height="834" alt="EspressoUI Builder: canvas, inspector and element library" src="https://github.com/user-attachments/assets/77daa818-e19e-44cd-a819-c36125ab49c9" />
+
 # EspressoUI Builder ☕️
 
-> The Visual UI Builder for Cappusances's Powerful Auto-Layout System
-
-## About The Project
-
-
-**EspressoUI Builder** is a WYSIWYG interface builder, built *in* Cappuccino, *for* Cappuccino. Inspired by modern tools like Xcode's Interface Builder, Espresso provides a visual, drag-and-drop canvas to graphically construct your application's UI. Its primary focus is to give you a hands-on, intuitive way to harness the full power of Cappusances's auto-layout engine.
-
-Our vision is to bridge the gap between visual design and clean, maintainable code, enabling you to build beautiful and responsive Cappuccino apps faster than ever before.
-
-### Vision & Philosophy
-
-EspressoUI is guided by a simple yet powerful philosophy:
-
-*   **Native-Like Experience:** The builder itself should feel like a fluid, responsive desktop application, showcasing the power of the Cappuccino framework.
-*   **Pure Cappuccino:** No external UI library dependencies. This project is a testament to what can be achieved with Cappuccino alone.
-*   **Layout First:** Place the emphasis on building robust, responsive interfaces using a visual representation of Cappusance's layout primitives.
+**A visual interface builder for Cappuccino, written in Cappuccino.**
+Design windows with Cappusance's box layout, wire up outlets and actions, define your data model, and get clean Cappusance markup (`.gsmarkup`) out of it, the same markup you would write by hand.
 
 ---
 
-## 🚀 Current Features
+## Why
 
-EspressoUI is well underway, with a robust set of features that already streamline UI development.
+Cappusance (GSMarkup for Cappuccino) describes interfaces as nested `<vbox>`/`<hbox>` layouts with bindings and connections. That is great to read and to diff, but hard to *see*. EspressoUI gives you an Interface-Builder-style canvas for exactly that markup:
 
-*   **Full-Window Canvas:** A limitless, scrollable canvas for designing your application windows and views. Standard features like element selection, multi-selection (rubber-banding), and visual resizing are all implemented.
+- **Markup in, markup out.** Paste an existing `gui.gsmarkup` and `model.gsmarkup`, edit them visually, and copy them back. Anything the builder does not model (custom tags, bindings, menus, comments) is preserved verbatim.
+- **Layout first.** The canvas uses the same box layout rules as the running app (`halign`/`valign` with `min`, `center`, `max`, `expand`), so what you see is what Cappusance will lay out.
+- **Pure Cappuccino.** No external UI libraries; the builder is itself a Cappuccino application.
 
-*   **Extensive Component Palette:** A floating palette provides a rich library of standard Cappuccino controls, neatly organized and ready to be dragged onto the canvas.
-    *   **Containers:** `Window`, `Box`, `Scroll View`, `Split View`, `Table View`
-    *   **Auto-Layout:** `HBox`, `VBox`, `HSpace`, `VSpace`
-    *   **Text & Fields:** `Label`, `Text Field`, `Search Field`, `Secure Field`, `Text View`, `Combo Box`
-    *   **Buttons & Controls:** `Button`, `Check Box`, `Pop Up Button`, `Stepper`, `Slider`, `Date Picker`
-    *   **Visuals:** `Image View`, `Progress Indicator`
+## Features
 
-*   **Visual Auto-Layout Engine:** This is the core of EspressoUI.
-    *   Drag and drop layout primitives like `HBox` and `VBox` onto the canvas to create horizontal or vertical stacks.
-    *   Drop other UI elements *inside* these boxes to have them automatically arrange themselves according to the layout rules.
-    *   Visually create flexible and rigid spacing to build complex, responsive designs that adapt gracefully.
+### Canvas
+- Scrollable canvas for any number of windows, with selection, rubber-band multi-selection, moving and resizing.
+- Drop elements into windows, boxes, tab views, split views and scroll views; rows are created automatically in vertical boxes.
+- Drag inside a box to position an element: the builder inserts and adjusts `hspace`/`vspace` for you.
+- Cut, copy, paste, duplicate, group in HBox/VBox, ungroup, reorder.
+- **Unlimited undo/redo for everything**: creating, deleting, moving, resizing, property edits, connections and data model changes, with descriptive menu titles ("Undo Move", "Redo Paste").
 
-*   **Contextual Inspector:** An inspector panel that displays the properties of the currently selected UI element(s).
+### Element library
+A searchable palette, grouped into:
 
-*   **Live Application Preview:** With a single click ("Run"), EspressoUI will:
-    1.  Instantiate real, native Cappuccino UI elements from your visual design.
-    2.  Build the complete view hierarchy, correctly nesting views within their containers.
-    3.  Connect targets and actions between elements.
-    4.  Launch the final, interactive UI in a new window, exactly as a user would see it.
+| Group | Elements |
+|---|---|
+| Windows & containers | Window, Box, Tab View, Split View, Scroll View |
+| Layout | VBox, HBox, HSpace, VSpace |
+| Text | Label, Text Field, Search Field, Secure Field, Combo Box, Text View |
+| Controls | Button, Check Box, Pop-Up Button, Slider, Stepper, Date Picker, Progress Indicator |
+| Data & other | Table View, Image View, Custom (any tag) |
 
----
+Unknown tags from imported markup (`ButtonBar`, `collectionView`, your own classes, …) appear as custom elements and are written back unchanged.
 
-## 🎯 The Roadmap: A Bright Future
+### Inspector
+- **Properties:** every attribute the builder understands, plus the markup `id`.
+- **Layout:** alignment and size; sizes can be fixed or left to the content, just like in the markup.
+- **Attributes:** an editable table for all other attributes (bindings, `autosaveName`, …).
+- **Connections:** list, add and remove target/action and outlet connections, including references outside the document such as `#CPOwner.someController`.
+- **Bindings:** combo boxes that suggest key paths from your data model (`#CPOwner.worklistController`, `….selection.name`, `….arrangedObjects.name`, `….selection.@count`).
 
-This is just the beginning. Our roadmap is focused on making Espresso an indispensable tool for every Cappuccino developer.
+### Connections and File's Owner
+`#CPOwner` is shown on the canvas as **File's Owner**. Control-drag between elements, or to and from the File's Owner, to create outlets and target/action connections. On export they are written inline (`target`/`action`, `delegate`, `dataSource`, `nextKeyView`) or as `<outlet>`/`<control>` connectors.
 
-### ✔️ Phase 1: The Foundation (Complete)
-- [x] Core drawing engine for skeleton UI elements.
-- [x] Data model managed by `CPArrayController` for robust state management.
-- [x] Canvas with selection, multi-selection, and rubber-banding.
-- [x] Drag-and-drop instantiation from the component palette.
-- [x] Visual manipulation (move, resize).
-- [x] Container logic for dropping elements into parent views.
-- [x] Visual support for the **Auto-Layout** engine (`HBox`, `VBox`, etc.).
-- [x] **Advanced Undo/Redo:** Full undo stack support for all actions (creation, deletion, moves, property changes).
+### Data model editor
+Edit what usually lives in `model.gsmarkup`:
+- **Entities** with columns (primary key, optimistic) and relationships (`toOne`/`toMany`, binding and target columns).
+- **Array controllers** with entity, sort descriptor, master–detail `valueBinding`, `autoFetch`/`autoFetchSync` and the File's Owner outlet.
+- **Sort descriptors.**
 
+One click creates an array controller for an entity, or inserts a ready-bound table (scroll view + table view with the entity's columns) into your interface.
 
-### ⚙️ Phase 2: The Inspector Deep-Dive (Mostly complete)
-- [x] Context-aware **Property Inspector Panel** to view element properties.
-- [x] **Live Property Editing:** Change an element's title, color, or state in the inspector and see it update instantly on the canvas.
-- [x] **Geometry & Sizing:** Precise numeric input for an element's position and size.
-- [ ] **Full support for all properties:** Currently only a few properties of a few views are implemented to demonstrate the concepts.
+### Import, export and autosave
+- **Import** a GUI file, a model file, or a combined file. A model file replaces only the data model, so you can load `gui.gsmarkup` and `model.gsmarkup` one after the other.
+- **Save** shows the markup fully selected (⌘C copies it) or downloads it, as interface only, data model only, or both in one file.
+- The writer keeps the original attribute order, comments and outlet style, so re-exported files produce small, readable diffs.
+- The current document is **autosaved in the browser** and restored on the next start.
 
-### 💾 Phase 3: Persistency (In progres)
-- [X] **Data serialisation:** Save and load your visual UI designs from gsmarkup text.
-- [ ] **Project Persistency:** Save and load your visual UI designs to and from a file (`.xib` or `.cib` equivalent).
-- [ ] **Outlet & Action Generation:** Visually connect elements to "File's Owner" to automatically generate Objective-J outlet and action stubs in your controller files.
+### Run
+**File ▸ Run** builds real Cappuccino views from the design and opens them in native windows, with connections applied. This is a quick preview; not every element has a native counterpart yet.
+
+### Localization
+The UI is in English. All user-visible strings go through `CPLocalizedStringFromTable` (table `UIBuilder`); a template with every key is in `Resources/en.lproj/UIBuilder.strings`.
+
+## Getting started
+
+EspressoUI is a regular Cappuccino application in `public/Frontend`.
+
+1. Make the Cappuccino frameworks available as `public/Frontend/Frameworks` (for example as a symlink created by `capp`).
+2. Serve the `public` directory with any local web server and open `Frontend/index.html`.
+
+> `public/Frontend/Frameworks` is usually a symlink; add it to `.gitignore` (without a trailing slash).
+
+## Keyboard shortcuts
+
+| Shortcut | Action |
+|---|---|
+| ⌘Z / ⇧⌘Z | Undo / Redo |
+| ⌘X, ⌘C, ⌘V | Cut, Copy, Paste |
+| ⌘D | Duplicate |
+| ⌫ | Delete |
+| ⌘A | Select All |
+| ⌘G / ⇧⌘G | Group in HBox / Ungroup |
+| ⌘[ / ⌘] | Move earlier / later in its box |
+| Arrow keys (⇧ for 10 px) | Move selection |
+| Esc | Cancel a drag, or clear the selection |
+| ⌘L / ⌘S | Import / Save markup |
+| ⌘R | Run |
+
+## Project structure
+
+| File | Purpose |
+|---|---|
+| `AppController.j` | Application setup, menus, import/export windows, autosave |
+| `UIBuilderController.j` | Document model, undo primitives, data model, bindings support |
+| `CappusanceCodec.j` | Reading and writing Cappusance markup (round-trip safe) |
+| `UICanvasView.j` | The canvas: selection, drag and drop, connections |
+| `UIElementView.j` | Base class of all elements; box layout engine |
+| `UI*View.j` | One class per element type |
+| `UIBSkeletons.j` | The look of all elements on the canvas and of the palette icons |
+| `UIBPalette.j` | The element library |
+| `InspectorController.j` | The inspector |
+| `DataModelEditorController.j` | The data model editor |
+| `UIBuilderConstants.j` | Shared constants, undo and localization helpers |
+
+## Roadmap
+
+### ✅ Foundation
+- [x] Canvas with selection, rubber-band selection, move and resize
+- [x] Drag and drop from the element library, containers and box layout
+- [x] Undo/redo for every change
+- [x] Cut, copy, paste, duplicate, group, ungroup
+
+### ✅ Inspector
+- [x] Properties, layout, attributes and connections
+- [x] Live editing with immediate canvas updates
+- [x] Fixed or content-driven sizes
+- [ ] Dedicated editors for more element-specific properties (today many are edited as plain attributes)
+
+### ✅ Persistence and data
+- [x] Import and export Cappusance markup, round-trip safe
+- [x] Separate or combined GUI and data model files
+- [x] Data model editor (entities, array controllers, sort descriptors)
+- [x] Bindings with suggestions from the data model
+- [x] Connections to File's Owner
+- [x] Autosave in the browser
+
+### 🔜 Next
+- [ ] Save to and open from project files on a server
+- [ ] Generate Objective-J outlet and action stubs for the File's Owner class
+- [ ] Native counterparts for all elements in **Run**
+- [ ] German translation of the builder UI
+
+## License
+
+© 2025 Daniel Boehringer. All rights reserved.

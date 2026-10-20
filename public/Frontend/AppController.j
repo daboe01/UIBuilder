@@ -9,6 +9,8 @@
 @import "UICanvasView.j"
 @import "UIElementView.j";
 @import "InspectorController.j";
+@import "DataModelEditorController.j";
+@import "UIBPalette.j";
 
 var CGSizeZero = CGSizeMake(0, 0);
 
@@ -450,6 +452,7 @@ var CGSizeZero = CGSizeMake(0, 0);
     UICanvasView _canvasView;
     InspectorController _inspectorController;
     CPPanel _inspectorPanel;
+    DataModelEditorController _dataModelEditor;
 }
 
 - (void)applicationDidFinishLaunching:(CPNotification)aNotification
@@ -556,6 +559,25 @@ var CGSizeZero = CGSizeMake(0, 0);
     [arrangeMenu addItemWithTitle:@"Move Later" action:@selector(moveLater:) keyEquivalent:@"]"];
     [arrangeMenuItem setSubmenu:arrangeMenu];
     [mainMenuBar addItem:arrangeMenuItem];
+
+    // Data model
+    var dataMenuItem = [[CPMenuItem alloc] initWithTitle:@"Daten" action:nil keyEquivalent:@""];
+    var dataMenu = [[CPMenu alloc] initWithTitle:@"Daten"];
+    [dataMenu addItemWithTitle:@"Datenmodell-Editor…" action:@selector(showDataModelEditor:) keyEquivalent:@""];
+    [dataMenu addItem:[CPMenuItem separatorItem]];
+    [dataMenu addItemWithTitle:@"Datenmodell importieren…" action:@selector(importDataModel:) keyEquivalent:@""];
+    [dataMenu addItemWithTitle:@"Datenmodell sichern…" action:@selector(saveDataModel:) keyEquivalent:@""];
+    [dataMenuItem setSubmenu:dataMenu];
+    [mainMenuBar addItem:dataMenuItem];
+
+    // Window
+    var windowMenuItem = [[CPMenuItem alloc] initWithTitle:@"Fenster" action:nil keyEquivalent:@""];
+    var windowMenu = [[CPMenu alloc] initWithTitle:@"Fenster"];
+    [windowMenu addItemWithTitle:@"Elemente" action:@selector(showPalette:) keyEquivalent:@""];
+    [windowMenu addItemWithTitle:@"Inspector" action:@selector(showInspector:) keyEquivalent:@""];
+    [windowMenu addItemWithTitle:@"Datenmodell" action:@selector(showDataModelEditor:) keyEquivalent:@""];
+    [windowMenuItem setSubmenu:windowMenu];
+    [mainMenuBar addItem:windowMenuItem];
 
     [CPApp setMainMenu:mainMenuBar];
     [CPMenu setMenuBarVisible:YES];
@@ -675,104 +697,27 @@ var CGSizeZero = CGSizeMake(0, 0);
 
 - (void)createPalette
 {
-    var screenWidth = window.innerWidth;
-    var symbolSize = 40;
-    var labelHeight = 20;
-    var itemHeight = symbolSize + labelHeight;
-    var itemWidth = 65; 
-    var padding = 10;
-    var itemsPerRow = 7;
-
-    var paletteItems = [
-        // Row 1: Windows & Containers
-        [
-            {dragType: UIWindowDragType, elementType: "window", label: "Window"},
-            {dragType: UIBoxDragType, elementType: "box", label: "Box"},
-            {dragType: UIScrollViewDragType, elementType: "scrollView", label: "Scroll View"},
-            {dragType: UISplitViewDragType, elementType: "splitView", label: "Split View"},
-            {dragType: UITableViewDragType, elementType: "tableView", label: "Table View"}
-        ],
-        // Row 2: Layout
-        [
-            {dragType: UIHBoxDragType, elementType: "hbox", label: "HBox"},
-            {dragType: UIVBoxDragType, elementType: "vbox", label: "VBox"},
-            {dragType: UIHSpaceDragType, elementType: "hspace", label: "HSpace"},
-            {dragType: UIVSpaceDragType, elementType: "vspace", label: "VSpace"}
-        ],
-        // Row 3: Text & Fields
-        [
-            {dragType: UILabelDragType, elementType: "label", label: "Label"},
-            {dragType: UITextFieldDragType, elementType: "textField", label: "Text Field"},
-            {dragType: UISearchFieldDragType, elementType: "searchField", label: "Search Field"},
-            {dragType: UISecureFieldDragType, elementType: "secureField", label: "Secure Field"},
-            {dragType: UITextViewDragType, elementType: "textView", label: "Text View"},
-            {dragType: UIComboBoxDragType, elementType: "comboBox", label: "Combo Box"}
-        ],
-        // Row 4: Buttons & Controls
-        [
-            {dragType: UIButtonDragType, elementType: "button", label: "Button"},
-            {dragType: UICheckBoxDragType, elementType: "checkBox", label: "Check Box"},
-            {dragType: UIPopUpButtonDragType, elementType: "popUpButton", label: "Pop Up"},
-            {dragType: UIStepperDragType, elementType: "stepper", label: "Stepper"},
-            {dragType: UISliderDragType, elementType: "slider", label: "Slider"},
-            {dragType: UIDatePickerDragType, elementType: "datePicker", label: "Date Picker"}
-        ],
-        // Row 5: Other
-        [
-            {dragType: UIImageViewDragType, elementType: "imageView", label: "Image View"},
-            {dragType: UIProgressIndicatorDragType, elementType: "progresIndicator", label: "Progress"},
-            {dragType: UITabViewDragType, elementType: "tabView", label: "Tab View"},
-            {dragType: UICustomViewDragType, elementType: "custom", label: "Custom"}
-        ]
-    ];
-
-    var paletteWidth = padding + itemsPerRow * (itemWidth + padding);
-    var paletteHeight = padding + [paletteItems count] * (itemHeight + padding) + 20;
-    var paletteX = MAX(360, screenWidth - paletteWidth - 20);
-    var paletteY = 40;
-
-    _palette = [[CPPanel alloc] initWithContentRect:CGRectMake(paletteX, paletteY, paletteWidth, paletteHeight)
-                                          styleMask:CPHUDBackgroundWindowMask | CPTitledWindowMask | CPClosableWindowMask];
-    [_palette setTitle:@"Elements"];
-    [_palette setFloatingPanel:YES];
+    _palette = UIBCreatePalette();
     [_palette setDelegate:self];
-    [_palette setAcceptsMouseMovedEvents:NO];
-
-    var contentView = [_palette contentView];
-    var contentViewHeight = [contentView bounds].size.height;
-
-    for (var r = 0; r < [paletteItems count]; r++) {
-        var rowItems = paletteItems[r];
-        var xPos = padding;
-        var yPos = contentViewHeight - (r + 1) * (itemHeight + padding);
-
-        for (var i = 0; i < [rowItems count]; i++) {
-            var item = rowItems[i];
-
-            var container = [[CPView alloc] initWithFrame:CGRectMake(xPos, yPos, itemWidth, itemHeight)];
-
-            var symbol = [[DraggableSymbolView alloc] initWithFrame:CGRectMake((itemWidth - symbolSize) / 2, labelHeight, symbolSize, symbolSize)];
-            [symbol setDragType:item.dragType];
-            [symbol setElementType:item.elementType];
-            [container addSubview:symbol];
-
-            var label = [[CPTextField alloc] initWithFrame:CGRectMake(0, 5, itemWidth, labelHeight)];
-            [label setStringValue:item.label];
-            [label setFont:[CPFont systemFontOfSize:10]];
-            [label setTextColor:[CPColor whiteColor]];
-            [label setAlignment:CPCenterTextAlignment];
-            [label setBezeled:NO];
-            [label setDrawsBackground:NO];
-            [label setEditable:NO];
-            [label setSelectable:NO];
-            [container addSubview:label];
-
-            [contentView addSubview:container];
-            xPos += itemWidth + padding;
-        }
-    }
-
     [_palette orderFront:self];
+}
+
+- (void)showPalette:(id)sender
+{
+    [_palette orderFront:self];
+}
+
+- (void)showInspector:(id)sender
+{
+    [_inspectorPanel orderFront:self];
+}
+
+- (void)showDataModelEditor:(id)sender
+{
+    if (!_dataModelEditor)
+        _dataModelEditor = [[DataModelEditorController alloc] initWithBuilderController:_builderController];
+
+    [_dataModelEditor showWindow:self];
 }
 
 - (void)createInspector
@@ -919,24 +864,72 @@ var CGSizeZero = CGSizeMake(0, 0);
 */
 - (void)save:(id)sender
 {
-    var markup = [_builderController cappusanceMarkup],
-        textView = nil,
-        panel = [self _markupPanelWithTitle:@"Cappusance Markup — select all is active, press ⌘C" textView:function(aTextView) { textView = aTextView; }];
+    // Interface by default; only the data model if there is no interface.
+    [self _showMarkupForMode:([_builderController hasInterface] || ![_builderController hasDataModel]) ? 0 : 1];
+}
 
-    [textView setString:markup];
+- (void)saveDataModel:(id)sender
+{
+    [self _showMarkupForMode:1];
+}
 
-    var copyButton = [self _panelButton:@"Copy to Clipboard" x:10 inPanel:panel action:@selector(copyMarkup:)];
-    copyButton._markup = markup;
+- (CPString)_markupForMode:(int)aMode
+{
+    if (aMode === 1)
+        return [_builderController cappusanceMarkupIncludingInterface:NO model:YES];
+    if (aMode === 2)
+        return [_builderController cappusanceMarkupIncludingInterface:YES model:YES];
+    return [_builderController cappusanceMarkupIncludingInterface:YES model:NO];
+}
 
-    var downloadButton = [self _panelButton:@"Download…" x:[[panel contentView] bounds].size.width - 150 inPanel:panel action:@selector(downloadMarkup:)];
-    downloadButton._markup = markup;
+/*!
+    Shows markup (0: interface, 1: data model, 2: both in one file), all of it
+    selected, ready to be copied out with ⌘C.
+*/
+- (void)_showMarkupForMode:(int)aMode
+{
+    var textView = nil,
+        panel = [self _markupPanelWithTitle:@"Cappusance Markup — alles markiert, ⌘C kopiert" textView:function(aTextView) { textView = aTextView; }],
+        bounds = [[panel contentView] bounds];
+
+    var modePopUp = [[CPPopUpButton alloc] initWithFrame:CGRectMake(160, bounds.size.height - 35, 220, 26) pullsDown:NO];
+    [modePopUp addItemsWithTitles:["Oberfläche (gui)", "Datenmodell (model)", "Beides in einer Datei"]];
+    [modePopUp selectItemAtIndex:aMode];
+    [modePopUp setTarget:self];
+    [modePopUp setAction:@selector(markupModeChanged:)];
+    [modePopUp setAutoresizingMask:CPViewMinYMargin | CPViewMaxXMargin];
+    [[panel contentView] addSubview:modePopUp];
+
+    var copyButton = [self _panelButton:@"In Zwischenablage" x:10 inPanel:panel action:@selector(copyMarkup:)],
+        downloadButton = [self _panelButton:@"Download…" x:bounds.size.width - 150 inPanel:panel action:@selector(downloadMarkup:)];
+
+    modePopUp._textView = textView;
+    modePopUp._buttons = [copyButton, downloadButton];
 
     [panel makeKeyAndOrderFront:self];
-    [panel makeFirstResponder:textView];
-    [textView setSelectedRange:CPMakeRange(0, [markup length])];
+    [self markupModeChanged:modePopUp];
 
     // The user has the markup now; treat the document as saved.
     [_builderController setDocumentEdited:NO];
+}
+
+- (void)markupModeChanged:(id)sender
+{
+    var mode = [sender indexOfSelectedItem],
+        markup = [self _markupForMode:mode],
+        textView = sender._textView;
+
+    [textView setString:markup];
+
+    for (var i = 0; i < sender._buttons.length; i++)
+    {
+        sender._buttons[i]._markup = markup;
+        sender._buttons[i]._fileName = (mode === 1) ? "model.gsmarkup" : "gui.gsmarkup";
+    }
+
+    [sender._buttons[0] setTitle:@"In Zwischenablage"];
+    [[textView window] makeFirstResponder:textView];
+    [textView setSelectedRange:CPMakeRange(0, [markup length])];
 }
 
 - (void)copyMarkup:(id)sender
@@ -971,7 +964,7 @@ var CGSizeZero = CGSizeMake(0, 0);
         link = document.createElement("a");
 
     link.href = url;
-    link.download = "interface.gsmarkup";
+    link.download = sender._fileName || "interface.gsmarkup";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -982,19 +975,33 @@ var CGSizeZero = CGSizeMake(0, 0);
     Import: paste Cappusance markup (or open a .gsmarkup file) and replace
     the current document with it.
 */
+- (void)importDataModel:(id)sender
+{
+    [self _showImportPanelModelOnly:YES];
+}
+
 - (void)load:(id)sender
 {
     if (![self _confirmDiscardingChanges])
         return;
 
+    [self _showImportPanelModelOnly:NO];
+}
+
+- (void)_showImportPanelModelOnly:(BOOL)modelOnly
+{
     var textView = nil,
         panel = [self _markupPanelWithTitle:@"Import Cappusance Markup — paste the markup below" textView:function(aTextView) { textView = aTextView; }];
 
     var fileButton = [self _panelButton:@"Open File…" x:10 inPanel:panel action:@selector(chooseMarkupFile:)];
     fileButton._textView = textView;
 
-    var importButton = [self _panelButton:@"Import" x:[[panel contentView] bounds].size.width - 150 inPanel:panel action:@selector(performLoad:)];
+    var importButton = [self _panelButton:@"Importieren" x:[[panel contentView] bounds].size.width - 150 inPanel:panel action:@selector(performLoad:)];
     importButton._textView = textView;
+    importButton._modelOnly = modelOnly;
+
+    if (modelOnly)
+        [panel setTitle:@"Datenmodell importieren — model.gsmarkup einfügen (die Oberfläche bleibt erhalten)"];
     [importButton setKeyEquivalent:CPCarriageReturnCharacter];
     [importButton setKeyEquivalentModifierMask:CPCommandKeyMask];
 
@@ -1041,7 +1048,13 @@ var CGSizeZero = CGSizeMake(0, 0);
         return;
     }
 
-    var error = [_builderController loadCappusanceMarkup:markup];
+    // A pure data model file (model.gsmarkup) only replaces the data model.
+    var isModelOnly = !/<window[\s>]/.test(markup) && /<(arrayController|entities|sortDescriptor)[\s>]/.test(markup),
+        error = (isModelOnly || sender._modelOnly) ? [_builderController importDataModelFromMarkup:markup] : [_builderController loadCappusanceMarkup:markup];
+
+    if (!error && isModelOnly)
+        [self showDataModelEditor:self];
+
     if (error)
     {
         var errorAlert = [CPAlert alertWithMessageText:@"Could Not Import" defaultButton:@"OK" alternateButton:nil otherButton:nil informativeTextWithFormat:@"%@", error];

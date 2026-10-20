@@ -234,6 +234,89 @@ UIBXMLEscapeAttribute = function(aString)
     return UIBXMLEscapeText(aString).replace(/"/g, "&quot;");
 };
 
+/*
+    The data model: sort descriptors and array controllers (top-level objects)
+    and entities (the <entities> section). [dataKey, attributeName, default]
+*/
+UIBModelSchema = {
+    "sortDescriptor": {
+        tag: "sortDescriptor",
+        attributes: [["name", "id", ""], ["key", "key", ""], ["ascending", "ascending", YES], ["numeric", "numeric", NO]]
+    },
+    "arrayController": {
+        tag: "arrayController",
+        attributes: [["name", "id", ""], ["entity", "entity", ""], ["sortDescriptor", "sortDescriptor", ""], ["valueBinding", "valueBinding", ""],
+                     ["autoFetch", "autoFetch", NO], ["autoFetchSync", "autoFetchSync", NO]]
+    },
+    "entity": {
+        tag: "entity",
+        attributes: [["name", "id", ""], ["store", "store", "#CPOwner.store"]]
+    }
+};
+
+var UIBModelCounter = 0;
+
+UIBNewModelObject = function(aKind)
+{
+    var object = [CPConservativeDictionary dictionary],
+        attributes = UIBModelSchema[aKind].attributes;
+
+    [object setValue:aKind forKey:@"kind"];
+    [object setValue:"model_" + (UIBModelCounter++) forKey:@"id"];
+    [object setValue:{} forKey:@"extraAttributes"];
+    [object setValue:[] forKey:@"markupKeys"];
+    [object setValue:[] forKey:@"markupAttributeOrder"];
+
+    for (var i = 0; i < attributes.length; i++)
+        if (attributes[i][2] !== "")
+            [object setValue:attributes[i][2] forKey:attributes[i][0]];
+
+    if (aKind === "entity")
+    {
+        [object setValue:[] forKey:@"columns"];
+        [object setValue:[] forKey:@"relationships"];
+        [object setValue:[] forKey:@"rawChildren"];
+    }
+
+    return object;
+};
+
+// Columns and relationships are kept as their attributes (strings), in order.
+UIBNewModelItem = function(someAttributes)
+{
+    var item = { attributes: {}, order: [] };
+    for (var name in someAttributes)
+        if (someAttributes.hasOwnProperty(name))
+        {
+            item.attributes[name] = someAttributes[name];
+            item.order.push(name);
+        }
+    return item;
+};
+
+UIBCopyModelItem = function(anItem)
+{
+    return { attributes: JSON.parse(JSON.stringify(anItem.attributes)), order: anItem.order.slice() };
+};
+
+UIBModelItemMarkup = function(aTag, anItem)
+{
+    var names = anItem.order.slice();
+    for (var name in anItem.attributes)
+        if (anItem.attributes.hasOwnProperty(name) && names.indexOf(name) < 0)
+            names.push(name);
+
+    var parts = [];
+    for (var i = 0; i < names.length; i++)
+    {
+        var value = anItem.attributes[names[i]];
+        if (value !== nil && value !== undefined && value !== "")
+            parts.push(names[i] + '="' + UIBXMLEscapeAttribute(value) + '"');
+    }
+
+    return "<" + aTag + (parts.length ? " " + parts.join(" ") : "") + "/>";
+};
+
 
 @implementation CappusanceCodec : CPObject
 {
@@ -241,14 +324,21 @@ UIBXMLEscapeAttribute = function(aString)
 
     // Import state
     JSObject    _elementsByIdentifier;
+    JSObject    _modelByIdentifier;
     CPArray     _pendingConnections;
+
+    // Writing style taken over from the imported document
+    BOOL        _outletsUseHash;
 }
 
 - (id)initWithController:(id)aController
 {
     self = [super init];
     if (self)
+    {
         _controller = aController;
+        _outletsUseHash = YES;
+    }
     return self;
 }
 
@@ -443,9 +533,30 @@ UIBXMLEscapeAttribute = function(aString)
     }
     else if (schema.content)
     {
-        var children = [];
-        for (var i = 0; i < childNodes.length; i++)
-            children.push([self _importNode:childNodes[i]]);
+        // Comments are kept with the element that follows them.
+        var children = [],
+            pendingComments = [];
+
+        for (var i = 0; i < aNode.childNodes.length; i++)
+        {
+            var childNode = aNode.childNodes[i];
+
+            if (childNode.nodeType === 8)
+                pendingComments.push(childNode.nodeValue);
+            else if (childNode.nodeType === 1)
+            {
+                var childData = [self _importNode:childNode];
+                if (pendingComments.length)
+                {
+                    [childData setValue:pendingComments forKey:@"leadingComments"];
+                    pendingComments = [];
+                }
+                children.push(childData);
+            }
+        }
+
+        if (pendingComments.length)
+            [data setValue:pendingComments forKey:@"trailingComments"];
 
         [self _attachImportedChildren:children toElement:data type:type];
     }
@@ -547,6 +658,75 @@ UIBXMLEscapeAttribute = function(aString)
     return connection;
 }
 
+#pragma mark -
+#pragma mark Data Model Import
+
+- (id)_importModelNode:(id)aNode kind:(CPString)aKind
+{
+    var object = UIBNewModelObject(aKind),
+        schema = UIBModelSchema[aKind],
+        extras = {},
+        order = [],
+        markupKeys = [];
+
+    for (var i = 0; i < aNode.attributes.length; i++)
+    {
+        var name = aNode.attributes[i].name,
+            value = aNode.attributes[i].value,
+            mapped = nil;
+
+        order.push(name);
+
+        for (var j = 0; j < schema.attributes.length; j++)
+            if (schema.attributes[j][1] === name)
+                mapped = schema.attributes[j];
+
+        if (mapped)
+        {
+            [object setValue:(typeof mapped[2] === "boolean" ? /^(yes|true|1)$/i.test(value) : value) forKey:mapped[0]];
+            markupKeys.push(mapped[0]);
+        }
+        else
+            extras[name] = value;
+    }
+
+    [object setValue:extras forKey:@"extraAttributes"];
+    [object setValue:order forKey:@"markupAttributeOrder"];
+    [object setValue:markupKeys forKey:@"markupKeys"];
+
+    if (aKind === "entity")
+    {
+        var columns = [], relationships = [], raw = [],
+            children = [self _elementChildrenOfNode:aNode];
+
+        for (var i = 0; i < children.length; i++)
+        {
+            var child = children[i],
+                attributes = {};
+
+            for (var j = 0; j < child.attributes.length; j++)
+                attributes[child.attributes[j].name] = child.attributes[j].value;
+
+            if (child.tagName === "column")
+                columns.push(UIBNewModelItem(attributes));
+            else if (child.tagName === "relationship")
+                relationships.push(UIBNewModelItem(attributes));
+            else
+                raw.push([self _serializeNode:child]);
+        }
+
+        [object setValue:columns forKey:@"columns"];
+        [object setValue:relationships forKey:@"relationships"];
+        [object setValue:raw forKey:@"rawChildren"];
+    }
+
+    var identifier = [object valueForKey:@"name"];
+    if (identifier && !_modelByIdentifier[identifier])
+        _modelByIdentifier[identifier] = object;
+
+    return object;
+}
+
 /*!
     Parses a Cappusance document.
     Returns { windows, order, connections, unknownConnectors, ownerActions, ownerOutlets }
@@ -567,26 +747,54 @@ UIBXMLEscapeAttribute = function(aString)
         return { error: "This is not a Cappusance/GSMarkup document (the root element must be <gsmarkup>)." };
 
     _elementsByIdentifier = {};
+    _modelByIdentifier = {};
     _pendingConnections = [];
 
-    var result = { windows: [], order: [], connections: [], unknownConnectors: [], ownerActions: [], ownerOutlets: [] },
+    var result = { windows: [], order: [], connections: [], unknownConnectors: [], ownerActions: [], ownerOutlets: [],
+                   sortDescriptors: [], arrayControllers: [], entities: [], modelConnectors: [], hasModel: NO },
         objectsNode = xmlDoc.getElementsByTagName("objects")[0];
 
     if (objectsNode)
     {
-        var nodes = [self _elementChildrenOfNode:objectsNode];
+        var nodes = [];
+        for (var i = 0; i < objectsNode.childNodes.length; i++)
+        {
+            var node = objectsNode.childNodes[i];
+            if (node.nodeType === 1)
+                nodes.push(node);
+            else if (node.nodeType === 8)
+                result.order.push({ raw: "<!--" + node.nodeValue + "-->" });
+        }
+
         for (var i = 0; i < nodes.length; i++)
         {
-            if (nodes[i].tagName === "window" || nodes[i].tagName === "panel")
+            var tag = nodes[i].tagName;
+
+            if (tag === "window" || tag === "panel")
             {
                 var windowData = [self _importNode:nodes[i]];
                 result.windows.push(windowData);
                 result.order.push({ element: windowData });
             }
+            else if (tag === "sortDescriptor")
+                result.sortDescriptors.push([self _importModelNode:nodes[i] kind:@"sortDescriptor"]);
+            else if (tag === "arrayController")
+                result.arrayControllers.push([self _importModelNode:nodes[i] kind:@"arrayController"]);
             else
                 result.order.push({ raw: [self _serializeNode:nodes[i]] });
         }
     }
+
+    var entitiesNode = xmlDoc.getElementsByTagName("entities")[0];
+    if (entitiesNode)
+    {
+        var nodes = [self _elementChildrenOfNode:entitiesNode];
+        for (var i = 0; i < nodes.length; i++)
+            if (nodes[i].tagName === "entity")
+                result.entities.push([self _importModelNode:nodes[i] kind:@"entity"]);
+    }
+
+    result.hasModel = result.sortDescriptors.length + result.arrayControllers.length + result.entities.length > 0;
 
     var addAction = function(name) { if (name && result.ownerActions.indexOf(name) < 0) result.ownerActions.push(name); },
         addOutlet = function(name) { if (name && result.ownerOutlets.indexOf(name) < 0) result.ownerOutlets.push(name); };
@@ -612,12 +820,47 @@ UIBXMLEscapeAttribute = function(aString)
     var connectorsNode = xmlDoc.getElementsByTagName("connectors")[0];
     if (connectorsNode)
     {
-        var nodes = [self _elementChildrenOfNode:connectorsNode];
+        var nodes = [self _elementChildrenOfNode:connectorsNode],
+            withHash = 0,
+            withoutHash = 0;
+
+        // Write outlets the way the document does (source="CPOwner" or source="#CPOwner").
+        for (var i = 0; i < nodes.length; i++)
+            if (nodes[i].tagName === "outlet" && !_modelByIdentifier[String(nodes[i].getAttribute("target") || "").replace(/^#/, "")])
+            {
+                if (String(nodes[i].getAttribute("target") || "").charAt(0) === "#")
+                    withHash++;
+                else
+                    withoutHash++;
+            }
+
+        if (withHash + withoutHash > 0)
+            _outletsUseHash = withHash >= withoutHash;
         for (var i = 0; i < nodes.length; i++)
         {
             var node = nodes[i],
                 tag = node.tagName,
-                source = [self _resolveReference:node.getAttribute("source") owner:ownerData],
+                sourceName = String(node.getAttribute("source") || "").replace(/^#/, ""),
+                targetName = String(node.getAttribute("target") || "").replace(/^#/, ""),
+                sourceModel = _modelByIdentifier[sourceName],
+                targetModel = _modelByIdentifier[targetName];
+
+            // Connections into the data model: the owner's outlet to an array controller.
+            if (sourceModel || targetModel)
+            {
+                var label = node.getAttribute("label") || node.getAttribute("key") || node.getAttribute("outlet");
+
+                if (tag === "outlet" && sourceName === UIBOwnerReference && targetModel && [targetModel valueForKey:@"kind"] === "arrayController" && ![targetModel valueForKey:@"ownerOutlet"] && label)
+                {
+                    [targetModel setValue:label forKey:@"ownerOutlet"];
+                    [targetModel setValue:i forKey:@"ownerOutletOrder"];
+                }
+                else
+                    result.modelConnectors.push({ order: i, xml: [self _serializeNode:node] });
+                continue;
+            }
+
+            var source = [self _resolveReference:node.getAttribute("source") owner:ownerData],
                 target = [self _resolveReference:node.getAttribute("target") owner:ownerData];
 
             if (tag === "outlet")
@@ -646,6 +889,7 @@ UIBXMLEscapeAttribute = function(aString)
 
     _pendingConnections = nil;
     _elementsByIdentifier = nil;
+    _modelByIdentifier = nil;
 
     return result;
 }
@@ -759,7 +1003,7 @@ UIBXMLEscapeAttribute = function(aString)
     return titles.map(function(title)
     {
         if (schema.items.tag === "tableColumn")
-            return indent + '<tableColumn identifier="' + UIBXMLEscapeAttribute(title.toLowerCase().replace(/\s+/g, "_")) + '" title="' + UIBXMLEscapeAttribute(title) + '"/>';
+            return indent + '<tableColumn identifier="' + UIBXMLEscapeAttribute(title.replace(/\s+/g, "_")) + '" title="' + UIBXMLEscapeAttribute(title) + '"/>';
 
         return indent + '<' + schema.items.tag + ' ' + schema.items.attribute + '="' + UIBXMLEscapeAttribute(title) + '"/>';
     }).join("\n");
@@ -877,13 +1121,23 @@ UIBXMLEscapeAttribute = function(aString)
             bodyLines.push(raw.map(function(line) { return childIndent + line; }).join("\n"));
     }
 
+    var trailing = [data valueForKey:@"trailingComments"] || [];
+    for (var i = 0; i < trailing.length; i++)
+        bodyLines.push(childIndent + "<!--" + trailing[i] + "-->");
+
+    var markup;
     if (bodyLines.length)
-        return indent + "<" + tag + attributeString + ">" + (text || "") + "\n" + bodyLines.join("\n") + "\n" + indent + "</" + tag + ">";
+        markup = indent + "<" + tag + attributeString + ">" + (text || "") + "\n" + bodyLines.join("\n") + "\n" + indent + "</" + tag + ">";
+    else if (text !== nil)
+        markup = indent + "<" + tag + attributeString + ">" + text + "</" + tag + ">";
+    else
+        markup = indent + "<" + tag + attributeString + "/>";
 
-    if (text !== nil)
-        return indent + "<" + tag + attributeString + ">" + text + "</" + tag + ">";
+    var leading = [data valueForKey:@"leadingComments"] || [];
+    if (leading.length)
+        markup = leading.map(function(comment) { return indent + "<!--" + comment + "-->"; }).join("\n") + "\n" + markup;
 
-    return indent + "<" + tag + attributeString + "/>";
+    return markup;
 }
 
 // The children written for an element: roots of windows/scroll/split views are unwrapped.
@@ -917,6 +1171,18 @@ UIBXMLEscapeAttribute = function(aString)
 */
 - (CPString)exportDocumentWithWindows:(CPArray)windows order:(CPArray)order connections:(CPArray)connections unknownConnectors:(CPArray)unknownConnectors
 {
+    return [self exportDocumentWithWindows:windows order:order connections:connections unknownConnectors:unknownConnectors model:nil includeInterface:YES includeModel:NO];
+}
+
+/*!
+    Writes the interface, the data model, or both. The data model alone is
+    written in the layout of a separate model file (model.gsmarkup).
+*/
+- (CPString)exportDocumentWithWindows:(CPArray)windows order:(CPArray)order connections:(CPArray)connections unknownConnectors:(CPArray)unknownConnectors model:(JSObject)aModel includeInterface:(BOOL)includeInterface includeModel:(BOOL)includeModel
+{
+    if (!includeInterface)
+        return [self exportDataModel:aModel standalone:YES];
+
     var identifiers = {},
         inlineAttributes = {},
         connectorLines = [],
@@ -972,6 +1238,12 @@ UIBXMLEscapeAttribute = function(aString)
         if (!sourceRef || targetRef === nil)
             continue;
 
+        if (!_outletsUseHash)
+        {
+            sourceRef = String(sourceRef).replace(/^#/, "");
+            targetRef = String(targetRef).replace(/^#/, "");
+        }
+
         if (action)
             connectorLines.push('        <control source="' + UIBXMLEscapeAttribute(sourceRef) + '" target="' + UIBXMLEscapeAttribute(targetRef) + '" action="' + UIBXMLEscapeAttribute(action) + '"/>');
         else if (outlet)
@@ -1001,7 +1273,19 @@ UIBXMLEscapeAttribute = function(aString)
         if (written.indexOf(windows[i]) < 0)
             objectLines.push([self _markupForElement:windows[i] level:2 inline:inlineAttributes identifiers:identifiers]);
 
-    return [
+    var entitiesLines = [];
+
+    if (includeModel && aModel)
+    {
+        var modelObjects = [self _modelObjectLines:aModel indent:"        "];
+        if (modelObjects.length)
+            objectLines.unshift(modelObjects.join("\n"));
+
+        entitiesLines = [self _entitiesLines:aModel.entities indent:"    "];
+        connectorLines = [self _modelConnectorLines:aModel indent:"        "].concat(connectorLines);
+    }
+
+    var lines = [
         '<?xml version="1.0"?>',
         '<!DOCTYPE gsmarkup>',
         '<gsmarkup>',
@@ -1009,13 +1293,178 @@ UIBXMLEscapeAttribute = function(aString)
         '    <objects>',
         objectLines.join("\n\n"),
         '    </objects>',
-        '',
+        ''
+    ];
+
+    if (entitiesLines.length)
+        lines = lines.concat(entitiesLines, ['']);
+
+    return lines.concat([
         '    <connectors>',
         connectorLines.join("\n"),
         '    </connectors>',
         '</gsmarkup>',
         ''
-    ].join("\n");
+    ]).join("\n");
+}
+
+#pragma mark -
+#pragma mark Data Model Export
+
+- (CPString)_modelObjectMarkup:(id)anObject
+{
+    var kind = [anObject valueForKey:@"kind"],
+        schema = UIBModelSchema[kind],
+        attributes = {},
+        names = [],
+        markupKeys = [anObject valueForKey:@"markupKeys"] || [];
+
+    var add = function(name, value)
+    {
+        if (attributes[name] === undefined)
+            names.push(name);
+        attributes[name] = value;
+    };
+
+    for (var i = 0; i < schema.attributes.length; i++)
+    {
+        var key = schema.attributes[i][0],
+            attribute = schema.attributes[i][1],
+            defaultValue = schema.attributes[i][2],
+            value = [anObject valueForKey:key];
+
+        if (value === nil || value === undefined || value === "")
+            continue;
+
+        if (typeof defaultValue === "boolean")
+        {
+            if (markupKeys.indexOf(key) >= 0 || !!value !== defaultValue)
+                add(attribute, value ? "YES" : "NO");
+        }
+        else
+            add(attribute, String(value));
+    }
+
+    var extras = [anObject valueForKey:@"extraAttributes"] || {};
+    for (var name in extras)
+        if (extras.hasOwnProperty(name))
+            add(name, extras[name]);
+
+    var order = [anObject valueForKey:@"markupAttributeOrder"] || [];
+    names.sort(function(a, b)
+    {
+        var ia = order.indexOf(a), ib = order.indexOf(b);
+        if (ia < 0) ia = 1000 + names.indexOf(a);
+        if (ib < 0) ib = 1000 + names.indexOf(b);
+        return ia - ib;
+    });
+
+    return "<" + schema.tag + names.map(function(n) { return " " + n + '="' + UIBXMLEscapeAttribute(attributes[n]) + '"'; }).join("") + (kind === "entity" ? ">" : "/>");
+}
+
+- (CPArray)_modelObjectLines:(JSObject)aModel indent:(CPString)indent
+{
+    var lines = [],
+        sortDescriptors = aModel.sortDescriptors || [],
+        controllers = aModel.arrayControllers || [];
+
+    for (var i = 0; i < sortDescriptors.length; i++)
+        lines.push(indent + [self _modelObjectMarkup:sortDescriptors[i]]);
+
+    if (sortDescriptors.length && controllers.length)
+        lines.push("");
+
+    for (var i = 0; i < controllers.length; i++)
+        lines.push(indent + [self _modelObjectMarkup:controllers[i]]);
+
+    return lines;
+}
+
+- (CPArray)_entitiesLines:(CPArray)entities indent:(CPString)indent
+{
+    if (!entities || !entities.length)
+        return [];
+
+    var lines = [indent + "<entities>"],
+        inner = indent + "    ",
+        innermost = inner + "    ";
+
+    for (var i = 0; i < entities.length; i++)
+    {
+        var entity = entities[i];
+        lines.push(inner + [self _modelObjectMarkup:entity]);
+
+        var columns = [entity valueForKey:@"columns"] || [];
+        for (var j = 0; j < columns.length; j++)
+            lines.push(innermost + UIBModelItemMarkup("column", columns[j]));
+
+        var relationships = [entity valueForKey:@"relationships"] || [];
+        if (relationships.length && columns.length)
+            lines.push("");
+        for (var j = 0; j < relationships.length; j++)
+            lines.push(innermost + UIBModelItemMarkup("relationship", relationships[j]));
+
+        var raw = [entity valueForKey:@"rawChildren"] || [];
+        for (var j = 0; j < raw.length; j++)
+            lines.push(innermost + raw[j]);
+
+        lines.push(inner + "</entity>");
+    }
+
+    lines.push(indent + "</entities>");
+    return lines;
+}
+
+// Owner outlets to array controllers (in their original order, new ones last).
+- (CPArray)_modelConnectorLines:(JSObject)aModel indent:(CPString)indent
+{
+    var entries = [],
+        controllers = aModel.arrayControllers || [];
+
+    for (var i = 0; i < controllers.length; i++)
+    {
+        var outlet = [controllers[i] valueForKey:@"ownerOutlet"],
+            name = [controllers[i] valueForKey:@"name"],
+            order = [controllers[i] valueForKey:@"ownerOutletOrder"];
+
+        if (outlet && name)
+            entries.push({ order: (typeof order === "number") ? order : 100000 + i,
+                           xml: '<outlet source="#CPOwner" target="' + UIBXMLEscapeAttribute(name) + '" label="' + UIBXMLEscapeAttribute(outlet) + '"/>' });
+    }
+
+    var raw = aModel.connectors || [];
+    for (var i = 0; i < raw.length; i++)
+        entries.push(typeof raw[i] === "string" ? { order: 200000 + i, xml: raw[i] } : raw[i]);
+
+    entries.sort(function(a, b) { return a.order - b.order; });
+    return entries.map(function(entry) { return indent + entry.xml; });
+}
+
+/*!
+    The data model as its own document, laid out like a typical model.gsmarkup.
+*/
+- (CPString)exportDataModel:(JSObject)aModel standalone:(BOOL)standalone
+{
+    aModel = aModel || {};
+
+    return [
+        '<?xml version="1.0"?>',
+        '<!DOCTYPE gsmarkup>',
+        '<gsmarkup>',
+        '',
+        '    <objects>'
+    ].concat([self _modelObjectLines:aModel indent:"        "], [
+        '    </objects>',
+        '',
+        ''
+    ], [self _entitiesLines:aModel.entities indent:""], [
+        '',
+        '<connectors>'
+    ], [self _modelConnectorLines:aModel indent:"    "], [
+        '</connectors>',
+        '</gsmarkup>',
+        ''
+    ]).join("\n");
 }
 
 @end

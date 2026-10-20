@@ -105,6 +105,9 @@ UIBStructuralKeys["syntheticRoot"] = true;
 UIBStructuralKeys["rawChildren"] = true;
 UIBStructuralKeys["rawItemsSignature"] = true;
 UIBStructuralKeys["markupAttributeOrder"] = true;
+UIBStructuralKeys["leadingComments"] = true;
+UIBStructuralKeys["trailingComments"] = true;
+UIBStructuralKeys["kind"] = true;
 
 // Normalizes Renaissance alignment values to min / center / max / expand.
 UIBAlignKind = function(aValue)
@@ -130,3 +133,24 @@ UIBVerticalAlignValues   = ["min", "center", "max", "expand", "wexpand", "top", 
 
 // The owner object of a Cappusance document ("#CPOwner").
 UIBOwnerReference = "CPOwner";
+
+// --- Data model ---
+UIBDataModelDidChangeNotification = "UIBDataModelDidChangeNotification";
+
+// Bindings the inspector offers per element type.
+UIBBindingKeysForType = {
+    "tableView":        ["valueBinding"],
+    "popUpButton":      ["itemsBinding", "valueBinding", "enabledBinding"],
+    "comboBox":         ["itemsBinding", "valueBinding", "enabledBinding"],
+    "textField":        ["valueBinding", "enabledBinding"],
+    "searchField":      ["valueBinding"],
+    "secureField":      ["valueBinding", "enabledBinding"],
+    "label":            ["valueBinding"],
+    "checkBox":         ["valueBinding", "enabledBinding"],
+    "slider":           ["valueBinding", "enabledBinding"],
+    "stepper":          ["valueBinding", "enabledBinding"],
+    "datePicker":       ["valueBinding", "enabledBinding"],
+    "textView":         ["valueBinding"],
+    "button":           ["enabledBinding"],
+    "progresIndicator": ["valueBinding"]
+};

@@ -1,5 +1,6 @@
 
 @class UIElementView;
+@class UISplitViewView;
 
 @implementation UIVBoxView : UIElementView
 {
@@ -63,16 +64,23 @@
     return CGRectInset([self bounds], UIBStackPadding, UIBStackPadding);
 }
 
+// The root box of a vertical split view lays its panes out side by side.
+- (BOOL)_uib_isHorizontalSplit
+{
+    return !![[self dataObject] valueForKey:@"isRootVBox"] && [[self superview] isKindOfClass:[UISplitViewView class]] &&
+           !![[[self superview] dataObject] valueForKey:@"vertical"];
+}
+
 - (void)layoutSubviews
 {
     [super layoutSubviews];
-    UIBLayoutStack([self subviews], [self stackRect], YES);
+    UIBLayoutStack([self subviews], [self stackRect], ![self _uib_isHorizontalSplit]);
 }
 
 // The size of the stacked content, used when this box sits in another box.
 - (CGSize)intrinsicContentSize
 {
-    var size = UIBFittingStackSize([self subviews], YES);
+    var size = UIBFittingStackSize([self subviews], ![self _uib_isHorizontalSplit]);
     return CGSizeMake(MAX(20, size.width + 2 * UIBStackPadding), MAX(20, size.height + 2 * UIBStackPadding));
 }
 
@@ -82,33 +90,47 @@
 
     if ([self isSelected])
     {
+        UIBFillStroke([CPBezierPath bezierPathWithRect:CGRectInset([self bounds], 1, 1)], nil, UIBTheme("accent"), 2);
         [self drawHandles];
     }
 
     if (_isRubbing)
     {
         var rubber = CGRectUnion(CGRectMake(_rubberStart.x, _rubberStart.y, 0.1, 0.1), CGRectMake(_rubberEnd.x, _rubberEnd.y, 0.1, 0.1));
-        [[[[CPColor alternateSelectedControlColor] colorWithAlphaComponent:0.2] setFill]];
-        [CPBezierPath fillRect:rubber];
-        [[CPColor alternateSelectedControlColor] setStroke];
-        [CPBezierPath setDefaultLineWidth:1.0];
-        [CPBezierPath strokeRect:rubber];
+        UIBFillStroke([CPBezierPath bezierPathWithRect:rubber], UIBTheme("accentSoft"), UIBTheme("accent"), 1);
     }
 }
 
 - (void)drawSkeleton:(CGRect)rect
 {
-    var bounds = [self bounds];
-    var path = [CPBezierPath bezierPathWithRect:CGRectInset(bounds, 0.5, 0.5)];
-    [[[CPColor grayColor] colorWithAlphaComponent:[[self dataObject] valueForKey:@"isRootVBox"] ? 0.25 : 0.6] setStroke];
-    [path setLineWidth:[self isSelected] ? 3.0 : 1.0];
-    [path setLineDash:[2,2] count:2 phase:0];
-    [path stroke];
+    var bounds = [self bounds],
+        data = [self dataObject],
+        isRoot = !![data valueForKey:@"isRootVBox"],
+        path = [CPBezierPath bezierPathWithRect:CGRectInset(bounds, 0.5, 0.5)];
 
     if (_isDropTarget)
     {
-        [[[CPColor yellowColor] colorWithAlphaComponent:0.5] setFill];
-        [CPBezierPath fillRect:bounds];
+        UIBFillStroke(path, UIBTheme("accentSoft"), UIBTheme("accent"), 2);
+        return;
+    }
+
+    // Boxes are only hinted at: a fine dashed outline (fainter for a window's root box).
+    [path setLineDash:[3, 3] count:2 phase:0];
+    UIBFillStroke(path, nil, UIBTheme(isRoot ? "rootLine" : "containerLine"), 1);
+
+    // In a split view the panes sit side by side (vertical) or stacked: draw the dividers.
+    if (isRoot && [[self superview] isKindOfClass:[UISplitViewView class]])
+    {
+        var panes = UIBLayoutViews([self subviews]),
+            sideBySide = !![[[self superview] dataObject] valueForKey:@"vertical"];
+
+        for (var i = 1; i < panes.length; i++)
+        {
+            var frame = [panes[i] frame],
+                divider = sideBySide ? CGRectMake(frame.origin.x - 1, 0, 2, bounds.size.height) : CGRectMake(0, frame.origin.y - 1, bounds.size.width, 2);
+            [UIBTheme("controlBorder") setFill];
+            [CPBezierPath fillRect:divider];
+        }
     }
 }
 

@@ -175,6 +175,13 @@ function UIBIsVerticalStackType(aType)
     CPArray           _markupOrder;         // top-level order of the imported document
     CPArray           _unknownConnectors;   // connectors the builder does not model
 
+    // Data model (sort descriptors, array controllers, entities)
+    CPArray           _sortDescriptors;
+    CPArray           _arrayControllers;
+    CPArray           _entities;
+    CPArray           _modelConnectors;
+    id                _modelObjects;        // Set of all model objects, for undo tracking
+
     // Interactive (mouse-drag) change tracking
     int               _interactiveDepth;
     CPArray           _interactiveSnapshot;
@@ -221,6 +228,7 @@ function UIBIsVerticalStackType(aType)
         _codec = [[CappusanceCodec alloc] initWithController:self];
         _markupOrder = [];
         _unknownConnectors = [];
+        [self _resetDataModel];
     }
     return self;
 }
@@ -292,7 +300,7 @@ function UIBIsVerticalStackType(aType)
 
     // Only objects that are part of the document are tracked. Freshly built
     // elements (not inserted yet) and detached ones are ignored.
-    if (_elementsByID[[anObject objectForKey:@"id"]] !== anObject)
+    if (_elementsByID[[anObject objectForKey:@"id"]] !== anObject && !(_modelObjects && _modelObjects.has(anObject)))
         return;
 
     [[_undoManager prepareWithInvocationTarget:self] _setValue:oldValue forKey:aKey ofElement:anObject];
@@ -333,7 +341,7 @@ function UIBIsVerticalStackType(aType)
             return;
 
         // Record the inverse manually, removeObjectForKey: bypasses setValue:forKey:
-        if (UIBUndoSuppressionCount === 0 && _elementsByID[[anElement objectForKey:@"id"]] === anElement)
+        if (UIBUndoSuppressionCount === 0 && (_elementsByID[[anElement objectForKey:@"id"]] === anElement || _modelObjects.has(anElement)))
             [[_undoManager prepareWithInvocationTarget:self] _setValue:current forKey:aKey ofElement:anElement];
 
         [anElement removeObjectForKey:aKey];
@@ -341,7 +349,10 @@ function UIBIsVerticalStackType(aType)
     else
         [anElement setValue:aValue forKey:aKey];
 
-    [self _relayoutElement:[self parentOfElement:anElement]];
+    if (_modelObjects.has(anElement))
+        [self _postDataModelChange];
+    else
+        [self _relayoutElement:[self parentOfElement:anElement]];
 }
 
 - (void)_registerUndoForInsertionOfElement:(id)elementData
@@ -1798,6 +1809,7 @@ function UIBIsVerticalStackType(aType)
 
 - (void)_removeEverythingWithoutUndo
 {
+    // (the data model is reset separately)
     _elementsByID = {};
     _ownerElement = nil;
     _markupOrder = [];
@@ -1840,10 +1852,12 @@ function UIBIsVerticalStackType(aType)
     UIBPerformWithoutUndo(function()
     {
         [self _removeEverythingWithoutUndo];
+        [self _resetDataModel];
         _elementCounter = 0;
         _ownerElement = [self _newOwnerElement];
         [self _insertTopLevelElementsWithoutUndo:[_ownerElement]];
     });
+    [self _postDataModelChange];
 
     [_undoManager removeAllActions];
     [self setDocumentEdited:NO];
@@ -1879,6 +1893,10 @@ function UIBIsVerticalStackType(aType)
 
         _markupOrder = result.order;
         _unknownConnectors = result.unknownConnectors;
+
+        // A file without data model keeps the current one (gui.gsmarkup + model.gsmarkup).
+        if (result.hasModel)
+            [self _setDataModelFromResult:result];
 
         [_connectionsController addObjects:result.connections];
         [_connectionsController rearrangeObjects];
@@ -1945,6 +1963,25 @@ function UIBIsVerticalStackType(aType)
 
 - (CPString)cappusanceMarkup
 {
+    return [self cappusanceMarkupIncludingInterface:YES model:NO];
+}
+
+- (BOOL)hasDataModel
+{
+    return _sortDescriptors.length + _arrayControllers.length + _entities.length > 0;
+}
+
+- (BOOL)hasInterface
+{
+    var all = [_elementsController arrangedObjects];
+    for (var i = 0; i < all.length; i++)
+        if ([all[i] valueForKey:@"type"] === "window")
+            return YES;
+    return NO;
+}
+
+- (CPString)cappusanceMarkupIncludingInterface:(BOOL)includeInterface model:(BOOL)includeModel
+{
     var windows = [],
         all = [_elementsController arrangedObjects];
 
@@ -1961,7 +1998,8 @@ function UIBIsVerticalStackType(aType)
         if (ordered.indexOf(windows[i]) < 0)
             ordered.push(windows[i]);
 
-    return [_codec exportDocumentWithWindows:ordered order:_markupOrder connections:[self allConnections] unknownConnectors:_unknownConnectors];
+    return [_codec exportDocumentWithWindows:ordered order:_markupOrder connections:[self allConnections] unknownConnectors:_unknownConnectors
+                                       model:[self _dataModelSnapshot] includeInterface:includeInterface includeModel:includeModel];
 }
 
 // Kept for compatibility with the earlier menu commands.
@@ -2138,6 +2176,300 @@ function UIBIsVerticalStackType(aType)
             [_ownerElement setValue:actions.join(", ") forKey:@"actions"];
         }
     }
+}
+
+#pragma mark -
+#pragma mark Data Model
+
+- (void)_resetDataModel
+{
+    _sortDescriptors = [];
+    _arrayControllers = [];
+    _entities = [];
+    _modelConnectors = [];
+    _modelObjects = new Set();
+}
+
+- (void)_rebuildModelObjectSet
+{
+    _modelObjects = new Set(_sortDescriptors.concat(_arrayControllers, _entities));
+}
+
+- (void)_postDataModelChange
+{
+    [[CPNotificationCenter defaultCenter] postNotificationName:UIBDataModelDidChangeNotification object:self];
+}
+
+- (void)_setDataModelFromResult:(JSObject)result
+{
+    _sortDescriptors = result.sortDescriptors.slice();
+    _arrayControllers = result.arrayControllers.slice();
+    _entities = result.entities.slice();
+    _modelConnectors = result.modelConnectors.slice();
+    [self _rebuildModelObjectSet];
+    [self _postDataModelChange];
+}
+
+- (JSObject)_dataModelSnapshot
+{
+    return { sortDescriptors: _sortDescriptors, arrayControllers: _arrayControllers, entities: _entities, connectors: _modelConnectors };
+}
+
+- (CPArray)sortDescriptors   { return _sortDescriptors; }
+- (CPArray)arrayControllers  { return _arrayControllers; }
+- (CPArray)entities          { return _entities; }
+
+- (CPString)_listKeyForKind:(CPString)aKind
+{
+    return { "sortDescriptor": "sortDescriptors", "arrayController": "arrayControllers", "entity": "entities" }[aKind];
+}
+
+- (CPArray)_modelListForKey:(CPString)aKey
+{
+    if (aKey === "sortDescriptors") return _sortDescriptors;
+    if (aKey === "arrayControllers") return _arrayControllers;
+    return _entities;
+}
+
+// Replaces a whole list (add/remove/reorder). Undo restores the old list.
+- (void)_replaceModelListForKey:(CPString)aKey with:(CPArray)aList
+{
+    var old = [self _modelListForKey:aKey].slice();
+
+    if (aKey === "sortDescriptors") _sortDescriptors = aList.slice();
+    else if (aKey === "arrayControllers") _arrayControllers = aList.slice();
+    else _entities = aList.slice();
+
+    [self _rebuildModelObjectSet];
+
+    if (UIBUndoSuppressionCount === 0)
+    {
+        [[_undoManager prepareWithInvocationTarget:self] _replaceModelListForKey:aKey with:old];
+        [self _noteDocumentChanged];
+    }
+
+    [self _postDataModelChange];
+}
+
+- (id)modelObjectOfKind:(CPString)aKind named:(CPString)aName
+{
+    var list = [self _modelListForKey:[self _listKeyForKind:aKind]];
+    for (var i = 0; i < list.length; i++)
+        if ([list[i] valueForKey:@"name"] === aName)
+            return list[i];
+    return nil;
+}
+
+- (id)addModelObjectOfKind:(CPString)aKind
+{
+    var base = { "sortDescriptor": "by_", "arrayController": "new_controller", "entity": "new_entity" }[aKind],
+        name = base,
+        counter = 1;
+
+    while ([self modelObjectOfKind:aKind named:name])
+        name = base + (++counter);
+
+    var object = UIBNewModelObject(aKind);
+    [object setValue:name forKey:@"name"];
+
+    if (aKind === "entity")
+        [object setValue:[UIBNewModelItem({ name: "id", primaryKey: "YES" })] forKey:@"columns"];
+    if (aKind === "sortDescriptor")
+        [object setValue:"name" forKey:@"key"];
+    if (aKind === "arrayController" && _entities.length)
+        [object setValue:[_entities[0] valueForKey:@"name"] forKey:@"entity"];
+
+    var listKey = [self _listKeyForKind:aKind];
+    [self _replaceModelListForKey:listKey with:[self _modelListForKey:listKey].concat([object])];
+    [self _setActionName:@"Add " + aKind];
+    return object;
+}
+
+- (void)removeModelObjects:(CPArray)objects
+{
+    if (!objects || !objects.length)
+        return;
+
+    var listKey = [self _listKeyForKind:[objects[0] valueForKey:@"kind"]],
+        remaining = [self _modelListForKey:listKey].filter(function(o) { return objects.indexOf(o) < 0; });
+
+    [self _replaceModelListForKey:listKey with:remaining];
+    [self _setActionName:@"Delete"];
+}
+
+// Sets one property of a model object (undoable). Renaming an entity or a
+// sort descriptor also updates the array controllers that use it.
+- (void)setModelValue:(id)aValue forKey:(CPString)aKey ofObject:(id)anObject
+{
+    if (!_modelObjects.has(anObject))
+        return;
+
+    var kind = [anObject valueForKey:@"kind"],
+        oldValue = [anObject valueForKey:aKey];
+
+    if (aKey === "name")
+    {
+        aValue = String(aValue || "").trim();
+        if (!aValue.length || aValue === oldValue)
+            return;
+
+        for (var i = 0; i < _arrayControllers.length; i++)
+        {
+            if (kind === "entity" && [_arrayControllers[i] valueForKey:@"entity"] === oldValue)
+                [_arrayControllers[i] setValue:aValue forKey:@"entity"];
+            if (kind === "sortDescriptor" && [_arrayControllers[i] valueForKey:@"sortDescriptor"] === oldValue)
+                [_arrayControllers[i] setValue:aValue forKey:@"sortDescriptor"];
+        }
+    }
+
+    if (aValue === "" || aValue === nil)
+        [self _setValue:nil forKey:aKey ofElement:anObject];
+    else
+        [anObject setValue:aValue forKey:aKey];
+
+    [self _setActionName:aKey === "name" ? @"Rename" : @"Change " + aKey];
+    [self _postDataModelChange];
+}
+
+// Columns and relationships are replaced as a whole (undoable).
+- (void)setModelItems:(CPArray)items forKey:(CPString)aKey ofEntity:(id)anEntity
+{
+    if (!_modelObjects.has(anEntity))
+        return;
+
+    [anEntity setValue:items.slice() forKey:aKey];
+    [self _setActionName:aKey === "columns" ? @"Edit Columns" : @"Edit Relationships"];
+    [self _postDataModelChange];
+}
+
+/*!
+    Replaces the data model with the one in the given markup (undoable).
+    The interface stays as it is.
+*/
+- (CPString)importDataModelFromMarkup:(CPString)aString
+{
+    var result = [_codec parseMarkup:aString ownerData:_ownerElement || [self _newOwnerElement]];
+
+    if (result.error)
+        return result.error;
+
+    if (!result.hasModel)
+        return "The markup contains no sort descriptors, array controllers or entities.";
+
+    [self _replaceModelListForKey:@"sortDescriptors" with:result.sortDescriptors];
+    [self _replaceModelListForKey:@"arrayControllers" with:result.arrayControllers];
+    [self _replaceModelListForKey:@"entities" with:result.entities];
+    _modelConnectors = result.modelConnectors.slice();
+    [self _setActionName:@"Import Data Model"];
+
+    return nil;
+}
+
+#pragma mark -
+#pragma mark Bindings Support
+
+// How the interface refers to a controller: through the owner's outlet if it has one.
+- (CPString)referenceForArrayController:(id)aController
+{
+    var outlet = [aController valueForKey:@"ownerOutlet"];
+    return outlet ? "#CPOwner." + outlet : "#" + [aController valueForKey:@"name"];
+}
+
+// The array controller a binding path starts with, or nil.
+- (id)arrayControllerForBinding:(CPString)aBinding
+{
+    var path = String(aBinding || "").replace(/^#/, "");
+    if (!path.length)
+        return nil;
+
+    for (var i = 0; i < _arrayControllers.length; i++)
+    {
+        var controller = _arrayControllers[i],
+            outlet = [controller valueForKey:@"ownerOutlet"],
+            name = [controller valueForKey:@"name"];
+
+        if (outlet && (path === "CPOwner." + outlet || path.indexOf("CPOwner." + outlet + ".") === 0))
+            return controller;
+        if (name && (path === name || path.indexOf(name + ".") === 0))
+            return controller;
+    }
+
+    return nil;
+}
+
+- (CPArray)columnNamesForArrayController:(id)aController
+{
+    var entity = [self modelObjectOfKind:@"entity" named:[aController valueForKey:@"entity"]];
+    if (!entity)
+        return [];
+
+    return ([entity valueForKey:@"columns"] || []).map(function(column) { return column.attributes.name; }).filter(function(n) { return !!n; });
+}
+
+// Values offered in the inspector's binding fields.
+- (CPArray)bindingSuggestionsForKey:(CPString)aBindingKey elementType:(CPString)aType
+{
+    var result = [];
+
+    for (var i = 0; i < _arrayControllers.length; i++)
+    {
+        var controller = _arrayControllers[i],
+            reference = [self referenceForArrayController:controller],
+            columns = [self columnNamesForArrayController:controller];
+
+        if (aBindingKey === "valueBinding" && aType === "tableView")
+            result.push(reference);
+        else if (aBindingKey === "itemsBinding")
+            columns.forEach(function(c) { result.push(reference + ".arrangedObjects." + c); });
+        else if (aBindingKey === "enabledBinding")
+            result.push(reference + ".selection.@count");
+        else
+            columns.forEach(function(c) { result.push(reference + ".selection." + c); });
+    }
+
+    return result;
+}
+
+/*!
+    Sets the columns of a table view to the columns of the entity of the
+    array controller it is bound to. Returns an error message or nil.
+*/
+- (CPString)takeTableColumnsFromEntityForElement:(id)anElement
+{
+    var extras = [anElement valueForKey:@"extraAttributes"] || {},
+        controller = [self arrayControllerForBinding:extras.valueBinding];
+
+    if (!controller)
+        return "Bind the table view to an array controller first (valueBinding).";
+
+    var columns = [self columnNamesForArrayController:controller];
+    if (!columns.length)
+        return "The entity of " + [controller valueForKey:@"name"] + " has no columns.";
+
+    [anElement setValue:columns.join(", ") forKey:@"columns"];
+    [self _setActionName:@"Columns from Entity"];
+    return nil;
+}
+
+/*!
+    Inserts a scroll view with a table view bound to the controller, with one
+    column per entity column, next to the selection (or in a new window).
+*/
+- (id)insertTableForArrayController:(id)aController
+{
+    var scrollView = [self _newElementDataOfType:@"scrollView"],
+        tableView = [self _newElementDataOfType:@"tableView"],
+        root = [scrollView valueForKey:@"children"][0],
+        columns = [self columnNamesForArrayController:aController];
+
+    [tableView setValue:columns.join(", ") forKey:@"columns"];
+    [tableView setValue:{ valueBinding: [self referenceForArrayController:aController], zebra: "YES" } forKey:@"extraAttributes"];
+    [root valueForKey:@"children"].push(tableView);
+
+    [self _insertElementsNearSelection:[scrollView]];
+    [self _selectElements:[tableView]];
+    [self _setActionName:@"Insert Table"];
+    return tableView;
 }
 
 @end

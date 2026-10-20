@@ -31,7 +31,6 @@ function treshold(value, limit)
 
 - (void)drawRect:(CGRect)rect
 {
-    console.log("ConnectionView: drawRect - Drawing connection from ", _startPoint, " to ", _endPoint);
     if (_startPoint && _endPoint)
     {
         [self drawLinkFrom:_startPoint to:_endPoint color:_color];

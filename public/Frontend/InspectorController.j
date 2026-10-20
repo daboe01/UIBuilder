@@ -177,6 +177,9 @@ var UIBKeyLabels = {
     CPButton            _connectionAddButton;
     CPButton            _connectionRemoveButton;
     CPTextField         _connectionsHint;
+
+    CPArray             _bindingFields;
+    CPTextField         _bindingMessage;
 }
 
 #pragma mark -
@@ -396,7 +399,13 @@ var UIBKeyLabels = {
     else if (object === _inspectedObject)
     {
         if (keyPath === @"extraAttributes")
+        {
             [self _reloadAttributes];
+
+            var extras = [_inspectedObject valueForKey:@"extraAttributes"] || {};
+            for (var i = 0; _bindingFields && i < _bindingFields.length; i++)
+                [_bindingFields[i] setStringValue:extras[_bindingFields[i]._uibBindingKey] || @""];
+        }
         else if (keyPath === @"markupKeys")
             [self _updateControlStates];
         else if (keyPath === @"actions" || keyPath === @"outlets")
@@ -418,6 +427,8 @@ var UIBKeyLabels = {
         [_boundControls[i][0] unbind:_boundControls[i][1]];
 
     _boundControls = [];
+    _bindingFields = [];
+    _bindingMessage = nil;
     _observedKeys = nil;
     _inspectedObject = nil;
     _widthControl = nil;
@@ -596,6 +607,58 @@ var UIBKeyLabels = {
         y += UIBInspectorRowHeight;
     }
 
+    // Bindings to the data model
+    _bindingFields = [];
+    var bindingKeys = UIBBindingKeysForType[elementType] || [];
+    if (bindingKeys.length)
+    {
+        var extras = [_inspectedObject valueForKey:@"extraAttributes"] || {},
+            width = [_propertiesView bounds].size.width;
+
+        y += 8;
+        [self _addSectionTitle:@"Bindings (Datenmodell)" inView:_propertiesView y:y];
+        y += 22;
+
+        for (var i = 0; i < bindingKeys.length; i++)
+        {
+            var bindingKey = bindingKeys[i];
+            [_propertiesView addSubview:[self _labelWithString:bindingKey.replace("Binding", "") frame:CGRectMake(4, y + 5, UIBInspectorLabelWidth, 20)]];
+
+            var combo = [[CPComboBox alloc] initWithFrame:CGRectMake(UIBInspectorLabelWidth + 10, y, width - UIBInspectorLabelWidth - 18, 28)];
+            [combo addItemsWithObjectValues:[_builderController bindingSuggestionsForKey:bindingKey elementType:elementType]];
+            [combo setCompletes:YES];
+            [combo setNumberOfVisibleItems:14];
+            [combo setStringValue:extras[bindingKey] || @""];
+            [combo setPlaceholderString:@"#CPOwner.controller…"];
+            [combo setTarget:self];
+            [combo setAction:@selector(commitBinding:)];
+            [combo setDelegate:self];
+            [combo setAutoresizingMask:CPViewWidthSizable];
+            combo._uibBindingKey = bindingKey;
+            [_propertiesView addSubview:combo];
+            _bindingFields.push(combo);
+            y += UIBInspectorRowHeight;
+        }
+
+        if (elementType === "tableView")
+        {
+            var columnsButton = [[CPButton alloc] initWithFrame:CGRectMake(UIBInspectorLabelWidth + 10, y + 2, width - UIBInspectorLabelWidth - 18, 24)];
+            [columnsButton setTitle:@"Spalten aus Entity übernehmen"];
+            [columnsButton setTarget:self];
+            [columnsButton setAction:@selector(takeColumnsFromEntity:)];
+            [columnsButton setAutoresizingMask:CPViewWidthSizable];
+            [_propertiesView addSubview:columnsButton];
+            y += UIBInspectorRowHeight;
+        }
+
+        _bindingMessage = [self _labelWithString:([[_builderController arrayControllers] count] ? @"" : @"Noch kein Datenmodell – Daten ▸ Datenmodell-Editor") frame:CGRectMake(8, y, width - 16, 18)];
+        [_bindingMessage setAlignment:CPLeftTextAlignment];
+        [_bindingMessage setFont:[CPFont systemFontOfSize:10]];
+        [_bindingMessage setAutoresizingMask:CPViewWidthSizable];
+        [_propertiesView addSubview:_bindingMessage];
+        y += 18;
+    }
+
     // What control-dragging offers for this element.
     y += 8;
     [self _addSectionTitle:(elementType === "owner" ? @"Owner methods and outlets" : @"Offered when control-dragging") inView:_propertiesView y:y];
@@ -719,6 +782,42 @@ var UIBKeyLabels = {
 
     [_builderController setExplicitSize:([sender state] === CPOnState) forKey:([sender tag] === 0 ? @"width" : @"height") ofElement:_inspectedObject];
     [self _updateControlStates];
+}
+
+#pragma mark -
+#pragma mark Bindings
+
+- (void)commitBinding:(id)sender
+{
+    if (!_inspectedObject || !sender._uibBindingKey)
+        return;
+
+    var key = sender._uibBindingKey,
+        value = String([sender stringValue] || "").trim(),
+        current = ([_inspectedObject valueForKey:@"extraAttributes"] || {})[key] || "";
+
+    if (value !== current)
+        [_builderController setMarkupAttribute:key value:(value.length ? value : nil) ofElement:_inspectedObject];
+}
+
+- (void)controlTextDidEndEditing:(CPNotification)aNotification
+{
+    var field = [aNotification object];
+    if (field && field._uibBindingKey)
+        [self commitBinding:field];
+}
+
+- (void)takeColumnsFromEntity:(id)sender
+{
+    if (!_inspectedObject)
+        return;
+
+    // Commit a binding that is still being typed.
+    for (var i = 0; _bindingFields && i < _bindingFields.length; i++)
+        [self commitBinding:_bindingFields[i]];
+
+    var error = [_builderController takeTableColumnsFromEntityForElement:_inspectedObject];
+    [_bindingMessage setStringValue:error || @"Spalten übernommen."];
 }
 
 #pragma mark -

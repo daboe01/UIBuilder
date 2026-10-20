@@ -1,0 +1,3960 @@
+diff -ruN d/public/Frontend/AppController.j e/public/Frontend/AppController.j
+--- d/public/Frontend/AppController.j	2026-10-19 17:38:44.919453492 +0000
++++ e/public/Frontend/AppController.j	2026-10-19 20:35:07.458160166 +0000
+@@ -9,6 +9,8 @@
+ @import "UICanvasView.j"
+ @import "UIElementView.j";
+ @import "InspectorController.j";
++@import "DataModelEditorController.j";
++@import "UIBPalette.j";
+ 
+ var CGSizeZero = CGSizeMake(0, 0);
+ 
+@@ -450,6 +452,7 @@
+     UICanvasView _canvasView;
+     InspectorController _inspectorController;
+     CPPanel _inspectorPanel;
++    DataModelEditorController _dataModelEditor;
+ }
+ 
+ - (void)applicationDidFinishLaunching:(CPNotification)aNotification
+@@ -557,6 +560,25 @@
+     [arrangeMenuItem setSubmenu:arrangeMenu];
+     [mainMenuBar addItem:arrangeMenuItem];
+ 
++    // Data model
++    var dataMenuItem = [[CPMenuItem alloc] initWithTitle:@"Daten" action:nil keyEquivalent:@""];
++    var dataMenu = [[CPMenu alloc] initWithTitle:@"Daten"];
++    [dataMenu addItemWithTitle:@"Datenmodell-Editor…" action:@selector(showDataModelEditor:) keyEquivalent:@""];
++    [dataMenu addItem:[CPMenuItem separatorItem]];
++    [dataMenu addItemWithTitle:@"Datenmodell importieren…" action:@selector(importDataModel:) keyEquivalent:@""];
++    [dataMenu addItemWithTitle:@"Datenmodell sichern…" action:@selector(saveDataModel:) keyEquivalent:@""];
++    [dataMenuItem setSubmenu:dataMenu];
++    [mainMenuBar addItem:dataMenuItem];
++
++    // Window
++    var windowMenuItem = [[CPMenuItem alloc] initWithTitle:@"Fenster" action:nil keyEquivalent:@""];
++    var windowMenu = [[CPMenu alloc] initWithTitle:@"Fenster"];
++    [windowMenu addItemWithTitle:@"Elemente" action:@selector(showPalette:) keyEquivalent:@""];
++    [windowMenu addItemWithTitle:@"Inspector" action:@selector(showInspector:) keyEquivalent:@""];
++    [windowMenu addItemWithTitle:@"Datenmodell" action:@selector(showDataModelEditor:) keyEquivalent:@""];
++    [windowMenuItem setSubmenu:windowMenu];
++    [mainMenuBar addItem:windowMenuItem];
++
+     [CPApp setMainMenu:mainMenuBar];
+     [CPMenu setMenuBarVisible:YES];
+ }
+@@ -675,104 +697,27 @@
+ 
+ - (void)createPalette
+ {
+-    var screenWidth = window.innerWidth;
+-    var symbolSize = 40;
+-    var labelHeight = 20;
+-    var itemHeight = symbolSize + labelHeight;
+-    var itemWidth = 65; 
+-    var padding = 10;
+-    var itemsPerRow = 7;
+-
+-    var paletteItems = [
+-        // Row 1: Windows & Containers
+-        [
+-            {dragType: UIWindowDragType, elementType: "window", label: "Window"},
+-            {dragType: UIBoxDragType, elementType: "box", label: "Box"},
+-            {dragType: UIScrollViewDragType, elementType: "scrollView", label: "Scroll View"},
+-            {dragType: UISplitViewDragType, elementType: "splitView", label: "Split View"},
+-            {dragType: UITableViewDragType, elementType: "tableView", label: "Table View"}
+-        ],
+-        // Row 2: Layout
+-        [
+-            {dragType: UIHBoxDragType, elementType: "hbox", label: "HBox"},
+-            {dragType: UIVBoxDragType, elementType: "vbox", label: "VBox"},
+-            {dragType: UIHSpaceDragType, elementType: "hspace", label: "HSpace"},
+-            {dragType: UIVSpaceDragType, elementType: "vspace", label: "VSpace"}
+-        ],
+-        // Row 3: Text & Fields
+-        [
+-            {dragType: UILabelDragType, elementType: "label", label: "Label"},
+-            {dragType: UITextFieldDragType, elementType: "textField", label: "Text Field"},
+-            {dragType: UISearchFieldDragType, elementType: "searchField", label: "Search Field"},
+-            {dragType: UISecureFieldDragType, elementType: "secureField", label: "Secure Field"},
+-            {dragType: UITextViewDragType, elementType: "textView", label: "Text View"},
+-            {dragType: UIComboBoxDragType, elementType: "comboBox", label: "Combo Box"}
+-        ],
+-        // Row 4: Buttons & Controls
+-        [
+-            {dragType: UIButtonDragType, elementType: "button", label: "Button"},
+-            {dragType: UICheckBoxDragType, elementType: "checkBox", label: "Check Box"},
+-            {dragType: UIPopUpButtonDragType, elementType: "popUpButton", label: "Pop Up"},
+-            {dragType: UIStepperDragType, elementType: "stepper", label: "Stepper"},
+-            {dragType: UISliderDragType, elementType: "slider", label: "Slider"},
+-            {dragType: UIDatePickerDragType, elementType: "datePicker", label: "Date Picker"}
+-        ],
+-        // Row 5: Other
+-        [
+-            {dragType: UIImageViewDragType, elementType: "imageView", label: "Image View"},
+-            {dragType: UIProgressIndicatorDragType, elementType: "progresIndicator", label: "Progress"},
+-            {dragType: UITabViewDragType, elementType: "tabView", label: "Tab View"},
+-            {dragType: UICustomViewDragType, elementType: "custom", label: "Custom"}
+-        ]
+-    ];
+-
+-    var paletteWidth = padding + itemsPerRow * (itemWidth + padding);
+-    var paletteHeight = padding + [paletteItems count] * (itemHeight + padding) + 20;
+-    var paletteX = MAX(360, screenWidth - paletteWidth - 20);
+-    var paletteY = 40;
+-
+-    _palette = [[CPPanel alloc] initWithContentRect:CGRectMake(paletteX, paletteY, paletteWidth, paletteHeight)
+-                                          styleMask:CPHUDBackgroundWindowMask | CPTitledWindowMask | CPClosableWindowMask];
+-    [_palette setTitle:@"Elements"];
+-    [_palette setFloatingPanel:YES];
++    _palette = UIBCreatePalette();
+     [_palette setDelegate:self];
+-    [_palette setAcceptsMouseMovedEvents:NO];
++    [_palette orderFront:self];
++}
+ 
+-    var contentView = [_palette contentView];
+-    var contentViewHeight = [contentView bounds].size.height;
++- (void)showPalette:(id)sender
++{
++    [_palette orderFront:self];
++}
+ 
+-    for (var r = 0; r < [paletteItems count]; r++) {
+-        var rowItems = paletteItems[r];
+-        var xPos = padding;
+-        var yPos = contentViewHeight - (r + 1) * (itemHeight + padding);
+-
+-        for (var i = 0; i < [rowItems count]; i++) {
+-            var item = rowItems[i];
+-
+-            var container = [[CPView alloc] initWithFrame:CGRectMake(xPos, yPos, itemWidth, itemHeight)];
+-
+-            var symbol = [[DraggableSymbolView alloc] initWithFrame:CGRectMake((itemWidth - symbolSize) / 2, labelHeight, symbolSize, symbolSize)];
+-            [symbol setDragType:item.dragType];
+-            [symbol setElementType:item.elementType];
+-            [container addSubview:symbol];
+-
+-            var label = [[CPTextField alloc] initWithFrame:CGRectMake(0, 5, itemWidth, labelHeight)];
+-            [label setStringValue:item.label];
+-            [label setFont:[CPFont systemFontOfSize:10]];
+-            [label setTextColor:[CPColor whiteColor]];
+-            [label setAlignment:CPCenterTextAlignment];
+-            [label setBezeled:NO];
+-            [label setDrawsBackground:NO];
+-            [label setEditable:NO];
+-            [label setSelectable:NO];
+-            [container addSubview:label];
++- (void)showInspector:(id)sender
++{
++    [_inspectorPanel orderFront:self];
++}
+ 
+-            [contentView addSubview:container];
+-            xPos += itemWidth + padding;
+-        }
+-    }
++- (void)showDataModelEditor:(id)sender
++{
++    if (!_dataModelEditor)
++        _dataModelEditor = [[DataModelEditorController alloc] initWithBuilderController:_builderController];
+ 
+-    [_palette orderFront:self];
++    [_dataModelEditor showWindow:self];
+ }
+ 
+ - (void)createInspector
+@@ -919,26 +864,74 @@
+ */
+ - (void)save:(id)sender
+ {
+-    var markup = [_builderController cappusanceMarkup],
+-        textView = nil,
+-        panel = [self _markupPanelWithTitle:@"Cappusance Markup — select all is active, press ⌘C" textView:function(aTextView) { textView = aTextView; }];
++    // Interface by default; only the data model if there is no interface.
++    [self _showMarkupForMode:([_builderController hasInterface] || ![_builderController hasDataModel]) ? 0 : 1];
++}
+ 
+-    [textView setString:markup];
++- (void)saveDataModel:(id)sender
++{
++    [self _showMarkupForMode:1];
++}
++
++- (CPString)_markupForMode:(int)aMode
++{
++    if (aMode === 1)
++        return [_builderController cappusanceMarkupIncludingInterface:NO model:YES];
++    if (aMode === 2)
++        return [_builderController cappusanceMarkupIncludingInterface:YES model:YES];
++    return [_builderController cappusanceMarkupIncludingInterface:YES model:NO];
++}
++
++/*!
++    Shows markup (0: interface, 1: data model, 2: both in one file), all of it
++    selected, ready to be copied out with ⌘C.
++*/
++- (void)_showMarkupForMode:(int)aMode
++{
++    var textView = nil,
++        panel = [self _markupPanelWithTitle:@"Cappusance Markup — alles markiert, ⌘C kopiert" textView:function(aTextView) { textView = aTextView; }],
++        bounds = [[panel contentView] bounds];
++
++    var modePopUp = [[CPPopUpButton alloc] initWithFrame:CGRectMake(160, bounds.size.height - 35, 220, 26) pullsDown:NO];
++    [modePopUp addItemsWithTitles:["Oberfläche (gui)", "Datenmodell (model)", "Beides in einer Datei"]];
++    [modePopUp selectItemAtIndex:aMode];
++    [modePopUp setTarget:self];
++    [modePopUp setAction:@selector(markupModeChanged:)];
++    [modePopUp setAutoresizingMask:CPViewMinYMargin | CPViewMaxXMargin];
++    [[panel contentView] addSubview:modePopUp];
+ 
+-    var copyButton = [self _panelButton:@"Copy to Clipboard" x:10 inPanel:panel action:@selector(copyMarkup:)];
+-    copyButton._markup = markup;
++    var copyButton = [self _panelButton:@"In Zwischenablage" x:10 inPanel:panel action:@selector(copyMarkup:)],
++        downloadButton = [self _panelButton:@"Download…" x:bounds.size.width - 150 inPanel:panel action:@selector(downloadMarkup:)];
+ 
+-    var downloadButton = [self _panelButton:@"Download…" x:[[panel contentView] bounds].size.width - 150 inPanel:panel action:@selector(downloadMarkup:)];
+-    downloadButton._markup = markup;
++    modePopUp._textView = textView;
++    modePopUp._buttons = [copyButton, downloadButton];
+ 
+     [panel makeKeyAndOrderFront:self];
+-    [panel makeFirstResponder:textView];
+-    [textView setSelectedRange:CPMakeRange(0, [markup length])];
++    [self markupModeChanged:modePopUp];
+ 
+     // The user has the markup now; treat the document as saved.
+     [_builderController setDocumentEdited:NO];
+ }
+ 
++- (void)markupModeChanged:(id)sender
++{
++    var mode = [sender indexOfSelectedItem],
++        markup = [self _markupForMode:mode],
++        textView = sender._textView;
++
++    [textView setString:markup];
++
++    for (var i = 0; i < sender._buttons.length; i++)
++    {
++        sender._buttons[i]._markup = markup;
++        sender._buttons[i]._fileName = (mode === 1) ? "model.gsmarkup" : "gui.gsmarkup";
++    }
++
++    [sender._buttons[0] setTitle:@"In Zwischenablage"];
++    [[textView window] makeFirstResponder:textView];
++    [textView setSelectedRange:CPMakeRange(0, [markup length])];
++}
++
+ - (void)copyMarkup:(id)sender
+ {
+     var markup = sender._markup;
+@@ -971,7 +964,7 @@
+         link = document.createElement("a");
+ 
+     link.href = url;
+-    link.download = "interface.gsmarkup";
++    link.download = sender._fileName || "interface.gsmarkup";
+     document.body.appendChild(link);
+     link.click();
+     document.body.removeChild(link);
+@@ -982,19 +975,33 @@
+     Import: paste Cappusance markup (or open a .gsmarkup file) and replace
+     the current document with it.
+ */
++- (void)importDataModel:(id)sender
++{
++    [self _showImportPanelModelOnly:YES];
++}
++
+ - (void)load:(id)sender
+ {
+     if (![self _confirmDiscardingChanges])
+         return;
+ 
++    [self _showImportPanelModelOnly:NO];
++}
++
++- (void)_showImportPanelModelOnly:(BOOL)modelOnly
++{
+     var textView = nil,
+         panel = [self _markupPanelWithTitle:@"Import Cappusance Markup — paste the markup below" textView:function(aTextView) { textView = aTextView; }];
+ 
+     var fileButton = [self _panelButton:@"Open File…" x:10 inPanel:panel action:@selector(chooseMarkupFile:)];
+     fileButton._textView = textView;
+ 
+-    var importButton = [self _panelButton:@"Import" x:[[panel contentView] bounds].size.width - 150 inPanel:panel action:@selector(performLoad:)];
++    var importButton = [self _panelButton:@"Importieren" x:[[panel contentView] bounds].size.width - 150 inPanel:panel action:@selector(performLoad:)];
+     importButton._textView = textView;
++    importButton._modelOnly = modelOnly;
++
++    if (modelOnly)
++        [panel setTitle:@"Datenmodell importieren — model.gsmarkup einfügen (die Oberfläche bleibt erhalten)"];
+     [importButton setKeyEquivalent:CPCarriageReturnCharacter];
+     [importButton setKeyEquivalentModifierMask:CPCommandKeyMask];
+ 
+@@ -1041,7 +1048,13 @@
+         return;
+     }
+ 
+-    var error = [_builderController loadCappusanceMarkup:markup];
++    // A pure data model file (model.gsmarkup) only replaces the data model.
++    var isModelOnly = !/<window[\s>]/.test(markup) && /<(arrayController|entities|sortDescriptor)[\s>]/.test(markup),
++        error = (isModelOnly || sender._modelOnly) ? [_builderController importDataModelFromMarkup:markup] : [_builderController loadCappusanceMarkup:markup];
++
++    if (!error && isModelOnly)
++        [self showDataModelEditor:self];
++
+     if (error)
+     {
+         var errorAlert = [CPAlert alertWithMessageText:@"Could Not Import" defaultButton:@"OK" alternateButton:nil otherButton:nil informativeTextWithFormat:@"%@", error];
+diff -ruN d/public/Frontend/CappusanceCodec.j e/public/Frontend/CappusanceCodec.j
+--- d/public/Frontend/CappusanceCodec.j	2026-10-19 17:38:44.919194636 +0000
++++ e/public/Frontend/CappusanceCodec.j	2026-10-19 20:25:41.588742196 +0000
+@@ -234,6 +234,89 @@
+     return UIBXMLEscapeText(aString).replace(/"/g, "&quot;");
+ };
+ 
++/*
++    The data model: sort descriptors and array controllers (top-level objects)
++    and entities (the <entities> section). [dataKey, attributeName, default]
++*/
++UIBModelSchema = {
++    "sortDescriptor": {
++        tag: "sortDescriptor",
++        attributes: [["name", "id", ""], ["key", "key", ""], ["ascending", "ascending", YES], ["numeric", "numeric", NO]]
++    },
++    "arrayController": {
++        tag: "arrayController",
++        attributes: [["name", "id", ""], ["entity", "entity", ""], ["sortDescriptor", "sortDescriptor", ""], ["valueBinding", "valueBinding", ""],
++                     ["autoFetch", "autoFetch", NO], ["autoFetchSync", "autoFetchSync", NO]]
++    },
++    "entity": {
++        tag: "entity",
++        attributes: [["name", "id", ""], ["store", "store", "#CPOwner.store"]]
++    }
++};
++
++var UIBModelCounter = 0;
++
++UIBNewModelObject = function(aKind)
++{
++    var object = [CPConservativeDictionary dictionary],
++        attributes = UIBModelSchema[aKind].attributes;
++
++    [object setValue:aKind forKey:@"kind"];
++    [object setValue:"model_" + (UIBModelCounter++) forKey:@"id"];
++    [object setValue:{} forKey:@"extraAttributes"];
++    [object setValue:[] forKey:@"markupKeys"];
++    [object setValue:[] forKey:@"markupAttributeOrder"];
++
++    for (var i = 0; i < attributes.length; i++)
++        if (attributes[i][2] !== "")
++            [object setValue:attributes[i][2] forKey:attributes[i][0]];
++
++    if (aKind === "entity")
++    {
++        [object setValue:[] forKey:@"columns"];
++        [object setValue:[] forKey:@"relationships"];
++        [object setValue:[] forKey:@"rawChildren"];
++    }
++
++    return object;
++};
++
++// Columns and relationships are kept as their attributes (strings), in order.
++UIBNewModelItem = function(someAttributes)
++{
++    var item = { attributes: {}, order: [] };
++    for (var name in someAttributes)
++        if (someAttributes.hasOwnProperty(name))
++        {
++            item.attributes[name] = someAttributes[name];
++            item.order.push(name);
++        }
++    return item;
++};
++
++UIBCopyModelItem = function(anItem)
++{
++    return { attributes: JSON.parse(JSON.stringify(anItem.attributes)), order: anItem.order.slice() };
++};
++
++UIBModelItemMarkup = function(aTag, anItem)
++{
++    var names = anItem.order.slice();
++    for (var name in anItem.attributes)
++        if (anItem.attributes.hasOwnProperty(name) && names.indexOf(name) < 0)
++            names.push(name);
++
++    var parts = [];
++    for (var i = 0; i < names.length; i++)
++    {
++        var value = anItem.attributes[names[i]];
++        if (value !== nil && value !== undefined && value !== "")
++            parts.push(names[i] + '="' + UIBXMLEscapeAttribute(value) + '"');
++    }
++
++    return "<" + aTag + (parts.length ? " " + parts.join(" ") : "") + "/>";
++};
++
+ 
+ @implementation CappusanceCodec : CPObject
+ {
+@@ -241,14 +324,21 @@
+ 
+     // Import state
+     JSObject    _elementsByIdentifier;
++    JSObject    _modelByIdentifier;
+     CPArray     _pendingConnections;
++
++    // Writing style taken over from the imported document
++    BOOL        _outletsUseHash;
+ }
+ 
+ - (id)initWithController:(id)aController
+ {
+     self = [super init];
+     if (self)
++    {
+         _controller = aController;
++        _outletsUseHash = YES;
++    }
+     return self;
+ }
+ 
+@@ -443,9 +533,30 @@
+     }
+     else if (schema.content)
+     {
+-        var children = [];
+-        for (var i = 0; i < childNodes.length; i++)
+-            children.push([self _importNode:childNodes[i]]);
++        // Comments are kept with the element that follows them.
++        var children = [],
++            pendingComments = [];
++
++        for (var i = 0; i < aNode.childNodes.length; i++)
++        {
++            var childNode = aNode.childNodes[i];
++
++            if (childNode.nodeType === 8)
++                pendingComments.push(childNode.nodeValue);
++            else if (childNode.nodeType === 1)
++            {
++                var childData = [self _importNode:childNode];
++                if (pendingComments.length)
++                {
++                    [childData setValue:pendingComments forKey:@"leadingComments"];
++                    pendingComments = [];
++                }
++                children.push(childData);
++            }
++        }
++
++        if (pendingComments.length)
++            [data setValue:pendingComments forKey:@"trailingComments"];
+ 
+         [self _attachImportedChildren:children toElement:data type:type];
+     }
+@@ -547,6 +658,75 @@
+     return connection;
+ }
+ 
++#pragma mark -
++#pragma mark Data Model Import
++
++- (id)_importModelNode:(id)aNode kind:(CPString)aKind
++{
++    var object = UIBNewModelObject(aKind),
++        schema = UIBModelSchema[aKind],
++        extras = {},
++        order = [],
++        markupKeys = [];
++
++    for (var i = 0; i < aNode.attributes.length; i++)
++    {
++        var name = aNode.attributes[i].name,
++            value = aNode.attributes[i].value,
++            mapped = nil;
++
++        order.push(name);
++
++        for (var j = 0; j < schema.attributes.length; j++)
++            if (schema.attributes[j][1] === name)
++                mapped = schema.attributes[j];
++
++        if (mapped)
++        {
++            [object setValue:(typeof mapped[2] === "boolean" ? /^(yes|true|1)$/i.test(value) : value) forKey:mapped[0]];
++            markupKeys.push(mapped[0]);
++        }
++        else
++            extras[name] = value;
++    }
++
++    [object setValue:extras forKey:@"extraAttributes"];
++    [object setValue:order forKey:@"markupAttributeOrder"];
++    [object setValue:markupKeys forKey:@"markupKeys"];
++
++    if (aKind === "entity")
++    {
++        var columns = [], relationships = [], raw = [],
++            children = [self _elementChildrenOfNode:aNode];
++
++        for (var i = 0; i < children.length; i++)
++        {
++            var child = children[i],
++                attributes = {};
++
++            for (var j = 0; j < child.attributes.length; j++)
++                attributes[child.attributes[j].name] = child.attributes[j].value;
++
++            if (child.tagName === "column")
++                columns.push(UIBNewModelItem(attributes));
++            else if (child.tagName === "relationship")
++                relationships.push(UIBNewModelItem(attributes));
++            else
++                raw.push([self _serializeNode:child]);
++        }
++
++        [object setValue:columns forKey:@"columns"];
++        [object setValue:relationships forKey:@"relationships"];
++        [object setValue:raw forKey:@"rawChildren"];
++    }
++
++    var identifier = [object valueForKey:@"name"];
++    if (identifier && !_modelByIdentifier[identifier])
++        _modelByIdentifier[identifier] = object;
++
++    return object;
++}
++
+ /*!
+     Parses a Cappusance document.
+     Returns { windows, order, connections, unknownConnectors, ownerActions, ownerOutlets }
+@@ -567,27 +747,55 @@
+         return { error: "This is not a Cappusance/GSMarkup document (the root element must be <gsmarkup>)." };
+ 
+     _elementsByIdentifier = {};
++    _modelByIdentifier = {};
+     _pendingConnections = [];
+ 
+-    var result = { windows: [], order: [], connections: [], unknownConnectors: [], ownerActions: [], ownerOutlets: [] },
++    var result = { windows: [], order: [], connections: [], unknownConnectors: [], ownerActions: [], ownerOutlets: [],
++                   sortDescriptors: [], arrayControllers: [], entities: [], modelConnectors: [], hasModel: NO },
+         objectsNode = xmlDoc.getElementsByTagName("objects")[0];
+ 
+     if (objectsNode)
+     {
+-        var nodes = [self _elementChildrenOfNode:objectsNode];
++        var nodes = [];
++        for (var i = 0; i < objectsNode.childNodes.length; i++)
++        {
++            var node = objectsNode.childNodes[i];
++            if (node.nodeType === 1)
++                nodes.push(node);
++            else if (node.nodeType === 8)
++                result.order.push({ raw: "<!--" + node.nodeValue + "-->" });
++        }
++
+         for (var i = 0; i < nodes.length; i++)
+         {
+-            if (nodes[i].tagName === "window" || nodes[i].tagName === "panel")
++            var tag = nodes[i].tagName;
++
++            if (tag === "window" || tag === "panel")
+             {
+                 var windowData = [self _importNode:nodes[i]];
+                 result.windows.push(windowData);
+                 result.order.push({ element: windowData });
+             }
++            else if (tag === "sortDescriptor")
++                result.sortDescriptors.push([self _importModelNode:nodes[i] kind:@"sortDescriptor"]);
++            else if (tag === "arrayController")
++                result.arrayControllers.push([self _importModelNode:nodes[i] kind:@"arrayController"]);
+             else
+                 result.order.push({ raw: [self _serializeNode:nodes[i]] });
+         }
+     }
+ 
++    var entitiesNode = xmlDoc.getElementsByTagName("entities")[0];
++    if (entitiesNode)
++    {
++        var nodes = [self _elementChildrenOfNode:entitiesNode];
++        for (var i = 0; i < nodes.length; i++)
++            if (nodes[i].tagName === "entity")
++                result.entities.push([self _importModelNode:nodes[i] kind:@"entity"]);
++    }
++
++    result.hasModel = result.sortDescriptors.length + result.arrayControllers.length + result.entities.length > 0;
++
+     var addAction = function(name) { if (name && result.ownerActions.indexOf(name) < 0) result.ownerActions.push(name); },
+         addOutlet = function(name) { if (name && result.ownerOutlets.indexOf(name) < 0) result.ownerOutlets.push(name); };
+ 
+@@ -612,12 +820,47 @@
+     var connectorsNode = xmlDoc.getElementsByTagName("connectors")[0];
+     if (connectorsNode)
+     {
+-        var nodes = [self _elementChildrenOfNode:connectorsNode];
++        var nodes = [self _elementChildrenOfNode:connectorsNode],
++            withHash = 0,
++            withoutHash = 0;
++
++        // Write outlets the way the document does (source="CPOwner" or source="#CPOwner").
++        for (var i = 0; i < nodes.length; i++)
++            if (nodes[i].tagName === "outlet" && !_modelByIdentifier[String(nodes[i].getAttribute("target") || "").replace(/^#/, "")])
++            {
++                if (String(nodes[i].getAttribute("target") || "").charAt(0) === "#")
++                    withHash++;
++                else
++                    withoutHash++;
++            }
++
++        if (withHash + withoutHash > 0)
++            _outletsUseHash = withHash >= withoutHash;
+         for (var i = 0; i < nodes.length; i++)
+         {
+             var node = nodes[i],
+                 tag = node.tagName,
+-                source = [self _resolveReference:node.getAttribute("source") owner:ownerData],
++                sourceName = String(node.getAttribute("source") || "").replace(/^#/, ""),
++                targetName = String(node.getAttribute("target") || "").replace(/^#/, ""),
++                sourceModel = _modelByIdentifier[sourceName],
++                targetModel = _modelByIdentifier[targetName];
++
++            // Connections into the data model: the owner's outlet to an array controller.
++            if (sourceModel || targetModel)
++            {
++                var label = node.getAttribute("label") || node.getAttribute("key") || node.getAttribute("outlet");
++
++                if (tag === "outlet" && sourceName === UIBOwnerReference && targetModel && [targetModel valueForKey:@"kind"] === "arrayController" && ![targetModel valueForKey:@"ownerOutlet"] && label)
++                {
++                    [targetModel setValue:label forKey:@"ownerOutlet"];
++                    [targetModel setValue:i forKey:@"ownerOutletOrder"];
++                }
++                else
++                    result.modelConnectors.push({ order: i, xml: [self _serializeNode:node] });
++                continue;
++            }
++
++            var source = [self _resolveReference:node.getAttribute("source") owner:ownerData],
+                 target = [self _resolveReference:node.getAttribute("target") owner:ownerData];
+ 
+             if (tag === "outlet")
+@@ -646,6 +889,7 @@
+ 
+     _pendingConnections = nil;
+     _elementsByIdentifier = nil;
++    _modelByIdentifier = nil;
+ 
+     return result;
+ }
+@@ -759,7 +1003,7 @@
+     return titles.map(function(title)
+     {
+         if (schema.items.tag === "tableColumn")
+-            return indent + '<tableColumn identifier="' + UIBXMLEscapeAttribute(title.toLowerCase().replace(/\s+/g, "_")) + '" title="' + UIBXMLEscapeAttribute(title) + '"/>';
++            return indent + '<tableColumn identifier="' + UIBXMLEscapeAttribute(title.replace(/\s+/g, "_")) + '" title="' + UIBXMLEscapeAttribute(title) + '"/>';
+ 
+         return indent + '<' + schema.items.tag + ' ' + schema.items.attribute + '="' + UIBXMLEscapeAttribute(title) + '"/>';
+     }).join("\n");
+@@ -877,13 +1121,23 @@
+             bodyLines.push(raw.map(function(line) { return childIndent + line; }).join("\n"));
+     }
+ 
++    var trailing = [data valueForKey:@"trailingComments"] || [];
++    for (var i = 0; i < trailing.length; i++)
++        bodyLines.push(childIndent + "<!--" + trailing[i] + "-->");
++
++    var markup;
+     if (bodyLines.length)
+-        return indent + "<" + tag + attributeString + ">" + (text || "") + "\n" + bodyLines.join("\n") + "\n" + indent + "</" + tag + ">";
++        markup = indent + "<" + tag + attributeString + ">" + (text || "") + "\n" + bodyLines.join("\n") + "\n" + indent + "</" + tag + ">";
++    else if (text !== nil)
++        markup = indent + "<" + tag + attributeString + ">" + text + "</" + tag + ">";
++    else
++        markup = indent + "<" + tag + attributeString + "/>";
+ 
+-    if (text !== nil)
+-        return indent + "<" + tag + attributeString + ">" + text + "</" + tag + ">";
++    var leading = [data valueForKey:@"leadingComments"] || [];
++    if (leading.length)
++        markup = leading.map(function(comment) { return indent + "<!--" + comment + "-->"; }).join("\n") + "\n" + markup;
+ 
+-    return indent + "<" + tag + attributeString + "/>";
++    return markup;
+ }
+ 
+ // The children written for an element: roots of windows/scroll/split views are unwrapped.
+@@ -917,6 +1171,18 @@
+ */
+ - (CPString)exportDocumentWithWindows:(CPArray)windows order:(CPArray)order connections:(CPArray)connections unknownConnectors:(CPArray)unknownConnectors
+ {
++    return [self exportDocumentWithWindows:windows order:order connections:connections unknownConnectors:unknownConnectors model:nil includeInterface:YES includeModel:NO];
++}
++
++/*!
++    Writes the interface, the data model, or both. The data model alone is
++    written in the layout of a separate model file (model.gsmarkup).
++*/
++- (CPString)exportDocumentWithWindows:(CPArray)windows order:(CPArray)order connections:(CPArray)connections unknownConnectors:(CPArray)unknownConnectors model:(JSObject)aModel includeInterface:(BOOL)includeInterface includeModel:(BOOL)includeModel
++{
++    if (!includeInterface)
++        return [self exportDataModel:aModel standalone:YES];
++
+     var identifiers = {},
+         inlineAttributes = {},
+         connectorLines = [],
+@@ -972,6 +1238,12 @@
+         if (!sourceRef || targetRef === nil)
+             continue;
+ 
++        if (!_outletsUseHash)
++        {
++            sourceRef = String(sourceRef).replace(/^#/, "");
++            targetRef = String(targetRef).replace(/^#/, "");
++        }
++
+         if (action)
+             connectorLines.push('        <control source="' + UIBXMLEscapeAttribute(sourceRef) + '" target="' + UIBXMLEscapeAttribute(targetRef) + '" action="' + UIBXMLEscapeAttribute(action) + '"/>');
+         else if (outlet)
+@@ -1001,7 +1273,19 @@
+         if (written.indexOf(windows[i]) < 0)
+             objectLines.push([self _markupForElement:windows[i] level:2 inline:inlineAttributes identifiers:identifiers]);
+ 
+-    return [
++    var entitiesLines = [];
++
++    if (includeModel && aModel)
++    {
++        var modelObjects = [self _modelObjectLines:aModel indent:"        "];
++        if (modelObjects.length)
++            objectLines.unshift(modelObjects.join("\n"));
++
++        entitiesLines = [self _entitiesLines:aModel.entities indent:"    "];
++        connectorLines = [self _modelConnectorLines:aModel indent:"        "].concat(connectorLines);
++    }
++
++    var lines = [
+         '<?xml version="1.0"?>',
+         '<!DOCTYPE gsmarkup>',
+         '<gsmarkup>',
+@@ -1009,13 +1293,178 @@
+         '    <objects>',
+         objectLines.join("\n\n"),
+         '    </objects>',
+-        '',
++        ''
++    ];
++
++    if (entitiesLines.length)
++        lines = lines.concat(entitiesLines, ['']);
++
++    return lines.concat([
+         '    <connectors>',
+         connectorLines.join("\n"),
+         '    </connectors>',
+         '</gsmarkup>',
+         ''
+-    ].join("\n");
++    ]).join("\n");
++}
++
++#pragma mark -
++#pragma mark Data Model Export
++
++- (CPString)_modelObjectMarkup:(id)anObject
++{
++    var kind = [anObject valueForKey:@"kind"],
++        schema = UIBModelSchema[kind],
++        attributes = {},
++        names = [],
++        markupKeys = [anObject valueForKey:@"markupKeys"] || [];
++
++    var add = function(name, value)
++    {
++        if (attributes[name] === undefined)
++            names.push(name);
++        attributes[name] = value;
++    };
++
++    for (var i = 0; i < schema.attributes.length; i++)
++    {
++        var key = schema.attributes[i][0],
++            attribute = schema.attributes[i][1],
++            defaultValue = schema.attributes[i][2],
++            value = [anObject valueForKey:key];
++
++        if (value === nil || value === undefined || value === "")
++            continue;
++
++        if (typeof defaultValue === "boolean")
++        {
++            if (markupKeys.indexOf(key) >= 0 || !!value !== defaultValue)
++                add(attribute, value ? "YES" : "NO");
++        }
++        else
++            add(attribute, String(value));
++    }
++
++    var extras = [anObject valueForKey:@"extraAttributes"] || {};
++    for (var name in extras)
++        if (extras.hasOwnProperty(name))
++            add(name, extras[name]);
++
++    var order = [anObject valueForKey:@"markupAttributeOrder"] || [];
++    names.sort(function(a, b)
++    {
++        var ia = order.indexOf(a), ib = order.indexOf(b);
++        if (ia < 0) ia = 1000 + names.indexOf(a);
++        if (ib < 0) ib = 1000 + names.indexOf(b);
++        return ia - ib;
++    });
++
++    return "<" + schema.tag + names.map(function(n) { return " " + n + '="' + UIBXMLEscapeAttribute(attributes[n]) + '"'; }).join("") + (kind === "entity" ? ">" : "/>");
++}
++
++- (CPArray)_modelObjectLines:(JSObject)aModel indent:(CPString)indent
++{
++    var lines = [],
++        sortDescriptors = aModel.sortDescriptors || [],
++        controllers = aModel.arrayControllers || [];
++
++    for (var i = 0; i < sortDescriptors.length; i++)
++        lines.push(indent + [self _modelObjectMarkup:sortDescriptors[i]]);
++
++    if (sortDescriptors.length && controllers.length)
++        lines.push("");
++
++    for (var i = 0; i < controllers.length; i++)
++        lines.push(indent + [self _modelObjectMarkup:controllers[i]]);
++
++    return lines;
++}
++
++- (CPArray)_entitiesLines:(CPArray)entities indent:(CPString)indent
++{
++    if (!entities || !entities.length)
++        return [];
++
++    var lines = [indent + "<entities>"],
++        inner = indent + "    ",
++        innermost = inner + "    ";
++
++    for (var i = 0; i < entities.length; i++)
++    {
++        var entity = entities[i];
++        lines.push(inner + [self _modelObjectMarkup:entity]);
++
++        var columns = [entity valueForKey:@"columns"] || [];
++        for (var j = 0; j < columns.length; j++)
++            lines.push(innermost + UIBModelItemMarkup("column", columns[j]));
++
++        var relationships = [entity valueForKey:@"relationships"] || [];
++        if (relationships.length && columns.length)
++            lines.push("");
++        for (var j = 0; j < relationships.length; j++)
++            lines.push(innermost + UIBModelItemMarkup("relationship", relationships[j]));
++
++        var raw = [entity valueForKey:@"rawChildren"] || [];
++        for (var j = 0; j < raw.length; j++)
++            lines.push(innermost + raw[j]);
++
++        lines.push(inner + "</entity>");
++    }
++
++    lines.push(indent + "</entities>");
++    return lines;
++}
++
++// Owner outlets to array controllers (in their original order, new ones last).
++- (CPArray)_modelConnectorLines:(JSObject)aModel indent:(CPString)indent
++{
++    var entries = [],
++        controllers = aModel.arrayControllers || [];
++
++    for (var i = 0; i < controllers.length; i++)
++    {
++        var outlet = [controllers[i] valueForKey:@"ownerOutlet"],
++            name = [controllers[i] valueForKey:@"name"],
++            order = [controllers[i] valueForKey:@"ownerOutletOrder"];
++
++        if (outlet && name)
++            entries.push({ order: (typeof order === "number") ? order : 100000 + i,
++                           xml: '<outlet source="#CPOwner" target="' + UIBXMLEscapeAttribute(name) + '" label="' + UIBXMLEscapeAttribute(outlet) + '"/>' });
++    }
++
++    var raw = aModel.connectors || [];
++    for (var i = 0; i < raw.length; i++)
++        entries.push(typeof raw[i] === "string" ? { order: 200000 + i, xml: raw[i] } : raw[i]);
++
++    entries.sort(function(a, b) { return a.order - b.order; });
++    return entries.map(function(entry) { return indent + entry.xml; });
++}
++
++/*!
++    The data model as its own document, laid out like a typical model.gsmarkup.
++*/
++- (CPString)exportDataModel:(JSObject)aModel standalone:(BOOL)standalone
++{
++    aModel = aModel || {};
++
++    return [
++        '<?xml version="1.0"?>',
++        '<!DOCTYPE gsmarkup>',
++        '<gsmarkup>',
++        '',
++        '    <objects>'
++    ].concat([self _modelObjectLines:aModel indent:"        "], [
++        '    </objects>',
++        '',
++        ''
++    ], [self _entitiesLines:aModel.entities indent:""], [
++        '',
++        '<connectors>'
++    ], [self _modelConnectorLines:aModel indent:"    "], [
++        '</connectors>',
++        '</gsmarkup>',
++        ''
++    ]).join("\n");
+ }
+ 
+ @end
+diff -ruN d/public/Frontend/ConnectionView.j e/public/Frontend/ConnectionView.j
+--- d/public/Frontend/ConnectionView.j	2026-10-19 17:38:44.918575832 +0000
++++ e/public/Frontend/ConnectionView.j	2026-10-19 20:33:54.750249679 +0000
+@@ -31,7 +31,6 @@
+ 
+ - (void)drawRect:(CGRect)rect
+ {
+-    console.log("ConnectionView: drawRect - Drawing connection from ", _startPoint, " to ", _endPoint);
+     if (_startPoint && _endPoint)
+     {
+         [self drawLinkFrom:_startPoint to:_endPoint color:_color];
+diff -ruN d/public/Frontend/DataModelEditorController.j e/public/Frontend/DataModelEditorController.j
+--- d/public/Frontend/DataModelEditorController.j	1970-01-01 00:00:00.000000000 +0000
++++ e/public/Frontend/DataModelEditorController.j	2026-10-19 20:28:50.266092310 +0000
+@@ -0,0 +1,654 @@
++//
++//  DataModelEditorController.j
++//  Edits the data model of the document: entities (columns, relationships),
++//  array controllers and sort descriptors. Every change goes through the
++//  builder controller and can be undone.
++//
++
++@import <Foundation/CPObject.j>
++@import "UIBuilderConstants.j"
++
++@class UIBuilderController
++
++var UIBCheckMark = "✓";
++
++@implementation DataModelEditorController : CPObject
++{
++    UIBuilderController _builderController;
++    CPPanel             _panel;
++    CPTabView           _tabView;
++
++    // Entities
++    CPSearchField       _entitySearchField;
++    CPTableView         _entitiesTable;
++    CPTableView         _columnsTable;
++    CPTableView         _relationshipsTable;
++    CPTextField         _entityHeader;
++    CPArray             _visibleEntities;
++
++    // Array controllers
++    CPSearchField       _controllerSearchField;
++    CPTableView         _controllersTable;
++    CPArray             _visibleControllers;
++    CPButton            _insertTableButton;
++
++    // Sort descriptors
++    CPTableView         _sortDescriptorsTable;
++}
++
++- (id)initWithBuilderController:(UIBuilderController)aController
++{
++    self = [super init];
++    if (self)
++    {
++        _builderController = aController;
++        _visibleEntities = [];
++        _visibleControllers = [];
++
++        [[CPNotificationCenter defaultCenter] addObserver:self selector:@selector(dataModelDidChange:) name:UIBDataModelDidChangeNotification object:aController];
++    }
++    return self;
++}
++
++#pragma mark -
++#pragma mark Panel
++
++- (void)showWindow:(id)sender
++{
++    if (!_panel)
++        [self _buildPanel];
++
++    [self reloadAll];
++    [_panel makeKeyAndOrderFront:self];
++}
++
++- (CPUndoManager)windowWillReturnUndoManager:(CPWindow)aWindow
++{
++    return [_builderController undoManager];
++}
++
++- (CPTextField)_label:(CPString)aString frame:(CGRect)aFrame bold:(BOOL)isBold
++{
++    var label = [[CPTextField alloc] initWithFrame:aFrame];
++    [label setStringValue:aString];
++    [label setFont:isBold ? [CPFont boldSystemFontOfSize:12] : [CPFont systemFontOfSize:11]];
++    [label setTextColor:isBold ? [CPColor colorWithCalibratedWhite:0.2 alpha:1.0] : [CPColor grayColor]];
++    [label setBezeled:NO];
++    [label setDrawsBackground:NO];
++    [label setEditable:NO];
++    [label setSelectable:NO];
++    return label;
++}
++
++- (CPButton)_button:(CPString)aTitle frame:(CGRect)aFrame action:(SEL)anAction
++{
++    var button = [[CPButton alloc] initWithFrame:aFrame];
++    [button setTitle:aTitle];
++    [button setTarget:self];
++    [button setAction:anAction];
++    return button;
++}
++
++// columns: [[identifier, title, width, isBoolean], ...]
++- (CPTableView)_tableInView:(CPView)aView frame:(CGRect)aFrame columns:(CPArray)columns autoresizingMask:(unsigned)aMask
++{
++    var scrollView = [[CPScrollView alloc] initWithFrame:aFrame];
++    [scrollView setAutoresizingMask:aMask];
++    [scrollView setHasHorizontalScroller:YES];
++    [scrollView setAutohidesScrollers:YES];
++
++    var table = [[CPTableView alloc] initWithFrame:[[scrollView contentView] bounds]];
++    [table setUsesAlternatingRowBackgroundColors:YES];
++    [table setAllowsMultipleSelection:YES];
++
++    for (var i = 0; i < columns.length; i++)
++    {
++        var column = [[CPTableColumn alloc] initWithIdentifier:columns[i][0]];
++        [[column headerView] setStringValue:columns[i][1]];
++        [column setWidth:columns[i][2]];
++        [column setEditable:!columns[i][3]];
++        column._uibIsBoolean = !!columns[i][3];
++        [table addTableColumn:column];
++    }
++
++    [table setDataSource:self];
++    [table setDelegate:self];
++    [table setTarget:self];
++    [table setDoubleAction:@selector(tableDoubleClicked:)];
++
++    [scrollView setDocumentView:table];
++    [aView addSubview:scrollView];
++    return table;
++}
++
++- (void)_buildPanel
++{
++    _panel = [[CPPanel alloc] initWithContentRect:CGRectMake(0, 0, 1000, 640) styleMask:CPTitledWindowMask | CPClosableWindowMask | CPResizableWindowMask];
++    [_panel setTitle:@"Datenmodell"];
++    [_panel setDelegate:self];
++    [_panel center];
++
++    _tabView = [[CPTabView alloc] initWithFrame:[[_panel contentView] bounds]];
++    [_tabView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
++
++    var size = CGSizeMake(980, 590);
++
++    // --- Entities ---
++    var entitiesView = [[CPView alloc] initWithFrame:CGRectMake(0, 0, size.width, size.height)];
++    [entitiesView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
++
++    _entitySearchField = [[CPSearchField alloc] initWithFrame:CGRectMake(8, 8, 270, 28)];
++    [_entitySearchField setPlaceholderString:@"Entity suchen"];
++    [_entitySearchField setTarget:self];
++    [_entitySearchField setAction:@selector(filterChanged:)];
++    [_entitySearchField setSendsSearchStringImmediately:YES];
++    [entitiesView addSubview:_entitySearchField];
++
++    _entitiesTable = [self _tableInView:entitiesView frame:CGRectMake(8, 42, 270, size.height - 82)
++                                columns:[["name", "Entity", 150], ["store", "Store", 110]]
++                       autoresizingMask:CPViewHeightSizable];
++
++    var addEntity = [self _button:@"+" frame:CGRectMake(8, size.height - 34, 30, 24) action:@selector(addEntity:)],
++        removeEntity = [self _button:@"−" frame:CGRectMake(42, size.height - 34, 30, 24) action:@selector(removeEntity:)];
++    [addEntity setAutoresizingMask:CPViewMinYMargin];
++    [removeEntity setAutoresizingMask:CPViewMinYMargin];
++    [entitiesView addSubview:addEntity];
++    [entitiesView addSubview:removeEntity];
++
++    var addController = [self _button:@"Array Controller anlegen" frame:CGRectMake(80, size.height - 34, 198, 24) action:@selector(addControllerForEntity:)];
++    [addController setAutoresizingMask:CPViewMinYMargin];
++    [entitiesView addSubview:addController];
++
++    var rightX = 294,
++        rightWidth = size.width - rightX - 8,
++        columnsHeight = Math.round((size.height - 120) * 0.6);
++
++    _entityHeader = [self _label:@"Spalten" frame:CGRectMake(rightX, 12, rightWidth, 20) bold:YES];
++    [_entityHeader setAutoresizingMask:CPViewWidthSizable];
++    [entitiesView addSubview:_entityHeader];
++
++    _columnsTable = [self _tableInView:entitiesView frame:CGRectMake(rightX, 36, rightWidth, columnsHeight)
++                               columns:[["name", "Spalte", 220], ["primaryKey", "Primärschlüssel", 110, YES], ["optimistic", "Optimistic", 90, YES], ["other", "Weitere Attribute", 250]]
++                      autoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
++
++    var y = 36 + columnsHeight + 6,
++        addColumn = [self _button:@"+" frame:CGRectMake(rightX, y, 30, 24) action:@selector(addColumn:)],
++        removeColumn = [self _button:@"−" frame:CGRectMake(rightX + 34, y, 30, 24) action:@selector(removeColumn:)],
++        hint = [self _label:@"Doppelklick auf ✓-Spalten schaltet um." frame:CGRectMake(rightX + 74, y + 4, 300, 18) bold:NO];
++
++    [addColumn setAutoresizingMask:CPViewMaxYMargin];
++    [removeColumn setAutoresizingMask:CPViewMaxYMargin];
++    [entitiesView addSubview:addColumn];
++    [entitiesView addSubview:removeColumn];
++    [entitiesView addSubview:hint];
++
++    y += 34;
++    [entitiesView addSubview:[self _label:@"Beziehungen" frame:CGRectMake(rightX, y, 200, 20) bold:YES]];
++    y += 24;
++
++    _relationshipsTable = [self _tableInView:entitiesView frame:CGRectMake(rightX, y, rightWidth, size.height - y - 40)
++                                     columns:[["name", "Name", 150], ["type", "Typ", 80], ["target", "Ziel-Entity", 170], ["bindingColumn", "bindingColumn", 130], ["targetColumn", "targetColumn", 130]]
++                            autoresizingMask:CPViewWidthSizable | CPViewMinYMargin];
++
++    var addRelationship = [self _button:@"+" frame:CGRectMake(rightX, size.height - 34, 30, 24) action:@selector(addRelationship:)],
++        removeRelationship = [self _button:@"−" frame:CGRectMake(rightX + 34, size.height - 34, 30, 24) action:@selector(removeRelationship:)];
++    [addRelationship setAutoresizingMask:CPViewMinYMargin];
++    [removeRelationship setAutoresizingMask:CPViewMinYMargin];
++    [entitiesView addSubview:addRelationship];
++    [entitiesView addSubview:removeRelationship];
++
++    // --- Array controllers ---
++    var controllersView = [[CPView alloc] initWithFrame:CGRectMake(0, 0, size.width, size.height)];
++    [controllersView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
++
++    _controllerSearchField = [[CPSearchField alloc] initWithFrame:CGRectMake(8, 8, 300, 28)];
++    [_controllerSearchField setPlaceholderString:@"Controller oder Entity suchen"];
++    [_controllerSearchField setTarget:self];
++    [_controllerSearchField setAction:@selector(filterChanged:)];
++    [_controllerSearchField setSendsSearchStringImmediately:YES];
++    [controllersView addSubview:_controllerSearchField];
++
++    _controllersTable = [self _tableInView:controllersView frame:CGRectMake(8, 42, size.width - 16, size.height - 82)
++                                   columns:[["name", "id", 200], ["entity", "Entity", 170], ["ownerOutlet", "Outlet in #CPOwner", 170], ["sortDescriptor", "sortDescriptor", 120],
++                                            ["valueBinding", "valueBinding (Master)", 220], ["autoFetch", "autoFetch", 70, YES], ["autoFetchSync", "autoFetchSync", 90, YES]]
++                          autoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
++
++    var addCtrl = [self _button:@"+" frame:CGRectMake(8, size.height - 34, 30, 24) action:@selector(addArrayController:)],
++        removeCtrl = [self _button:@"−" frame:CGRectMake(42, size.height - 34, 30, 24) action:@selector(removeArrayController:)];
++    [addCtrl setAutoresizingMask:CPViewMinYMargin];
++    [removeCtrl setAutoresizingMask:CPViewMinYMargin];
++    [controllersView addSubview:addCtrl];
++    [controllersView addSubview:removeCtrl];
++
++    _insertTableButton = [self _button:@"Tabelle in die Oberfläche einfügen" frame:CGRectMake(size.width - 268, size.height - 34, 260, 24) action:@selector(insertTable:)];
++    [_insertTableButton setAutoresizingMask:CPViewMinYMargin | CPViewMinXMargin];
++    [controllersView addSubview:_insertTableButton];
++
++    // --- Sort descriptors ---
++    var sortView = [[CPView alloc] initWithFrame:CGRectMake(0, 0, size.width, size.height)];
++    [sortView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
++
++    _sortDescriptorsTable = [self _tableInView:sortView frame:CGRectMake(8, 8, size.width - 16, size.height - 48)
++                                       columns:[["name", "id", 260], ["key", "key", 260], ["ascending", "ascending", 100, YES], ["numeric", "numeric", 100, YES]]
++                              autoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
++
++    var addSort = [self _button:@"+" frame:CGRectMake(8, size.height - 34, 30, 24) action:@selector(addSortDescriptor:)],
++        removeSort = [self _button:@"−" frame:CGRectMake(42, size.height - 34, 30, 24) action:@selector(removeSortDescriptor:)];
++    [addSort setAutoresizingMask:CPViewMinYMargin];
++    [removeSort setAutoresizingMask:CPViewMinYMargin];
++    [sortView addSubview:addSort];
++    [sortView addSubview:removeSort];
++
++    var tabs = [["entities", "Entities", entitiesView], ["controllers", "Array Controller", controllersView], ["sort", "Sort Descriptors", sortView]];
++    for (var i = 0; i < tabs.length; i++)
++    {
++        var item = [[CPTabViewItem alloc] initWithIdentifier:tabs[i][0]];
++        [item setLabel:tabs[i][1]];
++        [item setView:tabs[i][2]];
++        [_tabView addTabViewItem:item];
++    }
++
++    [_panel setContentView:_tabView];
++}
++
++#pragma mark -
++#pragma mark Reloading
++
++- (void)dataModelDidChange:(CPNotification)aNotification
++{
++    if (_panel)
++        [self reloadAll];
++}
++
++- (id)selectedEntity
++{
++    var row = [_entitiesTable selectedRow];
++    return (row >= 0 && row < _visibleEntities.length) ? _visibleEntities[row] : nil;
++}
++
++- (CPArray)_selectedObjectsIn:(CPTableView)aTable from:(CPArray)anArray
++{
++    var result = [],
++        indexes = [aTable selectedRowIndexes],
++        index = [indexes firstIndex];
++
++    while (index != CPNotFound)
++    {
++        if (index < anArray.length)
++            result.push(anArray[index]);
++        index = [indexes indexGreaterThanIndex:index];
++    }
++    return result;
++}
++
++- (void)_select:(CPArray)objects inTable:(CPTableView)aTable from:(CPArray)anArray
++{
++    var indexes = [CPIndexSet indexSet];
++    for (var i = 0; i < objects.length; i++)
++    {
++        var index = anArray.indexOf(objects[i]);
++        if (index >= 0)
++            [indexes addIndex:index];
++    }
++    [aTable selectRowIndexes:indexes byExtendingSelection:NO];
++}
++
++- (void)reloadAll
++{
++    var selectedEntities = [self _selectedObjectsIn:_entitiesTable from:_visibleEntities],
++        selectedControllers = [self _selectedObjectsIn:_controllersTable from:_visibleControllers],
++        entityFilter = String([_entitySearchField stringValue] || "").toLowerCase(),
++        controllerFilter = String([_controllerSearchField stringValue] || "").toLowerCase();
++
++    _visibleEntities = [_builderController entities].filter(function(entity)
++    {
++        return !entityFilter || String([entity valueForKey:@"name"] || "").toLowerCase().indexOf(entityFilter) >= 0;
++    });
++
++    _visibleControllers = [_builderController arrayControllers].filter(function(controller)
++    {
++        if (!controllerFilter)
++            return YES;
++        var text = ([controller valueForKey:@"name"] || "") + " " + ([controller valueForKey:@"entity"] || "") + " " + ([controller valueForKey:@"ownerOutlet"] || "");
++        return text.toLowerCase().indexOf(controllerFilter) >= 0;
++    });
++
++    [_entitiesTable reloadData];
++    [self _select:selectedEntities inTable:_entitiesTable from:_visibleEntities];
++
++    [_controllersTable reloadData];
++    [self _select:selectedControllers inTable:_controllersTable from:_visibleControllers];
++
++    [_sortDescriptorsTable reloadData];
++    [self _reloadEntityDetails];
++}
++
++- (void)_reloadEntityDetails
++{
++    var entity = [self selectedEntity];
++    [_entityHeader setStringValue:entity ? @"Spalten von „" + [entity valueForKey:@"name"] + "“" : @"Spalten (keine Entity ausgewählt)"];
++    [_columnsTable reloadData];
++    [_relationshipsTable reloadData];
++    [_insertTableButton setEnabled:[_controllersTable numberOfSelectedRows] === 1];
++}
++
++- (void)filterChanged:(id)sender
++{
++    [self reloadAll];
++}
++
++#pragma mark -
++#pragma mark Actions
++
++- (void)addEntity:(id)sender
++{
++    [_entitySearchField setStringValue:@""];
++    var entity = [_builderController addModelObjectOfKind:@"entity"];
++    [self reloadAll];
++    [self _select:[entity] inTable:_entitiesTable from:_visibleEntities];
++    [self _reloadEntityDetails];
++    [_entitiesTable editColumn:0 row:_visibleEntities.indexOf(entity) withEvent:nil select:YES];
++}
++
++- (void)removeEntity:(id)sender
++{
++    [_builderController removeModelObjects:[self _selectedObjectsIn:_entitiesTable from:_visibleEntities]];
++}
++
++- (void)addControllerForEntity:(id)sender
++{
++    var entity = [self selectedEntity];
++    if (!entity)
++        return;
++
++    var controller = [_builderController addModelObjectOfKind:@"arrayController"],
++        name = [entity valueForKey:@"name"];
++
++    [_builderController setModelValue:name forKey:@"entity" ofObject:controller];
++    [_builderController setModelValue:name + "_controller" forKey:@"name" ofObject:controller];
++
++    // camelCase outlet name: argos_worklist → argosWorklistController
++    var outlet = name.replace(/_([a-z0-9])/g, function(m, c) { return c.toUpperCase(); }) + "Controller";
++    [_builderController setModelValue:outlet forKey:@"ownerOutlet" ofObject:controller];
++
++    [_tabView selectTabViewItemAtIndex:1];
++    [_controllerSearchField setStringValue:@""];
++    [self reloadAll];
++    [self _select:[controller] inTable:_controllersTable from:_visibleControllers];
++}
++
++- (void)addArrayController:(id)sender
++{
++    [_controllerSearchField setStringValue:@""];
++    var controller = [_builderController addModelObjectOfKind:@"arrayController"];
++    [self reloadAll];
++    [self _select:[controller] inTable:_controllersTable from:_visibleControllers];
++    [_controllersTable editColumn:0 row:_visibleControllers.indexOf(controller) withEvent:nil select:YES];
++}
++
++- (void)removeArrayController:(id)sender
++{
++    [_builderController removeModelObjects:[self _selectedObjectsIn:_controllersTable from:_visibleControllers]];
++}
++
++- (void)addSortDescriptor:(id)sender
++{
++    var descriptor = [_builderController addModelObjectOfKind:@"sortDescriptor"],
++        list = [_builderController sortDescriptors];
++    [self reloadAll];
++    [self _select:[descriptor] inTable:_sortDescriptorsTable from:list];
++    [_sortDescriptorsTable editColumn:0 row:list.indexOf(descriptor) withEvent:nil select:YES];
++}
++
++- (void)removeSortDescriptor:(id)sender
++{
++    [_builderController removeModelObjects:[self _selectedObjectsIn:_sortDescriptorsTable from:[_builderController sortDescriptors]]];
++}
++
++- (void)_editItemsOfSelectedEntity:(CPString)aKey with:(Function)aFunction
++{
++    var entity = [self selectedEntity];
++    if (!entity)
++        return;
++
++    var items = ([entity valueForKey:aKey] || []).map(UIBCopyModelItem);
++    if (aFunction(items) === NO)
++        return;
++
++    [_builderController setModelItems:items forKey:aKey ofEntity:entity];
++}
++
++- (void)addColumn:(id)sender
++{
++    var newIndex = -1;
++    [self _editItemsOfSelectedEntity:@"columns" with:function(items)
++    {
++        var name = "new_column", counter = 1;
++        while (items.some(function(item) { return item.attributes.name === name; }))
++            name = "new_column" + (++counter);
++        items.push(UIBNewModelItem({ name: name }));
++        newIndex = items.length - 1;
++    }];
++
++    if (newIndex >= 0)
++    {
++        [_columnsTable selectRowIndexes:[CPIndexSet indexSetWithIndex:newIndex] byExtendingSelection:NO];
++        [_columnsTable editColumn:0 row:newIndex withEvent:nil select:YES];
++    }
++}
++
++- (void)removeColumn:(id)sender
++{
++    var indexes = [_columnsTable selectedRowIndexes];
++    [self _editItemsOfSelectedEntity:@"columns" with:function(items)
++    {
++        if (![indexes count])
++            return NO;
++        for (var i = items.length - 1; i >= 0; i--)
++            if ([indexes containsIndex:i])
++                items.splice(i, 1);
++    }];
++}
++
++- (void)addRelationship:(id)sender
++{
++    var newIndex = -1;
++    [self _editItemsOfSelectedEntity:@"relationships" with:function(items)
++    {
++        items.push(UIBNewModelItem({ type: "toMany", name: "new_relationship", bindingColumn: "id", targetColumn: "", target: "" }));
++        newIndex = items.length - 1;
++    }];
++
++    if (newIndex >= 0)
++    {
++        [_relationshipsTable selectRowIndexes:[CPIndexSet indexSetWithIndex:newIndex] byExtendingSelection:NO];
++        [_relationshipsTable editColumn:0 row:newIndex withEvent:nil select:YES];
++    }
++}
++
++- (void)removeRelationship:(id)sender
++{
++    var indexes = [_relationshipsTable selectedRowIndexes];
++    [self _editItemsOfSelectedEntity:@"relationships" with:function(items)
++    {
++        if (![indexes count])
++            return NO;
++        for (var i = items.length - 1; i >= 0; i--)
++            if ([indexes containsIndex:i])
++                items.splice(i, 1);
++    }];
++}
++
++- (void)insertTable:(id)sender
++{
++    var selected = [self _selectedObjectsIn:_controllersTable from:_visibleControllers];
++    if (selected.length !== 1)
++        return;
++
++    [_builderController insertTableForArrayController:selected[0]];
++}
++
++// Double-click toggles ✓ columns (and relationship types).
++- (void)tableDoubleClicked:(id)sender
++{
++    var row = [sender clickedRow],
++        columnIndex = [sender clickedColumn];
++
++    if (row < 0 || columnIndex < 0)
++        return;
++
++    var column = [[sender tableColumns] objectAtIndex:columnIndex],
++        identifier = [column identifier];
++
++    if (!column._uibIsBoolean && !(sender === _relationshipsTable && identifier === "type"))
++        return;
++
++    if (sender === _columnsTable || sender === _relationshipsTable)
++    {
++        var key = (sender === _columnsTable) ? @"columns" : @"relationships";
++        [self _editItemsOfSelectedEntity:key with:function(items)
++        {
++            if (row >= items.length)
++                return NO;
++
++            var attributes = items[row].attributes;
++            if (identifier === "type")
++                attributes.type = (attributes.type === "toMany") ? "toOne" : "toMany";
++            else if (/^(yes|true|1)$/i.test(attributes[identifier] || ""))
++                delete attributes[identifier];
++            else
++            {
++                attributes[identifier] = "YES";
++                if (items[row].order.indexOf(identifier) < 0)
++                    items[row].order.push(identifier);
++            }
++        }];
++        return;
++    }
++
++    var object = [self _objectForTable:sender row:row];
++    if (object)
++        [_builderController setModelValue:![object valueForKey:identifier] forKey:identifier ofObject:object];
++}
++
++#pragma mark -
++#pragma mark Table Data Source
++
++- (id)_objectForTable:(CPTableView)aTable row:(int)aRow
++{
++    if (aTable === _entitiesTable)
++        return _visibleEntities[aRow];
++    if (aTable === _controllersTable)
++        return _visibleControllers[aRow];
++    if (aTable === _sortDescriptorsTable)
++        return [_builderController sortDescriptors][aRow];
++    return nil;
++}
++
++- (int)numberOfRowsInTableView:(CPTableView)aTable
++{
++    if (!_builderController)
++        return 0;
++
++    if (aTable === _entitiesTable)
++        return _visibleEntities.length;
++    if (aTable === _controllersTable)
++        return _visibleControllers.length;
++    if (aTable === _sortDescriptorsTable)
++        return [_builderController sortDescriptors].length;
++
++    var entity = [self selectedEntity];
++    if (!entity)
++        return 0;
++
++    return ([entity valueForKey:(aTable === _columnsTable ? @"columns" : @"relationships")] || []).length;
++}
++
++- (id)tableView:(CPTableView)aTable objectValueForTableColumn:(CPTableColumn)aColumn row:(int)aRow
++{
++    var identifier = [aColumn identifier];
++
++    if (aTable === _columnsTable || aTable === _relationshipsTable)
++    {
++        var entity = [self selectedEntity],
++            item = ([entity valueForKey:(aTable === _columnsTable ? @"columns" : @"relationships")] || [])[aRow];
++
++        if (!item)
++            return nil;
++
++        if (identifier === "other")
++        {
++            var parts = [];
++            for (var name in item.attributes)
++                if (item.attributes.hasOwnProperty(name) && name !== "name" && name !== "primaryKey" && name !== "optimistic")
++                    parts.push(name + "=" + item.attributes[name]);
++            return parts.join("  ");
++        }
++
++        if (aColumn._uibIsBoolean)
++            return /^(yes|true|1)$/i.test(item.attributes[identifier] || "") ? UIBCheckMark : "";
++
++        return item.attributes[identifier] || "";
++    }
++
++    var object = [self _objectForTable:aTable row:aRow];
++    if (!object)
++        return nil;
++
++    var value = [object valueForKey:identifier];
++    if (aColumn._uibIsBoolean)
++        return value ? UIBCheckMark : "";
++
++    return value === nil || value === undefined ? "" : String(value);
++}
++
++- (void)tableView:(CPTableView)aTable setObjectValue:(id)aValue forTableColumn:(CPTableColumn)aColumn row:(int)aRow
++{
++    var identifier = [aColumn identifier],
++        value = String(aValue === nil || aValue === undefined ? "" : aValue).trim();
++
++    if (aTable === _columnsTable || aTable === _relationshipsTable)
++    {
++        if (identifier === "other")
++            return;
++
++        var key = (aTable === _columnsTable) ? @"columns" : @"relationships";
++        [self _editItemsOfSelectedEntity:key with:function(items)
++        {
++            var item = items[aRow];
++            if (!item || (item.attributes[identifier] || "") === value)
++                return NO;
++
++            if (value.length)
++            {
++                item.attributes[identifier] = value;
++                if (item.order.indexOf(identifier) < 0)
++                    item.order.push(identifier);
++            }
++            else
++                delete item.attributes[identifier];
++        }];
++        return;
++    }
++
++    var object = [self _objectForTable:aTable row:aRow];
++    if (object)
++        [_builderController setModelValue:value forKey:identifier ofObject:object];
++}
++
++- (BOOL)tableView:(CPTableView)aTable shouldEditTableColumn:(CPTableColumn)aColumn row:(int)aRow
++{
++    return !aColumn._uibIsBoolean && [aColumn identifier] !== "other" && !(aTable === _relationshipsTable && [aColumn identifier] === "type");
++}
++
++- (void)tableViewSelectionDidChange:(CPNotification)aNotification
++{
++    var table = [aNotification object];
++
++    if (table === _entitiesTable)
++        [self _reloadEntityDetails];
++    else if (table === _controllersTable)
++        [_insertTableButton setEnabled:[_controllersTable numberOfSelectedRows] === 1];
++}
++
++@end
+diff -ruN d/public/Frontend/InspectorController.j e/public/Frontend/InspectorController.j
+--- d/public/Frontend/InspectorController.j	2026-10-19 17:38:44.989909153 +0000
++++ e/public/Frontend/InspectorController.j	2026-10-19 20:29:19.350537477 +0000
+@@ -177,6 +177,9 @@
+     CPButton            _connectionAddButton;
+     CPButton            _connectionRemoveButton;
+     CPTextField         _connectionsHint;
++
++    CPArray             _bindingFields;
++    CPTextField         _bindingMessage;
+ }
+ 
+ #pragma mark -
+@@ -396,7 +399,13 @@
+     else if (object === _inspectedObject)
+     {
+         if (keyPath === @"extraAttributes")
++        {
+             [self _reloadAttributes];
++
++            var extras = [_inspectedObject valueForKey:@"extraAttributes"] || {};
++            for (var i = 0; _bindingFields && i < _bindingFields.length; i++)
++                [_bindingFields[i] setStringValue:extras[_bindingFields[i]._uibBindingKey] || @""];
++        }
+         else if (keyPath === @"markupKeys")
+             [self _updateControlStates];
+         else if (keyPath === @"actions" || keyPath === @"outlets")
+@@ -418,6 +427,8 @@
+         [_boundControls[i][0] unbind:_boundControls[i][1]];
+ 
+     _boundControls = [];
++    _bindingFields = [];
++    _bindingMessage = nil;
+     _observedKeys = nil;
+     _inspectedObject = nil;
+     _widthControl = nil;
+@@ -596,6 +607,58 @@
+         y += UIBInspectorRowHeight;
+     }
+ 
++    // Bindings to the data model
++    _bindingFields = [];
++    var bindingKeys = UIBBindingKeysForType[elementType] || [];
++    if (bindingKeys.length)
++    {
++        var extras = [_inspectedObject valueForKey:@"extraAttributes"] || {},
++            width = [_propertiesView bounds].size.width;
++
++        y += 8;
++        [self _addSectionTitle:@"Bindings (Datenmodell)" inView:_propertiesView y:y];
++        y += 22;
++
++        for (var i = 0; i < bindingKeys.length; i++)
++        {
++            var bindingKey = bindingKeys[i];
++            [_propertiesView addSubview:[self _labelWithString:bindingKey.replace("Binding", "") frame:CGRectMake(4, y + 5, UIBInspectorLabelWidth, 20)]];
++
++            var combo = [[CPComboBox alloc] initWithFrame:CGRectMake(UIBInspectorLabelWidth + 10, y, width - UIBInspectorLabelWidth - 18, 28)];
++            [combo addItemsWithObjectValues:[_builderController bindingSuggestionsForKey:bindingKey elementType:elementType]];
++            [combo setCompletes:YES];
++            [combo setNumberOfVisibleItems:14];
++            [combo setStringValue:extras[bindingKey] || @""];
++            [combo setPlaceholderString:@"#CPOwner.controller…"];
++            [combo setTarget:self];
++            [combo setAction:@selector(commitBinding:)];
++            [combo setDelegate:self];
++            [combo setAutoresizingMask:CPViewWidthSizable];
++            combo._uibBindingKey = bindingKey;
++            [_propertiesView addSubview:combo];
++            _bindingFields.push(combo);
++            y += UIBInspectorRowHeight;
++        }
++
++        if (elementType === "tableView")
++        {
++            var columnsButton = [[CPButton alloc] initWithFrame:CGRectMake(UIBInspectorLabelWidth + 10, y + 2, width - UIBInspectorLabelWidth - 18, 24)];
++            [columnsButton setTitle:@"Spalten aus Entity übernehmen"];
++            [columnsButton setTarget:self];
++            [columnsButton setAction:@selector(takeColumnsFromEntity:)];
++            [columnsButton setAutoresizingMask:CPViewWidthSizable];
++            [_propertiesView addSubview:columnsButton];
++            y += UIBInspectorRowHeight;
++        }
++
++        _bindingMessage = [self _labelWithString:([[_builderController arrayControllers] count] ? @"" : @"Noch kein Datenmodell – Daten ▸ Datenmodell-Editor") frame:CGRectMake(8, y, width - 16, 18)];
++        [_bindingMessage setAlignment:CPLeftTextAlignment];
++        [_bindingMessage setFont:[CPFont systemFontOfSize:10]];
++        [_bindingMessage setAutoresizingMask:CPViewWidthSizable];
++        [_propertiesView addSubview:_bindingMessage];
++        y += 18;
++    }
++
+     // What control-dragging offers for this element.
+     y += 8;
+     [self _addSectionTitle:(elementType === "owner" ? @"Owner methods and outlets" : @"Offered when control-dragging") inView:_propertiesView y:y];
+@@ -722,6 +785,42 @@
+ }
+ 
+ #pragma mark -
++#pragma mark Bindings
++
++- (void)commitBinding:(id)sender
++{
++    if (!_inspectedObject || !sender._uibBindingKey)
++        return;
++
++    var key = sender._uibBindingKey,
++        value = String([sender stringValue] || "").trim(),
++        current = ([_inspectedObject valueForKey:@"extraAttributes"] || {})[key] || "";
++
++    if (value !== current)
++        [_builderController setMarkupAttribute:key value:(value.length ? value : nil) ofElement:_inspectedObject];
++}
++
++- (void)controlTextDidEndEditing:(CPNotification)aNotification
++{
++    var field = [aNotification object];
++    if (field && field._uibBindingKey)
++        [self commitBinding:field];
++}
++
++- (void)takeColumnsFromEntity:(id)sender
++{
++    if (!_inspectedObject)
++        return;
++
++    // Commit a binding that is still being typed.
++    for (var i = 0; _bindingFields && i < _bindingFields.length; i++)
++        [self commitBinding:_bindingFields[i]];
++
++    var error = [_builderController takeTableColumnsFromEntityForElement:_inspectedObject];
++    [_bindingMessage setStringValue:error || @"Spalten übernommen."];
++}
++
++#pragma mark -
+ #pragma mark Attributes Tab
+ 
+ - (void)_reloadAttributes
+diff -ruN d/public/Frontend/UIBPalette.j e/public/Frontend/UIBPalette.j
+--- d/public/Frontend/UIBPalette.j	1970-01-01 00:00:00.000000000 +0000
++++ e/public/Frontend/UIBPalette.j	2026-10-19 20:34:08.485367610 +0000
+@@ -0,0 +1,268 @@
++//
++//  UIBPalette.j
++//  The element library: a light panel with grouped, searchable tiles.
++//  Drag a tile onto the canvas (or into a window, box, ...) to add the element.
++//
++
++@import <AppKit/CPView.j>
++@import "UIBuilderConstants.j"
++
++var UIBPaletteTileWidth = 76,
++    UIBPaletteTileHeight = 66,
++    UIBPaletteColumns = 4,
++    UIBPalettePadding = 10;
++
++var UIBPaletteSections = [
++    { title: "Fenster & Container", items: [
++        ["window", UIWindowDragType, "Fenster", "Ein Fenster (<window>)"],
++        ["box", UIBoxDragType, "Box", "Rahmen mit Titel (<box>)"],
++        ["tabView", UITabViewDragType, "Tab View", "Register mit Seiten (<tabView>)"],
++        ["splitView", UISplitViewDragType, "Split View", "Geteilte Ansicht (<splitView>)"],
++        ["scrollView", UIScrollViewDragType, "Scroll View", "Rollbarer Bereich (<scrollView>)"] ] },
++    { title: "Layout", items: [
++        ["vbox", UIVBoxDragType, "VBox", "Untereinander anordnen (<vbox>)"],
++        ["hbox", UIHBoxDragType, "HBox", "Nebeneinander anordnen (<hbox>)"],
++        ["hspace", UIHSpaceDragType, "HSpace", "Horizontaler Abstand (<hspace>)"],
++        ["vspace", UIVSpaceDragType, "VSpace", "Vertikaler Abstand (<vspace>)"] ] },
++    { title: "Text", items: [
++        ["label", UILabelDragType, "Label", "Beschriftung (<label>)"],
++        ["textField", UITextFieldDragType, "Textfeld", "Eingabefeld (<textField>)"],
++        ["searchField", UISearchFieldDragType, "Suchfeld", "Suchfeld (<searchField>)"],
++        ["secureField", UISecureFieldDragType, "Passwort", "Passwortfeld (<secureTextField>)"],
++        ["comboBox", UIComboBoxDragType, "Combo Box", "Eingabe mit Liste (<comboBox>)"],
++        ["textView", UITextViewDragType, "Text View", "Mehrzeiliger Text (<textView>)"] ] },
++    { title: "Steuerelemente", items: [
++        ["button", UIButtonDragType, "Button", "Schaltfläche (<button>)"],
++        ["checkBox", UICheckBoxDragType, "Checkbox", "Ankreuzfeld (<switchButton>)"],
++        ["popUpButton", UIPopUpButtonDragType, "Pop-Up", "Auswahlmenü (<popUpButton>)"],
++        ["slider", UISliderDragType, "Slider", "Schieberegler (<slider>)"],
++        ["stepper", UIStepperDragType, "Stepper", "Auf/Ab-Schalter (<stepper>)"],
++        ["datePicker", UIDatePickerDragType, "Datum", "Datumsauswahl (<datePicker>)"],
++        ["progresIndicator", UIProgressIndicatorDragType, "Fortschritt", "Fortschrittsanzeige (<progresIndicator>)"] ] },
++    { title: "Daten & Sonstiges", items: [
++        ["tableView", UITableViewDragType, "Tabelle", "Tabelle (<tableView>), mit Array Controller verbinden"],
++        ["imageView", UIImageViewDragType, "Bild", "Bild (<imageView>)"],
++        ["custom", UICustomViewDragType, "Eigenes", "Beliebiges Element (eigener Tag)"] ] }
++];
++
++
++@implementation UIBPaletteTile : CPView
++{
++    CPString _elementType;
++    CPString _dragType;
++    CPString _title;
++    BOOL     _isPressed;
++    BOOL     _isPlaceholder;
++}
++
++- (id)initWithElementType:(CPString)anElementType dragType:(CPString)aDragType title:(CPString)aTitle
++{
++    self = [super initWithFrame:CGRectMake(0, 0, UIBPaletteTileWidth, UIBPaletteTileHeight)];
++    if (self)
++    {
++        _elementType = anElementType;
++        _dragType = aDragType;
++        _title = aTitle;
++    }
++    return self;
++}
++
++- (CPString)title       { return _title; }
++- (CPString)elementType { return _elementType; }
++
++- (BOOL)acceptsFirstMouse:(CPEvent)anEvent
++{
++    return YES;
++}
++
++- (void)drawRect:(CGRect)aRect
++{
++    var bounds = [self bounds],
++        tile = CGRectMake(10, 2, bounds.size.width - 20, 42),
++        path = UIBRoundedPath(tile, 8);
++
++    UIBWithShadow(1, 2, UIBRGB(0, 0, 0, 0.10), function()
++    {
++        UIBFillStroke(path, _isPressed ? UIBTheme("accentSoft") : UIBTheme("tile"), nil);
++    });
++    UIBFillStroke(path, nil, _isPressed ? UIBTheme("accent") : UIBTheme("tileBorder"), 1);
++
++    UIBDrawElementIcon(_elementType, CGRectMake(tile.origin.x + 6, tile.origin.y + 6, tile.size.width - 12, tile.size.height - 12));
++
++    if (!_isPlaceholder)
++        UIBDrawTextInRect(_title, CGRectMake(0, 46, bounds.size.width, 18), UIBFont(11), UIBTheme("text"), "center");
++}
++
++- (void)mouseDown:(CPEvent)anEvent
++{
++    _isPressed = YES;
++    [self setNeedsDisplay:YES];
++
++    var placeholder = [[UIBPaletteTile alloc] initWithElementType:_elementType dragType:_dragType title:_title];
++    placeholder._isPlaceholder = YES;
++    [placeholder setAlphaValue:0.85];
++
++    var pasteboard = [CPPasteboard pasteboardWithName:CPDragPboard];
++    [pasteboard declareTypes:[_dragType] owner:nil];
++    // The element type travels with the drag, so the canvas knows exactly what to create.
++    [pasteboard setString:_elementType forType:_dragType];
++
++    [self dragView:placeholder at:CGPointMakeZero() offset:nil event:anEvent pasteboard:pasteboard source:self slideBack:YES];
++}
++
++- (void)draggedView:(CPView)aView endedAt:(CGPoint)aLocation operation:(CPDragOperation)anOperation
++{
++    _isPressed = NO;
++    [self setNeedsDisplay:YES];
++}
++
++- (void)mouseUp:(CPEvent)anEvent
++{
++    _isPressed = NO;
++    [self setNeedsDisplay:YES];
++}
++
++@end
++
++
++@implementation UIBPaletteContentView : CPView
++{
++    CPArray _sections;   // [{ header, tiles }]
++}
++
++- (id)initWithFrame:(CGRect)aFrame
++{
++    self = [super initWithFrame:aFrame];
++    if (self)
++    {
++        _sections = [];
++
++        for (var s = 0; s < UIBPaletteSections.length; s++)
++        {
++            var section = UIBPaletteSections[s],
++                header = [[CPTextField alloc] initWithFrame:CGRectMake(UIBPalettePadding, 0, 300, 16)];
++
++            [header setStringValue:section.title.toUpperCase()];
++            [header setFont:UIBFont(10, YES)];
++            [header setTextColor:UIBTheme("secondaryText")];
++            [header setBezeled:NO];
++            [header setDrawsBackground:NO];
++            [header setEditable:NO];
++            [header setSelectable:NO];
++            [self addSubview:header];
++
++            var tiles = [];
++            for (var i = 0; i < section.items.length; i++)
++            {
++                var item = section.items[i],
++                    tile = [[UIBPaletteTile alloc] initWithElementType:item[0] dragType:item[1] title:item[2]];
++                if ([tile respondsToSelector:@selector(setToolTip:)])
++                    [tile setToolTip:item[3]];
++                [self addSubview:tile];
++                tiles.push(tile);
++            }
++
++            _sections.push({ header: header, tiles: tiles });
++        }
++
++        [self filterWithString:@""];
++    }
++    return self;
++}
++
++// Shows the tiles whose title or type contains aString; returns the needed height.
++- (float)filterWithString:(CPString)aString
++{
++    var filter = String(aString || "").toLowerCase(),
++        y = 4;
++
++    for (var s = 0; s < _sections.length; s++)
++    {
++        var section = _sections[s],
++            visible = section.tiles.filter(function(tile)
++            {
++                return !filter || [tile title].toLowerCase().indexOf(filter) >= 0 || [tile elementType].toLowerCase().indexOf(filter) >= 0;
++            });
++
++        [section.header setHidden:!visible.length];
++        for (var i = 0; i < section.tiles.length; i++)
++            [section.tiles[i] setHidden:visible.indexOf(section.tiles[i]) < 0];
++
++        if (!visible.length)
++            continue;
++
++        [section.header setFrameOrigin:CGPointMake(UIBPalettePadding + 4, y)];
++        y += 20;
++
++        for (var i = 0; i < visible.length; i++)
++        {
++            var column = i % UIBPaletteColumns,
++                row = Math.floor(i / UIBPaletteColumns);
++            [visible[i] setFrameOrigin:CGPointMake(UIBPalettePadding + column * UIBPaletteTileWidth, y + row * UIBPaletteTileHeight)];
++        }
++
++        y += Math.ceil(visible.length / UIBPaletteColumns) * UIBPaletteTileHeight + 8;
++    }
++
++    [self setFrameSize:CGSizeMake([self frame].size.width, MAX(y, 40))];
++    return y;
++}
++
++@end
++
++
++@implementation UIBPaletteController : CPObject
++{
++    UIBPaletteContentView _contentView;
++}
++
++- (void)searchChanged:(id)sender
++{
++    [_contentView filterWithString:[sender stringValue]];
++}
++
++@end
++
++var UIBSharedPaletteController = nil;
++
++// Builds the element palette panel.
++UIBCreatePalette = function()
++{
++    var width = UIBPalettePadding * 2 + UIBPaletteColumns * UIBPaletteTileWidth + 16,
++        height = MIN(720, window.innerHeight - 80),
++        screenWidth = window.innerWidth;
++
++    var panel = [[CPPanel alloc] initWithContentRect:CGRectMake(MAX(360, screenWidth - width - 20), 40, width, height)
++                                           styleMask:CPTitledWindowMask | CPClosableWindowMask | CPResizableWindowMask];
++    [panel setTitle:@"Elemente"];
++    [panel setFloatingPanel:YES];
++    if ([panel respondsToSelector:@selector(setBecomesKeyOnlyIfNeeded:)])
++        [panel setBecomesKeyOnlyIfNeeded:YES];
++
++    var contentView = [panel contentView],
++        bounds = [contentView bounds];
++
++    [contentView setBackgroundColor:UIBRGB(246, 246, 248)];
++
++    var search = [[CPSearchField alloc] initWithFrame:CGRectMake(10, 8, bounds.size.width - 20, 28)];
++    [search setPlaceholderString:@"Element suchen"];
++    [search setAutoresizingMask:CPViewWidthSizable];
++    [search setSendsSearchStringImmediately:YES];
++    [contentView addSubview:search];
++
++    var scrollView = [[CPScrollView alloc] initWithFrame:CGRectMake(0, 42, bounds.size.width, bounds.size.height - 42)];
++    [scrollView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
++    [scrollView setHasHorizontalScroller:NO];
++    [scrollView setAutohidesScrollers:YES];
++
++    var tiles = [[UIBPaletteContentView alloc] initWithFrame:CGRectMake(0, 0, bounds.size.width - 4, 100)];
++    [scrollView setDocumentView:tiles];
++    [contentView addSubview:scrollView];
++
++    UIBSharedPaletteController = [[UIBPaletteController alloc] init];
++    UIBSharedPaletteController._contentView = tiles;
++    [search setTarget:UIBSharedPaletteController];
++    [search setAction:@selector(searchChanged:)];
++
++    return panel;
++};
+diff -ruN d/public/Frontend/UIBSkeletons.j e/public/Frontend/UIBSkeletons.j
+--- d/public/Frontend/UIBSkeletons.j	2026-10-19 17:38:44.990825153 +0000
++++ e/public/Frontend/UIBSkeletons.j	2026-10-19 20:34:24.912789281 +0000
+@@ -1,53 +1,408 @@
+ //
+ //  UIBSkeletons.j
+-//  Content sizes and nicer canvas drawing for the element views. These are
+-//  categories so the individual view files stay small; this file is imported
+-//  after all view classes.
++//  The look of the builder: how every element is drawn on the canvas
++//  ("construction mode"), the selection and resize handles, and the icons of
++//  the element palette. Everything shares the colors and helpers below, so
++//  the canvas, the palette and the File's Owner look like one app.
++//
++//  These are categories, imported after all view classes.
+ //
+ 
+ @import "UIElementView.j"
+ 
+-function UIBDrawText(aString, aPoint, aFont, aColor)
++#pragma mark - Theme
++
++var UIBThemeColors = nil;
++
++UIBRGB = function(r, g, b, a)
++{
++    return [CPColor colorWithCalibratedRed:r / 255 green:g / 255 blue:b / 255 alpha:(a === undefined ? 1.0 : a)];
++};
++
++// Colors are created lazily (CPColor must be loaded).
++UIBTheme = function(aName)
++{
++    if (!UIBThemeColors)
++    {
++        UIBThemeColors = {
++            accent:          UIBRGB(10, 132, 255),
++            accentSoft:      UIBRGB(10, 132, 255, 0.14),
++            accentDark:      UIBRGB(0, 98, 210),
++            text:            UIBRGB(29, 29, 31),
++            secondaryText:   UIBRGB(110, 110, 115),
++            placeholder:     UIBRGB(160, 160, 166),
++            controlFill:     UIBRGB(255, 255, 255),
++            controlFillLow:  UIBRGB(246, 246, 248),
++            controlBorder:   UIBRGB(0, 0, 0, 0.20),
++            controlShadow:   UIBRGB(0, 0, 0, 0.10),
++            fieldBorder:     UIBRGB(0, 0, 0, 0.18),
++            track:           UIBRGB(0, 0, 0, 0.12),
++            windowFill:      UIBRGB(236, 236, 238),
++            titleBarTop:     UIBRGB(232, 232, 235),
++            titleBarBottom:  UIBRGB(222, 222, 226),
++            titleBarLine:    UIBRGB(0, 0, 0, 0.12),
++            windowBorder:    UIBRGB(0, 0, 0, 0.28),
++            containerLine:   UIBRGB(0, 0, 0, 0.16),
++            rootLine:        UIBRGB(0, 0, 0, 0.07),
++            spacer:          UIBRGB(10, 132, 255, 0.45),
++            zebra:           UIBRGB(244, 246, 250),
++            header:          UIBRGB(246, 246, 248),
++            grid:            UIBRGB(0, 0, 0, 0.07),
++            red:             UIBRGB(255, 95, 87),
++            yellow:          UIBRGB(254, 188, 46),
++            green:           UIBRGB(40, 200, 64),
++            tile:            UIBRGB(255, 255, 255),
++            tileBorder:      UIBRGB(0, 0, 0, 0.10)
++        };
++    }
++    return UIBThemeColors[aName];
++};
++
++var UIBFonts = {};
++
++UIBFont = function(aSize, isBold)
++{
++    var key = (isBold ? "b" : "r") + (aSize || 12);
++    if (!UIBFonts[key])
++        UIBFonts[key] = isBold ? [CPFont boldSystemFontOfSize:aSize || 12] : [CPFont systemFontOfSize:aSize || 12];
++    return UIBFonts[key];
++};
++
++UIBContext = function()
++{
++    return [[CPGraphicsContext currentContext] graphicsPort];
++};
++
++// Draws with a soft drop shadow (if the canvas context supports it).
++UIBWithShadow = function(anOffsetY, aBlur, aColor, aFunction)
++{
++    var context = UIBContext();
++    if (typeof CGContextSetShadowWithColor === "undefined" || !context)
++    {
++        aFunction();
++        return;
++    }
++
++    CGContextSaveGState(context);
++    CGContextSetShadowWithColor(context, CGSizeMake(0, anOffsetY), aBlur, aColor);
++    aFunction();
++    CGContextRestoreGState(context);
++};
++
++UIBRoundedPath = function(aRect, aRadius)
++{
++    return [CPBezierPath bezierPathWithRoundedRect:aRect xRadius:aRadius yRadius:aRadius];
++};
++
++UIBFillStroke = function(aPath, aFill, aStroke, aWidth)
++{
++    if (aFill)
++    {
++        [aFill setFill];
++        [aPath fill];
++    }
++    if (aStroke)
++    {
++        [aPath setLineWidth:aWidth || 1];
++        [aStroke setStroke];
++        [aPath stroke];
++    }
++};
++
++UIBDrawText = function(aString, aPoint, aFont, aColor)
+ {
+     [String(aString) drawAtPoint:aPoint withAttributes:@{ CPFontAttributeName: aFont, CPForegroundColorAttributeName: aColor }];
++};
++
++UIBTextWidth = function(aString, aFont)
++{
++    return [String(aString || "") sizeWithFont:aFont || UIBFont(12)].width;
++};
++
++// Text vertically centered in aRect; anAlignment: "left", "center", "right".
++UIBDrawTextInRect = function(aString, aRect, aFont, aColor, anAlignment)
++{
++    if (aString === nil || aString === undefined || String(aString) === "")
++        return;
++
++    var text = String(aString),
++        size = [text sizeWithFont:aFont],
++        x = aRect.origin.x;
++
++    // Shorten text that does not fit.
++    if (size.width > aRect.size.width && text.length > 2)
++    {
++        while (text.length > 1 && [text + "…" sizeWithFont:aFont].width > aRect.size.width)
++            text = text.substring(0, text.length - 1);
++        text += "…";
++        size = [text sizeWithFont:aFont];
++    }
++
++    if (anAlignment === "center")
++        x += (aRect.size.width - size.width) / 2;
++    else if (anAlignment === "right")
++        x += aRect.size.width - size.width;
++
++    var y = aRect.origin.y + (aRect.size.height - [[aFont fontDescriptor] pointSize]) / 2 - 2;
++    UIBDrawText(text, CGPointMake(x, y), aFont, aColor);
++};
++
++// A macOS-like push button bezel.
++UIBDrawBezel = function(aRect, aRadius, isProminent)
++{
++    var path = UIBRoundedPath(aRect, aRadius === undefined ? 5 : aRadius);
++
++    UIBWithShadow(1, 1.5, UIBTheme("controlShadow"), function()
++    {
++        UIBFillStroke(path, isProminent ? UIBTheme("accent") : UIBTheme("controlFill"), nil);
++    });
++
++    UIBFillStroke(path, nil, isProminent ? UIBTheme("accentDark") : UIBTheme("controlBorder"), 1);
++};
++
++// A text field bezel (white, thin border, slight inner top line).
++UIBDrawFieldBezel = function(aRect, aRadius)
++{
++    var path = UIBRoundedPath(aRect, aRadius === undefined ? 4 : aRadius);
++    UIBFillStroke(path, UIBTheme("controlFill"), UIBTheme("fieldBorder"), 1);
++
++    var inner = [CPBezierPath bezierPath];
++    [inner moveToPoint:CGPointMake(aRect.origin.x + (aRadius || 4), aRect.origin.y + 1.5)];
++    [inner lineToPoint:CGPointMake(aRect.origin.x + aRect.size.width - (aRadius || 4), aRect.origin.y + 1.5)];
++    [inner setLineWidth:1];
++    [UIBTheme("grid") setStroke];
++    [inner stroke];
++};
++
++UIBDrawChevronUpDown = function(aCenter, aSize, aColor)
++{
++    var path = [CPBezierPath bezierPath];
++    [path moveToPoint:CGPointMake(aCenter.x - aSize, aCenter.y - 1.5)];
++    [path lineToPoint:CGPointMake(aCenter.x, aCenter.y - 1.5 - aSize)];
++    [path lineToPoint:CGPointMake(aCenter.x + aSize, aCenter.y - 1.5)];
++    [path moveToPoint:CGPointMake(aCenter.x - aSize, aCenter.y + 1.5)];
++    [path lineToPoint:CGPointMake(aCenter.x, aCenter.y + 1.5 + aSize)];
++    [path lineToPoint:CGPointMake(aCenter.x + aSize, aCenter.y + 1.5)];
++    [path setLineWidth:1.5];
++    [aColor setStroke];
++    [path stroke];
++};
++
++UIBDrawChevronDown = function(aCenter, aSize, aColor)
++{
++    var path = [CPBezierPath bezierPath];
++    [path moveToPoint:CGPointMake(aCenter.x - aSize, aCenter.y - aSize / 2)];
++    [path lineToPoint:CGPointMake(aCenter.x, aCenter.y + aSize / 2)];
++    [path lineToPoint:CGPointMake(aCenter.x + aSize, aCenter.y - aSize / 2)];
++    [path setLineWidth:1.5];
++    [aColor setStroke];
++    [path stroke];
++};
++
++UIBDrawCheckMark = function(aRect, aColor)
++{
++    var path = [CPBezierPath bezierPath],
++        x = aRect.origin.x, y = aRect.origin.y, w = aRect.size.width, h = aRect.size.height;
++    [path moveToPoint:CGPointMake(x + w * 0.22, y + h * 0.52)];
++    [path lineToPoint:CGPointMake(x + w * 0.42, y + h * 0.72)];
++    [path lineToPoint:CGPointMake(x + w * 0.78, y + h * 0.30)];
++    [path setLineWidth:2];
++    [aColor setStroke];
++    [path stroke];
++};
++
++UIBDrawMagnifier = function(anOrigin, aSize, aColor)
++{
++    var circle = [CPBezierPath bezierPathWithOvalInRect:CGRectMake(anOrigin.x, anOrigin.y, aSize * 0.7, aSize * 0.7)];
++    [circle setLineWidth:1.4];
++    [aColor setStroke];
++    [circle stroke];
++
++    var handle = [CPBezierPath bezierPath];
++    [handle moveToPoint:CGPointMake(anOrigin.x + aSize * 0.6, anOrigin.y + aSize * 0.6)];
++    [handle lineToPoint:CGPointMake(anOrigin.x + aSize, anOrigin.y + aSize)];
++    [handle setLineWidth:1.6];
++    [handle stroke];
++};
++
++// Shows what a control is bound to when it has no content of its own.
++UIBBindingHint = function(aData)
++{
++    var extras = [aData valueForKey:@"extraAttributes"] || {},
++        binding = extras.valueBinding || extras.itemsBinding;
++
++    return binding ? "⟶ " + String(binding).replace(/^#CPOwner\./, "") : nil;
++};
++
++#pragma mark - Selection and Handles
++
++@implementation UIElementView (UIBTheme)
++
++- (void)drawRect:(CGRect)rect
++{
++    [self drawSkeleton:rect];
++
++    if (self._isDragTarget)
++        [self _uib_drawDropHighlight];
++
++    if ([self isSelected])
++    {
++        var outline = [CPBezierPath bezierPathWithRect:CGRectInset([self bounds], 1, 1)];
++        [outline setLineWidth:2];
++        [UIBTheme("accent") setStroke];
++        [outline stroke];
++        [self drawHandles];
++    }
+ }
+ 
+-function UIBTextWidth(aString, aFont)
++- (void)_uib_drawDropHighlight
+ {
+-    return [String(aString || "") sizeWithFont:aFont].width;
++    var path = UIBRoundedPath(CGRectInset([self bounds], 1.5, 1.5), 4);
++    UIBFillStroke(path, UIBTheme("accentSoft"), UIBTheme("accent"), 2);
+ }
+ 
+-var UIBControlFont = nil;
++- (void)drawHandles
++{
++    var halign = UIBAlignKind([[self dataObject] valueForKey:@"halign"]),
++        valign = UIBAlignKind([[self dataObject] valueForKey:@"valign"]);
+ 
+-function UIBFont()
++    for (var i = 1; i <= 8; i++)
++    {
++        var horizontal = (i === kUIElementTopLeftHandle || i === kUIElementMiddleLeftHandle || i === kUIElementBottomLeftHandle ||
++                          i === kUIElementTopRightHandle || i === kUIElementMiddleRightHandle || i === kUIElementBottomRightHandle),
++            vertical = (i === kUIElementTopLeftHandle || i === kUIElementTopMiddleHandle || i === kUIElementTopRightHandle ||
++                        i === kUIElementBottomLeftHandle || i === kUIElementBottomMiddleHandle || i === kUIElementBottomRightHandle);
++
++        if ((halign === "expand" && horizontal) || (valign === "expand" && vertical))
++            continue;
++
++        var handleRect = CGRectInset([self rectForHandle:i], 0.5, 0.5),
++            handle = [CPBezierPath bezierPathWithOvalInRect:handleRect];
++
++        UIBWithShadow(0.5, 1, UIBRGB(0, 0, 0, 0.25), function()
++        {
++            UIBFillStroke(handle, UIBTheme("controlFill"), nil);
++        });
++        UIBFillStroke(handle, nil, UIBTheme("accent"), 1.5);
++    }
++}
++
++- (void)drawSkeleton:(CGRect)rect
+ {
+-    if (!UIBControlFont)
+-        UIBControlFont = [CPFont systemFontOfSize:12];
+-    return UIBControlFont;
++    // Elements without their own look: a neutral rounded placeholder.
++    var bounds = CGRectInset([self bounds], 0.5, 0.5);
++    UIBFillStroke(UIBRoundedPath(bounds, 4), UIBTheme("controlFillLow"), UIBTheme("controlBorder"), 1);
++    UIBDrawTextInRect([[self dataObject] valueForKey:@"value"] || [[self dataObject] valueForKey:@"type"], CGRectInset(bounds, 6, 0), UIBFont(11), UIBTheme("secondaryText"), "center");
+ }
+ 
++@end
++
++#pragma mark - Windows
+ 
+-@implementation UILabelView (UIBContentSize)
++@implementation UIWindowView (UIBTheme)
+ 
+-- (CGSize)intrinsicContentSize
++- (void)drawRect:(CGRect)rect
+ {
+-    var value = [[self dataObject] valueForKey:@"value"] || "";
+-    return CGSizeMake(MAX(10, UIBTextWidth(value, UIBFont()) + 6), 20);
++    [self drawSkeleton:rect];
++
++    var bounds = [self bounds],
++        frame = UIBRoundedPath(CGRectInset(bounds, 0.5, 0.5), 8);
++
++    if (self._isDropTarget || self._isDragTarget)
++        UIBFillStroke(frame, nil, UIBTheme("accent"), 2.5);
++
++    if ([self isSelected])
++    {
++        UIBFillStroke(UIBRoundedPath(CGRectInset(bounds, 1.5, 1.5), 8), nil, UIBTheme("accent"), 2.5);
++        [self drawHandles];
++    }
++
++    if (self._isRubbing)
++    {
++        var rubber = CGRectUnion(CGRectMake(self._rubberStart.x, self._rubberStart.y, 0.1, 0.1), CGRectMake(self._rubberEnd.x, self._rubberEnd.y, 0.1, 0.1));
++        UIBFillStroke([CPBezierPath bezierPathWithRect:rubber], UIBTheme("accentSoft"), UIBTheme("accent"), 1);
++    }
+ }
+ 
+-- (void)sizeToFit
++- (void)drawSkeleton:(CGRect)rect
+ {
+-    [self setFrameSize:[self intrinsicContentSize]];
++    var bounds = [self bounds],
++        titleBarHeight = 22.0,
++        windowRect = CGRectInset(bounds, 0.5, 0.5),
++        windowPath = UIBRoundedPath(windowRect, 8);
++
++    // Body with a soft shadow
++    UIBWithShadow(3, 10, UIBRGB(0, 0, 0, 0.22), function()
++    {
++        UIBFillStroke(windowPath, UIBTheme("windowFill"), nil);
++    });
++
++    // Title bar: two tones (rounded on top, square at the bottom) and a hairline
++    UIBFillStroke(UIBRoundedPath(CGRectMake(0.5, 0.5, bounds.size.width - 1, titleBarHeight), 8), UIBTheme("titleBarTop"), nil);
++    [UIBTheme("titleBarBottom") setFill];
++    [CPBezierPath fillRect:CGRectMake(0.5, titleBarHeight / 2, bounds.size.width - 1, titleBarHeight / 2)];
++
++    var line = [CPBezierPath bezierPath];
++    [line moveToPoint:CGPointMake(0, titleBarHeight - 0.5)];
++    [line lineToPoint:CGPointMake(bounds.size.width, titleBarHeight - 0.5)];
++    [UIBTheme("titleBarLine") setStroke];
++    [line stroke];
++
++    UIBFillStroke(windowPath, nil, UIBTheme("windowBorder"), 1);
++
++    // Traffic lights
++    var colors = [UIBTheme("red"), UIBTheme("yellow"), UIBTheme("green")];
++    for (var i = 0; i < 3; i++)
++    {
++        var light = [CPBezierPath bezierPathWithOvalInRect:CGRectMake(9 + i * 17, 5.5, 11, 11)];
++        UIBFillStroke(light, colors[i], UIBRGB(0, 0, 0, 0.12), 0.5);
++    }
++
++    // Title (the title text field is a subview; make it fit this look)
++    var subviews = [self subviews];
++    for (var i = 0; i < subviews.length; i++)
++    {
++        var subview = subviews[i];
++        if ([subview isKindOfClass:[CPTextField class]] && !subview._uibStyled)
++        {
++            [subview setTextColor:UIBTheme("text")];
++            [subview setFont:UIBFont(13, YES)];
++            [subview setAlignment:CPCenterTextAlignment];
++            subview._uibStyled = YES;
++        }
++    }
++
++    // Badges for things that are not visible on the canvas
++    var data = [self dataObject],
++        badges = [];
++
++    if ([data valueForKey:@"bridge"])
++        badges.push("bridge");
++    if ([data valueForKey:@"visible"] === false)
++        badges.push("hidden");
++    if ([data valueForKey:@"identifier"])
++        badges.push("#" + [data valueForKey:@"identifier"]);
++
++    var x = bounds.size.width - 8;
++    for (var i = badges.length - 1; i >= 0; i--)
++    {
++        var width = UIBTextWidth(badges[i], UIBFont(10)) + 10;
++        x -= width;
++        UIBFillStroke(UIBRoundedPath(CGRectMake(x, 4, width, 14), 7), UIBRGB(0, 0, 0, 0.07), nil);
++        UIBDrawTextInRect(badges[i], CGRectMake(x, 4, width, 14), UIBFont(10), UIBTheme("secondaryText"), "center");
++        x -= 4;
++    }
+ }
+ 
+ @end
+ 
++#pragma mark - Controls
+ 
+-@implementation UIButtonView (UIBContentSize)
++@implementation UIButtonView (UIBTheme)
+ 
+ - (CGSize)intrinsicContentSize
+ {
+-    return CGSizeMake(MAX(40, UIBTextWidth([[self dataObject] valueForKey:@"value"], [CPFont boldSystemFontOfSize:12]) + 28), 24);
++    return CGSizeMake(MAX(56, UIBTextWidth([[self dataObject] valueForKey:@"value"], UIBFont(13)) + 30), 24);
+ }
+ 
+ - (void)sizeToFit
+@@ -55,141 +410,202 @@
+     [self setFrameSize:[self intrinsicContentSize]];
+ }
+ 
++- (void)drawSkeleton:(CGRect)rect
++{
++    var data = [self dataObject],
++        bounds = [self bounds],
++        bezel = CGRectMake(1, MAX(1, (bounds.size.height - 22) / 2), bounds.size.width - 2, MIN(22, bounds.size.height - 2)),
++        keyEquivalent = [data valueForKey:@"keyEquivalent"],
++        isDefault = keyEquivalent === "\r" || keyEquivalent === "\\r",
++        isEnabled = [data valueForKey:@"enabled"] !== false;
++
++    UIBDrawBezel(bezel, 5, isDefault);
++    UIBDrawTextInRect([data valueForKey:@"value"], CGRectInset(bezel, 8, 0), UIBFont(13), isDefault ? [CPColor whiteColor] : (isEnabled ? UIBTheme("text") : UIBTheme("placeholder")), "center");
++}
++
+ @end
+ 
+ 
+-@implementation UICheckBoxView (UIBContentSize)
++@implementation UICheckBoxView (UIBTheme)
+ 
+ - (CGSize)intrinsicContentSize
+ {
+     var title = [[self dataObject] valueForKey:@"title"] || "";
+-    return CGSizeMake(20 + (title.length ? UIBTextWidth(title, [CPFont boldSystemFontOfSize:12]) + 6 : 0), 20);
++    return CGSizeMake(18 + (title.length ? UIBTextWidth(title, UIBFont(13)) + 6 : 0), 20);
+ }
+ 
+-@end
+-
+-
+-@implementation UITextFieldView (UIBPlaceholder)
+-
+ - (void)drawSkeleton:(CGRect)rect
+ {
+-    var bounds = CGRectInset([self bounds], 1, 1),
+-        value = [[self dataObject] valueForKey:@"value"],
+-        data = [self dataObject];
+-
+-    [[CPColor textBackgroundColor] setFill];
+-    [CPBezierPath fillRect:bounds];
+-    [[CPColor grayColor] setStroke];
+-    [CPBezierPath strokeRect:bounds];
++    var data = [self dataObject],
++        bounds = [self bounds],
++        box = CGRectMake(1.5, (bounds.size.height - 14) / 2, 14, 14),
++        checked = !![data valueForKey:@"value"];
+ 
+-    if (value !== nil && value !== undefined && String(value).length)
+-        UIBDrawText(value, CGPointMake(5, (bounds.size.height - 14) / 2), UIBFont(), [CPColor blackColor]);
+-    else
++    if (checked)
+     {
+-        // Show what the field is bound to, or its kind.
+-        var extras = [data valueForKey:@"extraAttributes"] || {},
+-            hint = extras.valueBinding ? "⟶ " + String(extras.valueBinding).replace(/^#CPOwner\./, "") : ([data valueForKey:@"markupTag"] || [data valueForKey:@"type"]);
+-        UIBDrawText(hint, CGPointMake(5, (bounds.size.height - 14) / 2), [CPFont systemFontOfSize:11], [CPColor lightGrayColor]);
++        UIBFillStroke(UIBRoundedPath(box, 3.5), UIBTheme("accent"), UIBTheme("accentDark"), 1);
++        UIBDrawCheckMark(box, [CPColor whiteColor]);
+     }
++    else
++        UIBWithShadow(0.5, 1, UIBTheme("controlShadow"), function()
++        {
++            UIBFillStroke(UIBRoundedPath(box, 3.5), UIBTheme("controlFill"), UIBTheme("controlBorder"), 1);
++        });
++
++    var title = [data valueForKey:@"title"];
++    if (title)
++        UIBDrawTextInRect(title, CGRectMake(22, 0, bounds.size.width - 22, bounds.size.height), UIBFont(13), UIBTheme("text"), "left");
+ }
+ 
+ @end
+ 
+ 
+-@implementation UIPopUpButtonView (UIBContentSize)
++@implementation UILabelView (UIBTheme)
+ 
+ - (CGSize)intrinsicContentSize
+ {
+-    var items = UIBSplitList([[self dataObject] valueForKey:@"items"]),
+-        width = 60;
+-
+-    for (var i = 0; i < items.length; i++)
+-        width = MAX(width, UIBTextWidth(items[i], UIBFont()) + 36);
++    var value = [[self dataObject] valueForKey:@"value"] || "";
++    return CGSizeMake(MAX(10, UIBTextWidth(value, UIBFont(13)) + 6), 20);
++}
+ 
+-    return CGSizeMake(width, 24);
++- (void)sizeToFit
++{
++    [self setFrameSize:[self intrinsicContentSize]];
+ }
+ 
+ - (void)drawSkeleton:(CGRect)rect
+ {
+-    var bounds = CGRectInset([self bounds], 0.5, 0.5),
+-        path = [CPBezierPath bezierPathWithRoundedRect:bounds radius:4],
+-        items = UIBSplitList([[self dataObject] valueForKey:@"items"]);
+-
+-    [[CPColor controlColor] setFill];
+-    [path fill];
+-    [[CPColor grayColor] setStroke];
+-    [path stroke];
++    var data = [self dataObject],
++        value = [data valueForKey:@"value"],
++        colorString = [data valueForKey:@"color"],
++        color = UIBTheme("text"),
++        extras = [data valueForKey:@"extraAttributes"] || {},
++        font = /bold/i.test(extras.font || "") ? UIBFont(Number(extras.size) || 13, YES) : UIBFont(Number(extras.size) || 13);
+ 
+-    var extras = [[self dataObject] valueForKey:@"extraAttributes"] || {},
+-        title = items.length ? items[0] : (extras.itemsBinding ? "⟶ " + String(extras.itemsBinding).replace(/^#CPOwner\./, "") : "");
++    if (colorString && String(colorString).charAt(0) === "#" && colorString !== "#000000")
++        color = [CPColor colorWithHexString:String(colorString).substring(1)] || color;
+ 
+-    UIBDrawText(title, CGPointMake(8, (bounds.size.height - 14) / 2), UIBFont(), items.length ? [CPColor blackColor] : [CPColor grayColor]);
++    if (value === nil || value === undefined || String(value).trim() === "")
++    {
++        var hint = UIBBindingHint(data);
++        if (hint)
++            UIBDrawTextInRect(hint, CGRectInset([self bounds], 2, 0), UIBFont(11), UIBTheme("placeholder"), "left");
++        return;
++    }
+ 
+-    var arrow = [CPBezierPath bezierPath],
+-        x = bounds.size.width - 14,
+-        midY = bounds.size.height / 2;
+-    [arrow moveToPoint:CGPointMake(x, midY - 2)];
+-    [arrow lineToPoint:CGPointMake(x + 4, midY - 6)];
+-    [arrow lineToPoint:CGPointMake(x + 8, midY - 2)];
+-    [arrow moveToPoint:CGPointMake(x, midY + 2)];
+-    [arrow lineToPoint:CGPointMake(x + 4, midY + 6)];
+-    [arrow lineToPoint:CGPointMake(x + 8, midY + 2)];
+-    [[CPColor darkGrayColor] setStroke];
+-    [arrow stroke];
++    UIBDrawTextInRect(value, CGRectInset([self bounds], 2, 0), font, color, [data valueForKey:@"horizontalTextAlign"] || "left");
+ }
+ 
+ @end
+ 
+ 
+-@implementation UITableViewView (UIBColumns)
++@implementation UITextFieldView (UIBTheme)
+ 
++// Text fields, search fields, secure fields and combo boxes share this.
+ - (void)drawSkeleton:(CGRect)rect
+ {
+-    var bounds = [self bounds],
+-        columns = UIBSplitList([[self dataObject] valueForKey:@"columns"]),
+-        headerHeight = 20;
++    var data = [self dataObject],
++        type = [data valueForKey:@"type"],
++        bounds = [self bounds],
++        height = MIN(22, bounds.size.height - 2),
++        field = CGRectMake(1, MAX(1, (bounds.size.height - height) / 2), bounds.size.width - 2, height),
++        textRect = CGRectInset(field, 6, 0),
++        value = [data valueForKey:@"value"],
++        hasValue = value !== nil && value !== undefined && String(value).length > 0;
+ 
+-    [[CPColor whiteColor] setFill];
+-    [CPBezierPath fillRect:bounds];
++    if (type === "searchField")
++    {
++        UIBDrawFieldBezel(field, height / 2);
++        UIBDrawMagnifier(CGPointMake(field.origin.x + 8, field.origin.y + (height - 11) / 2), 11, UIBTheme("secondaryText"));
++        textRect = CGRectMake(field.origin.x + 24, field.origin.y, field.size.width - 30, height);
++    }
++    else
++        UIBDrawFieldBezel(field, 4);
+ 
+-    for (var row = 1; row * 20 < bounds.size.height; row += 2)
++    if (type === "comboBox")
+     {
+-        [[CPColor colorWithCalibratedRed:0.93 green:0.95 blue:1.0 alpha:1.0] setFill];
+-        [CPBezierPath fillRect:CGRectMake(0, headerHeight + row * 20, bounds.size.width, 20)];
++        var buttonRect = CGRectMake(field.origin.x + field.size.width - 20, field.origin.y + 2, 18, height - 4);
++        UIBFillStroke(UIBRoundedPath(buttonRect, 4), UIBTheme("accent"), nil);
++        UIBDrawChevronDown(CGPointMake(CGRectGetMidX(buttonRect), CGRectGetMidY(buttonRect)), 3.5, [CPColor whiteColor]);
++        textRect.size.width -= 22;
+     }
+ 
+-    [[CPColor controlColor] setFill];
+-    [CPBezierPath fillRect:CGRectMake(0, 0, bounds.size.width, headerHeight)];
++    if (type === "secureField" && hasValue)
++    {
++        var dots = Math.min(String(value).length, Math.floor(textRect.size.width / 9));
++        for (var i = 0; i < dots; i++)
++        {
++            var dot = [CPBezierPath bezierPathWithOvalInRect:CGRectMake(textRect.origin.x + i * 9, CGRectGetMidY(field) - 3, 6, 6)];
++            UIBFillStroke(dot, UIBTheme("text"), nil);
++        }
++        return;
++    }
+ 
+-    var x = 0,
+-        columnWidth = columns.length ? MAX(40, bounds.size.width / columns.length) : bounds.size.width;
++    if (hasValue)
++        UIBDrawTextInRect(value, textRect, UIBFont(13), UIBTheme("text"), "left");
++    else
++        UIBDrawTextInRect(UIBBindingHint(data) || ({ searchField: "Suchen", secureField: "Passwort", comboBox: "" }[type] || ""), textRect, UIBFont(12), UIBTheme("placeholder"), "left");
++}
+ 
+-    for (var i = 0; i < columns.length; i++)
+-    {
+-        UIBDrawText(columns[i], CGPointMake(x + 4, 3), [CPFont systemFontOfSize:11], [CPColor darkGrayColor]);
+-        x += columnWidth;
++@end
+ 
+-        var line = [CPBezierPath bezierPath];
+-        [line moveToPoint:CGPointMake(x, 0)];
+-        [line lineToPoint:CGPointMake(x, bounds.size.height)];
+-        [[CPColor colorWithCalibratedWhite:0.85 alpha:1.0] setStroke];
+-        [line stroke];
+-    }
++@implementation UISearchFieldView (UIBTheme)
++- (void)drawSkeleton:(CGRect)rect { [super drawSkeleton:rect]; }
++@end
++
++@implementation UISecureFieldView (UIBTheme)
++- (void)drawSkeleton:(CGRect)rect { [super drawSkeleton:rect]; }
++@end
++
++@implementation UIComboBoxView (UIBTheme)
++- (void)drawSkeleton:(CGRect)rect { [super drawSkeleton:rect]; }
++@end
++
++
++@implementation UIPopUpButtonView (UIBTheme)
++
++- (CGSize)intrinsicContentSize
++{
++    var items = UIBSplitList([[self dataObject] valueForKey:@"items"]),
++        width = 70;
++
++    for (var i = 0; i < items.length; i++)
++        width = MAX(width, UIBTextWidth(items[i], UIBFont(13)) + 40);
++
++    return CGSizeMake(width, 24);
++}
+ 
+-    [[CPColor grayColor] setStroke];
+-    [CPBezierPath strokeRect:CGRectInset(bounds, 0.5, 0.5)];
++- (void)drawSkeleton:(CGRect)rect
++{
++    var data = [self dataObject],
++        bounds = [self bounds],
++        bezel = CGRectMake(1, MAX(1, (bounds.size.height - 22) / 2), bounds.size.width - 2, MIN(22, bounds.size.height - 2)),
++        items = UIBSplitList([data valueForKey:@"items"]),
++        title = items.length ? items[0] : UIBBindingHint(data);
++
++    UIBDrawBezel(bezel, 5, NO);
++
++    var arrowBox = CGRectMake(bezel.origin.x + bezel.size.width - 19, bezel.origin.y + 3, 16, bezel.size.height - 6);
++    UIBFillStroke(UIBRoundedPath(arrowBox, 4), UIBTheme("accent"), nil);
++
++    if ([data valueForKey:@"pullsDown"])
++        UIBDrawChevronDown(CGPointMake(CGRectGetMidX(arrowBox), CGRectGetMidY(arrowBox)), 3.5, [CPColor whiteColor]);
++    else
++        UIBDrawChevronUpDown(CGPointMake(CGRectGetMidX(arrowBox), CGRectGetMidY(arrowBox)), 3, [CPColor whiteColor]);
++
++    UIBDrawTextInRect(title || "", CGRectMake(bezel.origin.x + 8, bezel.origin.y, bezel.size.width - 32, bezel.size.height), items.length ? UIBFont(13) : UIBFont(11), items.length ? UIBTheme("text") : UIBTheme("placeholder"), "left");
+ }
+ 
+ @end
+ 
+ 
+-@implementation UISliderView (UIBRange)
++@implementation UISliderView (UIBTheme)
+ 
+ - (void)drawSkeleton:(CGRect)rect
+ {
+     var data = [self dataObject],
+-        bounds = CGRectInset([self bounds], 8, 0),
+-        midY = bounds.size.height / 2.0,
++        bounds = [self bounds],
++        midY = bounds.size.height / 2,
+         minValue = Number([data valueForKey:@"minValue"]) || 0,
+         maxValue = Number([data valueForKey:@"maxValue"]),
+         value = Number([data valueForKey:@"value"]) || 0;
+@@ -197,26 +613,56 @@
+     if (isNaN(maxValue) || maxValue <= minValue)
+         maxValue = minValue + 1;
+ 
+-    var fraction = MAX(0, MIN(1, (value - minValue) / (maxValue - minValue)));
++    var fraction = MAX(0, MIN(1, (value - minValue) / (maxValue - minValue))),
++        left = 9, width = MAX(0, bounds.size.width - 18),
++        knobX = left + width * fraction;
+ 
+-    var track = [CPBezierPath bezierPath];
+-    [track setLineWidth:3.0];
+-    [track moveToPoint:CGPointMake(bounds.origin.x, midY)];
+-    [track lineToPoint:CGPointMake(bounds.origin.x + bounds.size.width, midY)];
+-    [[CPColor grayColor] setStroke];
+-    [track stroke];
++    UIBFillStroke(UIBRoundedPath(CGRectMake(left, midY - 2, width, 4), 2), UIBTheme("track"), nil);
++    UIBFillStroke(UIBRoundedPath(CGRectMake(left, midY - 2, knobX - left, 4), 2), UIBTheme("accent"), nil);
+ 
+-    var knob = [CPBezierPath bezierPathWithOvalInRect:CGRectMake(bounds.origin.x + bounds.size.width * fraction - 8, midY - 8, 16, 16)];
+-    [[CPColor whiteColor] setFill];
+-    [knob fill];
+-    [[CPColor darkGrayColor] setStroke];
+-    [knob stroke];
++    var knob = [CPBezierPath bezierPathWithOvalInRect:CGRectMake(knobX - 8, midY - 8, 16, 16)];
++    UIBWithShadow(1, 3, UIBRGB(0, 0, 0, 0.3), function()
++    {
++        UIBFillStroke(knob, UIBTheme("controlFill"), nil);
++    });
++    UIBFillStroke(knob, nil, UIBTheme("controlBorder"), 0.5);
+ }
+ 
+ @end
+ 
+ 
+-@implementation UIProgressIndicatorView (UIBIndeterminate)
++@implementation UIStepperView (UIBTheme)
++
++- (void)drawSkeleton:(CGRect)rect
++{
++    var bounds = [self bounds],
++        width = MIN(19, bounds.size.width - 2),
++        height = MIN(26, bounds.size.height - 2),
++        body = CGRectMake(1 + (bounds.size.width - 2 - width) / 2, (bounds.size.height - height) / 2, width, height);
++
++    UIBDrawBezel(body, 5, NO);
++
++    var divider = [CPBezierPath bezierPath];
++    [divider moveToPoint:CGPointMake(body.origin.x + 3, CGRectGetMidY(body))];
++    [divider lineToPoint:CGPointMake(body.origin.x + body.size.width - 3, CGRectGetMidY(body))];
++    [UIBTheme("controlBorder") setStroke];
++    [divider stroke];
++
++    UIBDrawChevronUpDown(CGPointMake(CGRectGetMidX(body), CGRectGetMidY(body)), 3, UIBTheme("text"));
++}
++
++@end
++
++
++@implementation UIProgressIndicatorView (UIBTheme)
++
++- (CGSize)intrinsicContentSize
++{
++    if ([[self dataObject] valueForKey:@"isIndeterminate"] && ![self hasExplicitSizeForKey:@"width"])
++        return CGSizeMake(20, 20);
++
++    return [super intrinsicContentSize];
++}
+ 
+ - (void)drawSkeleton:(CGRect)rect
+ {
+@@ -224,65 +670,545 @@
+ 
+     if ([[self dataObject] valueForKey:@"isIndeterminate"])
+     {
+-        var size = MIN(bounds.size.width, bounds.size.height) - 4,
++        var size = MIN(bounds.size.width, bounds.size.height) - 2,
+             center = CGPointMake(bounds.size.width / 2, bounds.size.height / 2);
+ 
+-        for (var i = 0; i < 8; i++)
++        for (var i = 0; i < 12; i++)
+         {
+-            var angle = i * Math.PI / 4,
++            var angle = i * Math.PI / 6,
+                 spoke = [CPBezierPath bezierPath];
+-            [spoke setLineWidth:2];
+-            [spoke moveToPoint:CGPointMake(center.x + Math.cos(angle) * size * 0.25, center.y + Math.sin(angle) * size * 0.25)];
+-            [spoke lineToPoint:CGPointMake(center.x + Math.cos(angle) * size * 0.5, center.y + Math.sin(angle) * size * 0.5)];
+-            [[CPColor colorWithCalibratedWhite:0.2 alpha:0.2 + i * 0.1] setStroke];
++            [spoke setLineWidth:MAX(1.5, size / 10)];
++            [spoke moveToPoint:CGPointMake(center.x + Math.cos(angle) * size * 0.24, center.y + Math.sin(angle) * size * 0.24)];
++            [spoke lineToPoint:CGPointMake(center.x + Math.cos(angle) * size * 0.46, center.y + Math.sin(angle) * size * 0.46)];
++            [UIBRGB(60, 60, 67, 0.15 + i * 0.06) setStroke];
+             [spoke stroke];
+         }
+         return;
+     }
+ 
+-    [[CPColor controlColor] setFill];
+-    [CPBezierPath fillRect:bounds];
+-    [[CPColor alternateSelectedControlColor] setFill];
+-    [CPBezierPath fillRect:CGRectMake(0, 0, bounds.size.width * 0.5, bounds.size.height)];
+-    [[CPColor grayColor] setStroke];
+-    [CPBezierPath strokeRect:CGRectInset(bounds, 0.5, 0.5)];
++    var track = CGRectMake(1, bounds.size.height / 2 - 3, bounds.size.width - 2, 6);
++    UIBFillStroke(UIBRoundedPath(track, 3), UIBTheme("track"), nil);
++    UIBFillStroke(UIBRoundedPath(CGRectMake(track.origin.x, track.origin.y, track.size.width * 0.45, 6), 3), UIBTheme("accent"), nil);
+ }
+ 
+-- (CGSize)intrinsicContentSize
++@end
++
++
++@implementation UIDatePickerView (UIBTheme)
++
++- (void)drawSkeleton:(CGRect)rect
+ {
+-    if ([[self dataObject] valueForKey:@"isIndeterminate"] && ![self hasExplicitSizeForKey:@"width"])
+-        return CGSizeMake(20, 20);
++    var bounds = [self bounds],
++        data = [self dataObject];
++
++    if ([data valueForKey:@"style"] === "graphical" && bounds.size.height > 60)
++    {
++        var body = CGRectInset(bounds, 1, 1);
++        UIBFillStroke(UIBRoundedPath(body, 6), UIBTheme("controlFill"), UIBTheme("fieldBorder"), 1);
++        UIBDrawTextInRect("Oktober 2026", CGRectMake(8, 4, body.size.width - 16, 16), UIBFont(11, YES), UIBTheme("text"), "left");
++
++        var cell = MIN((body.size.width - 12) / 7, (body.size.height - 28) / 6);
++        for (var row = 0; row < 6; row++)
++            for (var col = 0; col < 7; col++)
++            {
++                var day = row * 7 + col + 1;
++                if (day > 31)
++                    continue;
++
++                var cellRect = CGRectMake(6 + col * cell, 24 + row * cell, cell, cell);
++                if (day === 19)
++                    UIBFillStroke([CPBezierPath bezierPathWithOvalInRect:CGRectInset(cellRect, 1, 1)], UIBTheme("accent"), nil);
++                UIBDrawTextInRect(String(day), cellRect, UIBFont(9), day === 19 ? [CPColor whiteColor] : UIBTheme("secondaryText"), "center");
++            }
++        return;
++    }
++
++    var height = MIN(22, bounds.size.height - 2),
++        field = CGRectMake(1, (bounds.size.height - height) / 2, bounds.size.width - 2, height);
++
++    UIBDrawFieldBezel(field, 4);
++    UIBDrawTextInRect(UIBBindingHint(data) || "19.10.2026", CGRectMake(7, field.origin.y, field.size.width - 30, height), UIBFont(13), UIBBindingHint(data) ? UIBTheme("placeholder") : UIBTheme("text"), "left");
+ 
+-    var size = [super intrinsicContentSize];
+-    return size;
++    // Calendar glyph
++    var icon = CGRectMake(field.origin.x + field.size.width - 19, field.origin.y + (height - 12) / 2, 13, 12);
++    UIBFillStroke(UIBRoundedPath(icon, 2), nil, UIBTheme("secondaryText"), 1);
++    [UIBTheme("secondaryText") setFill];
++    [CPBezierPath fillRect:CGRectMake(icon.origin.x, icon.origin.y, icon.size.width, 3)];
+ }
+ 
+ @end
+ 
+ 
+-@implementation UIDatePickerView (UIBStyle)
++@implementation UIImageViewView (UIBTheme)
+ 
+ - (void)drawSkeleton:(CGRect)rect
+ {
++    var bounds = CGRectInset([self bounds], 1, 1);
++    UIBFillStroke(UIBRoundedPath(bounds, 4), UIBRGB(242, 244, 247), UIBTheme("fieldBorder"), 1);
++
++    // A small picture glyph: sun and mountains
++    var size = MIN(bounds.size.width, bounds.size.height) * 0.5,
++        origin = CGPointMake(CGRectGetMidX(bounds) - size / 2, CGRectGetMidY(bounds) - size / 2);
++
++    if (size < 8)
++        return;
++
++    UIBFillStroke([CPBezierPath bezierPathWithOvalInRect:CGRectMake(origin.x + size * 0.62, origin.y + size * 0.1, size * 0.22, size * 0.22)], UIBRGB(255, 196, 0), nil);
++
++    var mountains = [CPBezierPath bezierPath];
++    [mountains moveToPoint:CGPointMake(origin.x, origin.y + size)];
++    [mountains lineToPoint:CGPointMake(origin.x + size * 0.35, origin.y + size * 0.4)];
++    [mountains lineToPoint:CGPointMake(origin.x + size * 0.6, origin.y + size * 0.75)];
++    [mountains lineToPoint:CGPointMake(origin.x + size * 0.75, origin.y + size * 0.55)];
++    [mountains lineToPoint:CGPointMake(origin.x + size, origin.y + size)];
++    [mountains closePath];
++    UIBFillStroke(mountains, UIBRGB(120, 170, 120), nil);
++}
++
++@end
++
++
++@implementation UITextViewView (UIBTheme)
++
++- (void)drawSkeleton:(CGRect)rect
++{
++    var bounds = CGRectInset([self bounds], 0.5, 0.5),
++        data = [self dataObject],
++        value = [data valueForKey:@"value"];
++
++    UIBFillStroke([CPBezierPath bezierPathWithRect:bounds], UIBTheme("controlFill"), UIBTheme("fieldBorder"), 1);
++
++    if (value)
++    {
++        var lines = String(value).split("\n");
++        for (var i = 0; i < lines.length && 6 + i * 16 < bounds.size.height - 12; i++)
++            UIBDrawTextInRect(lines[i], CGRectMake(6, 4 + i * 16, bounds.size.width - 12, 16), UIBFont(12), UIBTheme("text"), "left");
++        return;
++    }
++
++    // Faint text lines
++    for (var y = 10, i = 0; y < bounds.size.height - 8 && i < 8; y += 12, i++)
++    {
++        var width = (bounds.size.width - 16) * ((i % 3 === 2) ? 0.55 : 0.9);
++        UIBFillStroke(UIBRoundedPath(CGRectMake(8, y, width, 4), 2), UIBRGB(0, 0, 0, 0.06), nil);
++    }
++
++    var hint = UIBBindingHint(data);
++    if (hint)
++        UIBDrawTextInRect(hint, CGRectMake(8, bounds.size.height - 20, bounds.size.width - 16, 16), UIBFont(11), UIBTheme("placeholder"), "left");
++}
++
++@end
++
++
++@implementation UIScrollViewView (UIBTheme)
++
++- (void)drawSkeleton:(CGRect)rect
++{
++    var bounds = CGRectInset([self bounds], 0.5, 0.5),
++        data = [self dataObject];
++
++    UIBFillStroke([CPBezierPath bezierPathWithRect:bounds], UIBTheme("controlFill"), UIBTheme("fieldBorder"), 1);
++
++    // Overlay scrollers
++    if ([data valueForKey:@"hasVerticalScroller"] !== false && bounds.size.height > 30)
++        UIBFillStroke(UIBRoundedPath(CGRectMake(bounds.size.width - 7, 4, 4, MIN(60, bounds.size.height * 0.35)), 2), UIBRGB(0, 0, 0, 0.25), nil);
++    if ([data valueForKey:@"hasHorizontalScroller"] !== false && bounds.size.width > 30)
++        UIBFillStroke(UIBRoundedPath(CGRectMake(4, bounds.size.height - 7, MIN(80, bounds.size.width * 0.35), 4), 2), UIBRGB(0, 0, 0, 0.25), nil);
++}
++
++@end
++
++
++@implementation UISplitViewView (UIBTheme)
++
++- (void)drawSkeleton:(CGRect)rect
++{
++    // The panes draw themselves; the divider is drawn by the root box.
+     var bounds = CGRectInset([self bounds], 0.5, 0.5);
++    UIBFillStroke([CPBezierPath bezierPathWithRect:bounds], nil, UIBTheme("containerLine"), 1);
++}
+ 
+-    [[CPColor whiteColor] setFill];
++@end
++
++
++@implementation UITableViewView (UIBTheme)
++
++- (void)drawSkeleton:(CGRect)rect
++{
++    var bounds = [self bounds],
++        data = [self dataObject],
++        columns = UIBSplitList([data valueForKey:@"columns"]),
++        headerHeight = 22,
++        rowHeight = 20;
++
++    [UIBTheme("controlFill") setFill];
+     [CPBezierPath fillRect:bounds];
+-    [[CPColor grayColor] setStroke];
+-    [CPBezierPath strokeRect:bounds];
+ 
+-    if ([[self dataObject] valueForKey:@"style"] === "graphical" && bounds.size.height > 60)
++    for (var row = 1, y = headerHeight + rowHeight; y < bounds.size.height; row += 2, y += 2 * rowHeight)
+     {
+-        // A small month grid
+-        var cell = MIN((bounds.size.width - 8) / 7, (bounds.size.height - 24) / 6);
+-        for (var row = 0; row < 6; row++)
+-            for (var col = 0; col < 7; col++)
+-                UIBDrawText(String(row * 7 + col + 1 <= 31 ? row * 7 + col + 1 : ""), CGPointMake(4 + col * cell, 20 + row * cell), [CPFont systemFontOfSize:9], [CPColor darkGrayColor]);
+-        UIBDrawText("Month", CGPointMake(6, 3), [CPFont boldSystemFontOfSize:10], [CPColor blackColor]);
++        [UIBTheme("zebra") setFill];
++        [CPBezierPath fillRect:CGRectMake(0, y, bounds.size.width, rowHeight)];
++    }
++
++    [UIBTheme("header") setFill];
++    [CPBezierPath fillRect:CGRectMake(0, 0, bounds.size.width, headerHeight)];
++
++    var line = [CPBezierPath bezierPath];
++    [line moveToPoint:CGPointMake(0, headerHeight - 0.5)];
++    [line lineToPoint:CGPointMake(bounds.size.width, headerHeight - 0.5)];
++    [UIBTheme("controlBorder") setStroke];
++    [line stroke];
++
++    var x = 0,
++        columnWidth = columns.length ? MAX(50, bounds.size.width / columns.length) : bounds.size.width;
++
++    for (var i = 0; i < columns.length && x < bounds.size.width; i++)
++    {
++        UIBDrawTextInRect(columns[i], CGRectMake(x + 6, 0, columnWidth - 12, headerHeight), UIBFont(11, YES), UIBTheme("secondaryText"), "left");
++        x += columnWidth;
++
++        var divider = [CPBezierPath bezierPath];
++        [divider moveToPoint:CGPointMake(x - 0.5, 4)];
++        [divider lineToPoint:CGPointMake(x - 0.5, headerHeight - 4)];
++        [UIBTheme("controlBorder") setStroke];
++        [divider stroke];
++    }
++
++    var hint = UIBBindingHint(data);
++    if (hint && bounds.size.height > headerHeight + 30)
++        UIBDrawTextInRect(hint, CGRectMake(8, headerHeight + 4, bounds.size.width - 16, 16), UIBFont(11), UIBTheme("accent"), "left");
++}
++
++@end
++
++
++@implementation UIHSpaceView (UIBTheme)
++
++- (void)drawRect:(CGRect)rect
++{
++    if ([self isSelected])
++        UIBFillStroke([CPBezierPath bezierPathWithRect:[self bounds]], UIBTheme("accentSoft"), nil);
++
++    [self drawSkeleton:rect];
++
++    if ([self isSelected])
++    {
++        UIBFillStroke([CPBezierPath bezierPathWithRect:CGRectInset([self bounds], 0.5, 0.5)], nil, UIBTheme("accent"), 1);
++        [self drawHandles];
++    }
++}
++
++- (void)drawSkeleton:(CGRect)rect
++{
++    var bounds = [self bounds],
++        midY = bounds.size.height / 2,
++        expanding = UIBAlignKind([[self dataObject] valueForKey:@"halign"]) === "expand",
++        path = [CPBezierPath bezierPath];
++
++    if (bounds.size.width < 4)
++        return;
++
++    if (expanding)
++    {
++        // A spring
++        var steps = MAX(2, Math.floor((bounds.size.width - 8) / 6));
++        [path moveToPoint:CGPointMake(4, midY)];
++        for (var i = 1; i <= steps; i++)
++            [path lineToPoint:CGPointMake(4 + i * (bounds.size.width - 8) / steps, midY + ((i % 2) ? -3 : 3))];
++    }
++    else
++    {
++        // A measurement bar
++        [path moveToPoint:CGPointMake(1, midY - 4)];
++        [path lineToPoint:CGPointMake(1, midY + 4)];
++        [path moveToPoint:CGPointMake(1, midY)];
++        [path lineToPoint:CGPointMake(bounds.size.width - 1, midY)];
++        [path moveToPoint:CGPointMake(bounds.size.width - 1, midY - 4)];
++        [path lineToPoint:CGPointMake(bounds.size.width - 1, midY + 4)];
++    }
++
++    [path setLineWidth:1];
++    [UIBTheme("spacer") setStroke];
++    [path stroke];
++}
++
++@end
++
++
++@implementation UIVSpaceView (UIBTheme)
++
++- (void)drawRect:(CGRect)rect
++{
++    if ([self isSelected])
++        UIBFillStroke([CPBezierPath bezierPathWithRect:[self bounds]], UIBTheme("accentSoft"), nil);
++
++    [self drawSkeleton:rect];
++
++    if ([self isSelected])
++    {
++        UIBFillStroke([CPBezierPath bezierPathWithRect:CGRectInset([self bounds], 0.5, 0.5)], nil, UIBTheme("accent"), 1);
++        [self drawHandles];
++    }
++}
++
++- (void)drawSkeleton:(CGRect)rect
++{
++    var bounds = [self bounds],
++        midX = bounds.size.width / 2,
++        expanding = UIBAlignKind([[self dataObject] valueForKey:@"valign"]) === "expand",
++        path = [CPBezierPath bezierPath];
++
++    if (bounds.size.height < 4)
+         return;
++
++    if (expanding)
++    {
++        var steps = MAX(2, Math.floor((bounds.size.height - 8) / 6));
++        [path moveToPoint:CGPointMake(midX, 4)];
++        for (var i = 1; i <= steps; i++)
++            [path lineToPoint:CGPointMake(midX + ((i % 2) ? -3 : 3), 4 + i * (bounds.size.height - 8) / steps)];
+     }
++    else
++    {
++        [path moveToPoint:CGPointMake(midX - 4, 1)];
++        [path lineToPoint:CGPointMake(midX + 4, 1)];
++        [path moveToPoint:CGPointMake(midX, 1)];
++        [path lineToPoint:CGPointMake(midX, bounds.size.height - 1)];
++        [path moveToPoint:CGPointMake(midX - 4, bounds.size.height - 1)];
++        [path lineToPoint:CGPointMake(midX + 4, bounds.size.height - 1)];
++    }
++
++    [path setLineWidth:1];
++    [UIBTheme("spacer") setStroke];
++    [path stroke];
++}
++
++@end
++
++
++#pragma mark - Palette Icons
++
++/*!
++    Draws the palette icon of an element type into aRect (about 44×30).
++    The icons are miniatures of the canvas look above.
++*/
++UIBDrawElementIcon = function(aType, aRect)
++{
++    var x = aRect.origin.x, y = aRect.origin.y, w = aRect.size.width, h = aRect.size.height,
++        cx = x + w / 2, cy = y + h / 2;
++
++    switch (aType)
++    {
++        case "window":
++            var body = CGRectMake(x + 2, y + 2, w - 4, h - 4),
++                path = UIBRoundedPath(body, 4);
++            UIBFillStroke(path, UIBTheme("windowFill"), UIBTheme("windowBorder"), 1);
++            [UIBTheme("titleBarBottom") setFill];
++            [CPBezierPath fillRect:CGRectMake(body.origin.x + 1, body.origin.y + 1, body.size.width - 2, 7)];
++            var lights = [UIBTheme("red"), UIBTheme("yellow"), UIBTheme("green")];
++            for (var i = 0; i < 3; i++)
++                UIBFillStroke([CPBezierPath bezierPathWithOvalInRect:CGRectMake(body.origin.x + 3 + i * 5, body.origin.y + 2.5, 3.5, 3.5)], lights[i], nil);
++            break;
++
++        case "box":
++            UIBFillStroke(UIBRoundedPath(CGRectMake(x + 3, y + 6, w - 6, h - 9), 4), UIBRGB(0, 0, 0, 0.04), UIBTheme("secondaryText"), 1);
++            UIBFillStroke([CPBezierPath bezierPathWithRect:CGRectMake(x + 8, y + 3, 16, 6)], UIBTheme("tile"), nil);
++            UIBFillStroke(UIBRoundedPath(CGRectMake(x + 9, y + 4, 14, 4), 2), UIBTheme("secondaryText"), nil);
++            break;
++
++        case "tabView":
++            UIBFillStroke(UIBRoundedPath(CGRectMake(x + 2, y + 7, w - 4, h - 9), 3), UIBTheme("tile"), UIBTheme("secondaryText"), 1);
++            UIBFillStroke(UIBRoundedPath(CGRectMake(cx - 13, y + 3, 13, 8), 2), UIBTheme("accent"), nil);
++            UIBFillStroke(UIBRoundedPath(CGRectMake(cx, y + 3, 13, 8), 2), UIBTheme("tile"), UIBTheme("secondaryText"), 1);
++            break;
++
++        case "scrollView":
++            UIBFillStroke([CPBezierPath bezierPathWithRect:CGRectMake(x + 3, y + 2, w - 6, h - 4)], UIBTheme("tile"), UIBTheme("secondaryText"), 1);
++            UIBFillStroke(UIBRoundedPath(CGRectMake(x + w - 8, y + 5, 3, 10), 1.5), UIBTheme("secondaryText"), nil);
++            for (var i = 0; i < 3; i++)
++                UIBFillStroke(UIBRoundedPath(CGRectMake(x + 7, y + 6 + i * 6, w - 20, 2.5), 1), UIBRGB(0, 0, 0, 0.15), nil);
++            break;
++
++        case "splitView":
++            UIBFillStroke([CPBezierPath bezierPathWithRect:CGRectMake(x + 3, y + 2, w - 6, h - 4)], UIBTheme("tile"), UIBTheme("secondaryText"), 1);
++            UIBFillStroke([CPBezierPath bezierPathWithRect:CGRectMake(x + 3, y + 2, (w - 6) * 0.38, h - 4)], UIBRGB(0, 0, 0, 0.06), nil);
++            [UIBTheme("secondaryText") setFill];
++            [CPBezierPath fillRect:CGRectMake(x + 3 + (w - 6) * 0.38, y + 2, 1.5, h - 4)];
++            break;
++
++        case "tableView":
++            UIBFillStroke([CPBezierPath bezierPathWithRect:CGRectMake(x + 3, y + 2, w - 6, h - 4)], UIBTheme("tile"), UIBTheme("secondaryText"), 1);
++            [UIBTheme("header") setFill];
++            [CPBezierPath fillRect:CGRectMake(x + 4, y + 3, w - 8, 6)];
++            [UIBTheme("zebra") setFill];
++            [CPBezierPath fillRect:CGRectMake(x + 4, y + 15, w - 8, 5)];
++            [UIBTheme("controlBorder") setFill];
++            [CPBezierPath fillRect:CGRectMake(cx - 4, y + 3, 1, h - 6)];
++            [CPBezierPath fillRect:CGRectMake(x + 4, y + 9, w - 8, 1)];
++            break;
++
++        case "vbox":
++        case "hbox":
++            var vertical = aType === "vbox",
++                frame = CGRectMake(x + 4, y + 2, w - 8, h - 4),
++                dashed = [CPBezierPath bezierPathWithRect:frame];
++            [dashed setLineDash:[2, 2] count:2 phase:0];
++            UIBFillStroke(dashed, nil, UIBTheme("secondaryText"), 1);
++            for (var i = 0; i < 3; i++)
++            {
++                var item = vertical ? CGRectMake(frame.origin.x + 4, frame.origin.y + 3 + i * 8, frame.size.width - 8, 5)
++                                    : CGRectMake(frame.origin.x + 3 + i * ((frame.size.width - 6) / 3), frame.origin.y + 4, (frame.size.width - 6) / 3 - 3, frame.size.height - 8);
++                UIBFillStroke(UIBRoundedPath(item, 1.5), UIBTheme("accent"), nil);
++            }
++            break;
++
++        case "hspace":
++        case "vspace":
++            var spring = [CPBezierPath bezierPath],
++                horizontal = aType === "hspace";
++            if (horizontal)
++            {
++                [spring moveToPoint:CGPointMake(x + 5, cy - 6)]; [spring lineToPoint:CGPointMake(x + 5, cy + 6)];
++                [spring moveToPoint:CGPointMake(x + w - 5, cy - 6)]; [spring lineToPoint:CGPointMake(x + w - 5, cy + 6)];
++                [spring moveToPoint:CGPointMake(x + 7, cy)];
++                for (var i = 1; i <= 8; i++)
++                    [spring lineToPoint:CGPointMake(x + 7 + i * (w - 14) / 8, cy + ((i % 2) ? -4 : 4))];
++            }
++            else
++            {
++                [spring moveToPoint:CGPointMake(cx - 6, y + 2)]; [spring lineToPoint:CGPointMake(cx + 6, y + 2)];
++                [spring moveToPoint:CGPointMake(cx - 6, y + h - 2)]; [spring lineToPoint:CGPointMake(cx + 6, y + h - 2)];
++                [spring moveToPoint:CGPointMake(cx, y + 4)];
++                for (var i = 1; i <= 6; i++)
++                    [spring lineToPoint:CGPointMake(cx + ((i % 2) ? -4 : 4), y + 4 + i * (h - 8) / 6)];
++            }
++            [spring setLineWidth:1.5];
++            [UIBTheme("accent") setStroke];
++            [spring stroke];
++            break;
++
++        case "label":
++            UIBDrawTextInRect("Aa", CGRectMake(x, y, w, h), UIBFont(17, YES), UIBTheme("text"), "center");
++            break;
++
++        case "textField":
++        case "secureField":
++        case "comboBox":
++        case "searchField":
++        case "datePicker":
++            var field = CGRectMake(x + 2, cy - 8, w - 4, 16);
++            UIBDrawFieldBezel(field, aType === "searchField" ? 8 : 3);
++            if (aType === "textField")
++            {
++                [UIBTheme("text") setFill];
++                [CPBezierPath fillRect:CGRectMake(x + 7, cy - 5, 1, 10)];
++            }
++            else if (aType === "secureField")
++                for (var i = 0; i < 4; i++)
++                    UIBFillStroke([CPBezierPath bezierPathWithOvalInRect:CGRectMake(x + 7 + i * 6, cy - 2, 4, 4)], UIBTheme("text"), nil);
++            else if (aType === "searchField")
++                UIBDrawMagnifier(CGPointMake(x + 6, cy - 4), 8, UIBTheme("secondaryText"));
++            else if (aType === "comboBox")
++            {
++                var button = CGRectMake(x + w - 14, cy - 6, 10, 12);
++                UIBFillStroke(UIBRoundedPath(button, 2.5), UIBTheme("accent"), nil);
++                UIBDrawChevronDown(CGPointMake(CGRectGetMidX(button), CGRectGetMidY(button)), 2.5, [CPColor whiteColor]);
++            }
++            else
++            {
++                UIBDrawTextInRect("19.10.", CGRectMake(x + 5, cy - 8, w - 20, 16), UIBFont(8), UIBTheme("text"), "left");
++                UIBFillStroke(UIBRoundedPath(CGRectMake(x + w - 13, cy - 4, 8, 8), 1.5), nil, UIBTheme("secondaryText"), 1);
++            }
++            break;
++
++        case "textView":
++            UIBFillStroke([CPBezierPath bezierPathWithRect:CGRectMake(x + 4, y + 2, w - 8, h - 4)], UIBTheme("tile"), UIBTheme("secondaryText"), 1);
++            for (var i = 0; i < 4; i++)
++                UIBFillStroke(UIBRoundedPath(CGRectMake(x + 8, y + 6 + i * 5, (i === 3) ? (w - 16) * 0.5 : w - 16, 2), 1), UIBRGB(0, 0, 0, 0.3), nil);
++            break;
++
++        case "button":
++            UIBDrawBezel(CGRectMake(x + 3, cy - 8, w - 6, 16), 4, NO);
++            UIBFillStroke(UIBRoundedPath(CGRectMake(x + 12, cy - 1, w - 24, 2.5), 1), UIBTheme("text"), nil);
++            break;
++
++        case "checkBox":
++            var box = CGRectMake(cx - 8, cy - 8, 16, 16);
++            UIBFillStroke(UIBRoundedPath(box, 4), UIBTheme("accent"), UIBTheme("accentDark"), 1);
++            UIBDrawCheckMark(box, [CPColor whiteColor]);
++            break;
++
++        case "popUpButton":
++            var bezel = CGRectMake(x + 2, cy - 8, w - 4, 16);
++            UIBDrawBezel(bezel, 4, NO);
++            var arrows = CGRectMake(bezel.origin.x + bezel.size.width - 12, bezel.origin.y + 2, 10, 12);
++            UIBFillStroke(UIBRoundedPath(arrows, 2.5), UIBTheme("accent"), nil);
++            UIBDrawChevronUpDown(CGPointMake(CGRectGetMidX(arrows), CGRectGetMidY(arrows)), 2, [CPColor whiteColor]);
++            UIBFillStroke(UIBRoundedPath(CGRectMake(x + 7, cy - 1, w - 26, 2.5), 1), UIBTheme("text"), nil);
++            break;
++
++        case "stepper":
++            var stepper = CGRectMake(cx - 6, cy - 11, 12, 22);
++            UIBDrawBezel(stepper, 4, NO);
++            UIBDrawChevronUpDown(CGPointMake(cx, cy), 2.5, UIBTheme("text"));
++            break;
++
++        case "slider":
++            UIBFillStroke(UIBRoundedPath(CGRectMake(x + 3, cy - 1.5, w - 6, 3), 1.5), UIBTheme("track"), nil);
++            UIBFillStroke(UIBRoundedPath(CGRectMake(x + 3, cy - 1.5, w * 0.5 - 3, 3), 1.5), UIBTheme("accent"), nil);
++            var knob = [CPBezierPath bezierPathWithOvalInRect:CGRectMake(cx - 6, cy - 6, 12, 12)];
++            UIBWithShadow(1, 2, UIBRGB(0, 0, 0, 0.3), function() { UIBFillStroke(knob, UIBTheme("controlFill"), nil); });
++            UIBFillStroke(knob, nil, UIBTheme("controlBorder"), 0.5);
++            break;
++
++        case "progresIndicator":
++            UIBFillStroke(UIBRoundedPath(CGRectMake(x + 3, cy - 3, w - 6, 6), 3), UIBTheme("track"), nil);
++            UIBFillStroke(UIBRoundedPath(CGRectMake(x + 3, cy - 3, (w - 6) * 0.6, 6), 3), UIBTheme("accent"), nil);
++            break;
++
++        case "imageView":
++            UIBFillStroke(UIBRoundedPath(CGRectMake(x + 6, y + 2, w - 12, h - 4), 3), UIBRGB(242, 244, 247), UIBTheme("secondaryText"), 1);
++            UIBFillStroke([CPBezierPath bezierPathWithOvalInRect:CGRectMake(x + w - 17, y + 6, 5, 5)], UIBRGB(255, 196, 0), nil);
++            var hills = [CPBezierPath bezierPath];
++            [hills moveToPoint:CGPointMake(x + 7, y + h - 3)];
++            [hills lineToPoint:CGPointMake(x + 17, y + 11)];
++            [hills lineToPoint:CGPointMake(x + 24, y + 19)];
++            [hills lineToPoint:CGPointMake(x + 29, y + 14)];
++            [hills lineToPoint:CGPointMake(x + w - 7, y + h - 3)];
++            [hills closePath];
++            UIBFillStroke(hills, UIBRGB(120, 170, 120), nil);
++            break;
++
++        case "custom":
++            var custom = UIBRoundedPath(CGRectMake(x + 3, y + 3, w - 6, h - 6), 4);
++            [custom setLineDash:[3, 2] count:2 phase:0];
++            UIBFillStroke(custom, UIBRGB(140, 90, 205, 0.1), UIBRGB(140, 90, 205), 1);
++            UIBDrawTextInRect("</>", CGRectMake(x, y, w, h), UIBFont(11, YES), UIBRGB(110, 60, 170), "center");
++            break;
++
++        default:
++            UIBFillStroke(UIBRoundedPath(CGRectInset(aRect, 4, 4), 4), UIBTheme("controlFillLow"), UIBTheme("controlBorder"), 1);
++    }
++};
+ 
+-    UIBDrawText("31.12.2025", CGPointMake(5, (bounds.size.height - 14) / 2), UIBFont(), [CPColor darkGrayColor]);
++
++// Switching a split view between side by side and stacked re-lays out its panes.
++@implementation UISplitViewView (UIBOrientation)
++
++- (void)observeValueForKeyPath:(CPString)keyPath ofObject:(id)object change:(CPDictionary)change context:(id)context
++{
++    [super observeValueForKeyPath:keyPath ofObject:object change:change context:context];
++
++    if (keyPath === @"vertical")
++    {
++        var subviews = [self subviews];
++        for (var i = 0; i < subviews.length; i++)
++        {
++            [subviews[i] setNeedsLayout:YES];
++            [subviews[i] setNeedsDisplay:YES];
++        }
++    }
+ }
+ 
+ @end
+diff -ruN d/public/Frontend/UIBuilderConstants.j e/public/Frontend/UIBuilderConstants.j
+--- d/public/Frontend/UIBuilderConstants.j	2026-10-19 17:38:44.919159297 +0000
++++ e/public/Frontend/UIBuilderConstants.j	2026-10-19 20:27:08.335391093 +0000
+@@ -105,6 +105,9 @@
+ UIBStructuralKeys["rawChildren"] = true;
+ UIBStructuralKeys["rawItemsSignature"] = true;
+ UIBStructuralKeys["markupAttributeOrder"] = true;
++UIBStructuralKeys["leadingComments"] = true;
++UIBStructuralKeys["trailingComments"] = true;
++UIBStructuralKeys["kind"] = true;
+ 
+ // Normalizes Renaissance alignment values to min / center / max / expand.
+ UIBAlignKind = function(aValue)
+@@ -130,3 +133,24 @@
+ 
+ // The owner object of a Cappusance document ("#CPOwner").
+ UIBOwnerReference = "CPOwner";
++
++// --- Data model ---
++UIBDataModelDidChangeNotification = "UIBDataModelDidChangeNotification";
++
++// Bindings the inspector offers per element type.
++UIBBindingKeysForType = {
++    "tableView":        ["valueBinding"],
++    "popUpButton":      ["itemsBinding", "valueBinding", "enabledBinding"],
++    "comboBox":         ["itemsBinding", "valueBinding", "enabledBinding"],
++    "textField":        ["valueBinding", "enabledBinding"],
++    "searchField":      ["valueBinding"],
++    "secureField":      ["valueBinding", "enabledBinding"],
++    "label":            ["valueBinding"],
++    "checkBox":         ["valueBinding", "enabledBinding"],
++    "slider":           ["valueBinding", "enabledBinding"],
++    "stepper":          ["valueBinding", "enabledBinding"],
++    "datePicker":       ["valueBinding", "enabledBinding"],
++    "textView":         ["valueBinding"],
++    "button":           ["enabledBinding"],
++    "progresIndicator": ["valueBinding"]
++};
+diff -ruN d/public/Frontend/UIBuilderController.j e/public/Frontend/UIBuilderController.j
+--- d/public/Frontend/UIBuilderController.j	2026-10-19 17:38:44.918617242 +0000
++++ e/public/Frontend/UIBuilderController.j	2026-10-19 20:27:08.354634587 +0000
+@@ -175,6 +175,13 @@
+     CPArray           _markupOrder;         // top-level order of the imported document
+     CPArray           _unknownConnectors;   // connectors the builder does not model
+ 
++    // Data model (sort descriptors, array controllers, entities)
++    CPArray           _sortDescriptors;
++    CPArray           _arrayControllers;
++    CPArray           _entities;
++    CPArray           _modelConnectors;
++    id                _modelObjects;        // Set of all model objects, for undo tracking
++
+     // Interactive (mouse-drag) change tracking
+     int               _interactiveDepth;
+     CPArray           _interactiveSnapshot;
+@@ -221,6 +228,7 @@
+         _codec = [[CappusanceCodec alloc] initWithController:self];
+         _markupOrder = [];
+         _unknownConnectors = [];
++        [self _resetDataModel];
+     }
+     return self;
+ }
+@@ -292,7 +300,7 @@
+ 
+     // Only objects that are part of the document are tracked. Freshly built
+     // elements (not inserted yet) and detached ones are ignored.
+-    if (_elementsByID[[anObject objectForKey:@"id"]] !== anObject)
++    if (_elementsByID[[anObject objectForKey:@"id"]] !== anObject && !(_modelObjects && _modelObjects.has(anObject)))
+         return;
+ 
+     [[_undoManager prepareWithInvocationTarget:self] _setValue:oldValue forKey:aKey ofElement:anObject];
+@@ -333,7 +341,7 @@
+             return;
+ 
+         // Record the inverse manually, removeObjectForKey: bypasses setValue:forKey:
+-        if (UIBUndoSuppressionCount === 0 && _elementsByID[[anElement objectForKey:@"id"]] === anElement)
++        if (UIBUndoSuppressionCount === 0 && (_elementsByID[[anElement objectForKey:@"id"]] === anElement || _modelObjects.has(anElement)))
+             [[_undoManager prepareWithInvocationTarget:self] _setValue:current forKey:aKey ofElement:anElement];
+ 
+         [anElement removeObjectForKey:aKey];
+@@ -341,7 +349,10 @@
+     else
+         [anElement setValue:aValue forKey:aKey];
+ 
+-    [self _relayoutElement:[self parentOfElement:anElement]];
++    if (_modelObjects.has(anElement))
++        [self _postDataModelChange];
++    else
++        [self _relayoutElement:[self parentOfElement:anElement]];
+ }
+ 
+ - (void)_registerUndoForInsertionOfElement:(id)elementData
+@@ -1798,6 +1809,7 @@
+ 
+ - (void)_removeEverythingWithoutUndo
+ {
++    // (the data model is reset separately)
+     _elementsByID = {};
+     _ownerElement = nil;
+     _markupOrder = [];
+@@ -1840,10 +1852,12 @@
+     UIBPerformWithoutUndo(function()
+     {
+         [self _removeEverythingWithoutUndo];
++        [self _resetDataModel];
+         _elementCounter = 0;
+         _ownerElement = [self _newOwnerElement];
+         [self _insertTopLevelElementsWithoutUndo:[_ownerElement]];
+     });
++    [self _postDataModelChange];
+ 
+     [_undoManager removeAllActions];
+     [self setDocumentEdited:NO];
+@@ -1880,6 +1894,10 @@
+         _markupOrder = result.order;
+         _unknownConnectors = result.unknownConnectors;
+ 
++        // A file without data model keeps the current one (gui.gsmarkup + model.gsmarkup).
++        if (result.hasModel)
++            [self _setDataModelFromResult:result];
++
+         [_connectionsController addObjects:result.connections];
+         [_connectionsController rearrangeObjects];
+     });
+@@ -1945,6 +1963,25 @@
+ 
+ - (CPString)cappusanceMarkup
+ {
++    return [self cappusanceMarkupIncludingInterface:YES model:NO];
++}
++
++- (BOOL)hasDataModel
++{
++    return _sortDescriptors.length + _arrayControllers.length + _entities.length > 0;
++}
++
++- (BOOL)hasInterface
++{
++    var all = [_elementsController arrangedObjects];
++    for (var i = 0; i < all.length; i++)
++        if ([all[i] valueForKey:@"type"] === "window")
++            return YES;
++    return NO;
++}
++
++- (CPString)cappusanceMarkupIncludingInterface:(BOOL)includeInterface model:(BOOL)includeModel
++{
+     var windows = [],
+         all = [_elementsController arrangedObjects];
+ 
+@@ -1961,7 +1998,8 @@
+         if (ordered.indexOf(windows[i]) < 0)
+             ordered.push(windows[i]);
+ 
+-    return [_codec exportDocumentWithWindows:ordered order:_markupOrder connections:[self allConnections] unknownConnectors:_unknownConnectors];
++    return [_codec exportDocumentWithWindows:ordered order:_markupOrder connections:[self allConnections] unknownConnectors:_unknownConnectors
++                                       model:[self _dataModelSnapshot] includeInterface:includeInterface includeModel:includeModel];
+ }
+ 
+ // Kept for compatibility with the earlier menu commands.
+@@ -2140,6 +2178,300 @@
+     }
+ }
+ 
++#pragma mark -
++#pragma mark Data Model
++
++- (void)_resetDataModel
++{
++    _sortDescriptors = [];
++    _arrayControllers = [];
++    _entities = [];
++    _modelConnectors = [];
++    _modelObjects = new Set();
++}
++
++- (void)_rebuildModelObjectSet
++{
++    _modelObjects = new Set(_sortDescriptors.concat(_arrayControllers, _entities));
++}
++
++- (void)_postDataModelChange
++{
++    [[CPNotificationCenter defaultCenter] postNotificationName:UIBDataModelDidChangeNotification object:self];
++}
++
++- (void)_setDataModelFromResult:(JSObject)result
++{
++    _sortDescriptors = result.sortDescriptors.slice();
++    _arrayControllers = result.arrayControllers.slice();
++    _entities = result.entities.slice();
++    _modelConnectors = result.modelConnectors.slice();
++    [self _rebuildModelObjectSet];
++    [self _postDataModelChange];
++}
++
++- (JSObject)_dataModelSnapshot
++{
++    return { sortDescriptors: _sortDescriptors, arrayControllers: _arrayControllers, entities: _entities, connectors: _modelConnectors };
++}
++
++- (CPArray)sortDescriptors   { return _sortDescriptors; }
++- (CPArray)arrayControllers  { return _arrayControllers; }
++- (CPArray)entities          { return _entities; }
++
++- (CPString)_listKeyForKind:(CPString)aKind
++{
++    return { "sortDescriptor": "sortDescriptors", "arrayController": "arrayControllers", "entity": "entities" }[aKind];
++}
++
++- (CPArray)_modelListForKey:(CPString)aKey
++{
++    if (aKey === "sortDescriptors") return _sortDescriptors;
++    if (aKey === "arrayControllers") return _arrayControllers;
++    return _entities;
++}
++
++// Replaces a whole list (add/remove/reorder). Undo restores the old list.
++- (void)_replaceModelListForKey:(CPString)aKey with:(CPArray)aList
++{
++    var old = [self _modelListForKey:aKey].slice();
++
++    if (aKey === "sortDescriptors") _sortDescriptors = aList.slice();
++    else if (aKey === "arrayControllers") _arrayControllers = aList.slice();
++    else _entities = aList.slice();
++
++    [self _rebuildModelObjectSet];
++
++    if (UIBUndoSuppressionCount === 0)
++    {
++        [[_undoManager prepareWithInvocationTarget:self] _replaceModelListForKey:aKey with:old];
++        [self _noteDocumentChanged];
++    }
++
++    [self _postDataModelChange];
++}
++
++- (id)modelObjectOfKind:(CPString)aKind named:(CPString)aName
++{
++    var list = [self _modelListForKey:[self _listKeyForKind:aKind]];
++    for (var i = 0; i < list.length; i++)
++        if ([list[i] valueForKey:@"name"] === aName)
++            return list[i];
++    return nil;
++}
++
++- (id)addModelObjectOfKind:(CPString)aKind
++{
++    var base = { "sortDescriptor": "by_", "arrayController": "new_controller", "entity": "new_entity" }[aKind],
++        name = base,
++        counter = 1;
++
++    while ([self modelObjectOfKind:aKind named:name])
++        name = base + (++counter);
++
++    var object = UIBNewModelObject(aKind);
++    [object setValue:name forKey:@"name"];
++
++    if (aKind === "entity")
++        [object setValue:[UIBNewModelItem({ name: "id", primaryKey: "YES" })] forKey:@"columns"];
++    if (aKind === "sortDescriptor")
++        [object setValue:"name" forKey:@"key"];
++    if (aKind === "arrayController" && _entities.length)
++        [object setValue:[_entities[0] valueForKey:@"name"] forKey:@"entity"];
++
++    var listKey = [self _listKeyForKind:aKind];
++    [self _replaceModelListForKey:listKey with:[self _modelListForKey:listKey].concat([object])];
++    [self _setActionName:@"Add " + aKind];
++    return object;
++}
++
++- (void)removeModelObjects:(CPArray)objects
++{
++    if (!objects || !objects.length)
++        return;
++
++    var listKey = [self _listKeyForKind:[objects[0] valueForKey:@"kind"]],
++        remaining = [self _modelListForKey:listKey].filter(function(o) { return objects.indexOf(o) < 0; });
++
++    [self _replaceModelListForKey:listKey with:remaining];
++    [self _setActionName:@"Delete"];
++}
++
++// Sets one property of a model object (undoable). Renaming an entity or a
++// sort descriptor also updates the array controllers that use it.
++- (void)setModelValue:(id)aValue forKey:(CPString)aKey ofObject:(id)anObject
++{
++    if (!_modelObjects.has(anObject))
++        return;
++
++    var kind = [anObject valueForKey:@"kind"],
++        oldValue = [anObject valueForKey:aKey];
++
++    if (aKey === "name")
++    {
++        aValue = String(aValue || "").trim();
++        if (!aValue.length || aValue === oldValue)
++            return;
++
++        for (var i = 0; i < _arrayControllers.length; i++)
++        {
++            if (kind === "entity" && [_arrayControllers[i] valueForKey:@"entity"] === oldValue)
++                [_arrayControllers[i] setValue:aValue forKey:@"entity"];
++            if (kind === "sortDescriptor" && [_arrayControllers[i] valueForKey:@"sortDescriptor"] === oldValue)
++                [_arrayControllers[i] setValue:aValue forKey:@"sortDescriptor"];
++        }
++    }
++
++    if (aValue === "" || aValue === nil)
++        [self _setValue:nil forKey:aKey ofElement:anObject];
++    else
++        [anObject setValue:aValue forKey:aKey];
++
++    [self _setActionName:aKey === "name" ? @"Rename" : @"Change " + aKey];
++    [self _postDataModelChange];
++}
++
++// Columns and relationships are replaced as a whole (undoable).
++- (void)setModelItems:(CPArray)items forKey:(CPString)aKey ofEntity:(id)anEntity
++{
++    if (!_modelObjects.has(anEntity))
++        return;
++
++    [anEntity setValue:items.slice() forKey:aKey];
++    [self _setActionName:aKey === "columns" ? @"Edit Columns" : @"Edit Relationships"];
++    [self _postDataModelChange];
++}
++
++/*!
++    Replaces the data model with the one in the given markup (undoable).
++    The interface stays as it is.
++*/
++- (CPString)importDataModelFromMarkup:(CPString)aString
++{
++    var result = [_codec parseMarkup:aString ownerData:_ownerElement || [self _newOwnerElement]];
++
++    if (result.error)
++        return result.error;
++
++    if (!result.hasModel)
++        return "The markup contains no sort descriptors, array controllers or entities.";
++
++    [self _replaceModelListForKey:@"sortDescriptors" with:result.sortDescriptors];
++    [self _replaceModelListForKey:@"arrayControllers" with:result.arrayControllers];
++    [self _replaceModelListForKey:@"entities" with:result.entities];
++    _modelConnectors = result.modelConnectors.slice();
++    [self _setActionName:@"Import Data Model"];
++
++    return nil;
++}
++
++#pragma mark -
++#pragma mark Bindings Support
++
++// How the interface refers to a controller: through the owner's outlet if it has one.
++- (CPString)referenceForArrayController:(id)aController
++{
++    var outlet = [aController valueForKey:@"ownerOutlet"];
++    return outlet ? "#CPOwner." + outlet : "#" + [aController valueForKey:@"name"];
++}
++
++// The array controller a binding path starts with, or nil.
++- (id)arrayControllerForBinding:(CPString)aBinding
++{
++    var path = String(aBinding || "").replace(/^#/, "");
++    if (!path.length)
++        return nil;
++
++    for (var i = 0; i < _arrayControllers.length; i++)
++    {
++        var controller = _arrayControllers[i],
++            outlet = [controller valueForKey:@"ownerOutlet"],
++            name = [controller valueForKey:@"name"];
++
++        if (outlet && (path === "CPOwner." + outlet || path.indexOf("CPOwner." + outlet + ".") === 0))
++            return controller;
++        if (name && (path === name || path.indexOf(name + ".") === 0))
++            return controller;
++    }
++
++    return nil;
++}
++
++- (CPArray)columnNamesForArrayController:(id)aController
++{
++    var entity = [self modelObjectOfKind:@"entity" named:[aController valueForKey:@"entity"]];
++    if (!entity)
++        return [];
++
++    return ([entity valueForKey:@"columns"] || []).map(function(column) { return column.attributes.name; }).filter(function(n) { return !!n; });
++}
++
++// Values offered in the inspector's binding fields.
++- (CPArray)bindingSuggestionsForKey:(CPString)aBindingKey elementType:(CPString)aType
++{
++    var result = [];
++
++    for (var i = 0; i < _arrayControllers.length; i++)
++    {
++        var controller = _arrayControllers[i],
++            reference = [self referenceForArrayController:controller],
++            columns = [self columnNamesForArrayController:controller];
++
++        if (aBindingKey === "valueBinding" && aType === "tableView")
++            result.push(reference);
++        else if (aBindingKey === "itemsBinding")
++            columns.forEach(function(c) { result.push(reference + ".arrangedObjects." + c); });
++        else if (aBindingKey === "enabledBinding")
++            result.push(reference + ".selection.@count");
++        else
++            columns.forEach(function(c) { result.push(reference + ".selection." + c); });
++    }
++
++    return result;
++}
++
++/*!
++    Sets the columns of a table view to the columns of the entity of the
++    array controller it is bound to. Returns an error message or nil.
++*/
++- (CPString)takeTableColumnsFromEntityForElement:(id)anElement
++{
++    var extras = [anElement valueForKey:@"extraAttributes"] || {},
++        controller = [self arrayControllerForBinding:extras.valueBinding];
++
++    if (!controller)
++        return "Bind the table view to an array controller first (valueBinding).";
++
++    var columns = [self columnNamesForArrayController:controller];
++    if (!columns.length)
++        return "The entity of " + [controller valueForKey:@"name"] + " has no columns.";
++
++    [anElement setValue:columns.join(", ") forKey:@"columns"];
++    [self _setActionName:@"Columns from Entity"];
++    return nil;
++}
++
++/*!
++    Inserts a scroll view with a table view bound to the controller, with one
++    column per entity column, next to the selection (or in a new window).
++*/
++- (id)insertTableForArrayController:(id)aController
++{
++    var scrollView = [self _newElementDataOfType:@"scrollView"],
++        tableView = [self _newElementDataOfType:@"tableView"],
++        root = [scrollView valueForKey:@"children"][0],
++        columns = [self columnNamesForArrayController:aController];
++
++    [tableView setValue:columns.join(", ") forKey:@"columns"];
++    [tableView setValue:{ valueBinding: [self referenceForArrayController:aController], zebra: "YES" } forKey:@"extraAttributes"];
++    [root valueForKey:@"children"].push(tableView);
++
++    [self _insertElementsNearSelection:[scrollView]];
++    [self _selectElements:[tableView]];
++    [self _setActionName:@"Insert Table"];
++    return tableView;
++}
++
+ @end
+ 
+ @implementation CPString (UIBAdditions)
+diff -ruN d/public/Frontend/UIHBoxView.j e/public/Frontend/UIHBoxView.j
+--- d/public/Frontend/UIHBoxView.j	2026-10-19 17:38:44.918954840 +0000
++++ e/public/Frontend/UIHBoxView.j	2026-10-19 20:33:13.068653147 +0000
+@@ -73,24 +73,27 @@
+ 
+     if ([self isSelected])
+     {
++        UIBFillStroke([CPBezierPath bezierPathWithRect:CGRectInset([self bounds], 1, 1)], nil, UIBTheme("accent"), 2);
+         [self drawHandles];
+     }
+ }
+ 
+ - (void)drawSkeleton:(CGRect)rect
+ {
+-    var bounds = [self bounds];
+-    var path = [CPBezierPath bezierPathWithRect:CGRectInset(bounds, 0.5, 0.5)];
+-    [[[CPColor grayColor] colorWithAlphaComponent:0.6] setStroke];
+-    [path setLineWidth:[self isSelected] ? 3.0 : 1.0];
+-    [path setLineDash:[2,2] count:2 phase:0];
+-    [path stroke];
++    var bounds = [self bounds],
++        data = [self dataObject],
++        isRoot = !!NO,
++        path = [CPBezierPath bezierPathWithRect:CGRectInset(bounds, 0.5, 0.5)];
+ 
+     if (_isDropTarget)
+     {
+-        [[[CPColor yellowColor] colorWithAlphaComponent:0.5] setFill];
+-        [CPBezierPath fillRect:bounds];
++        UIBFillStroke(path, UIBTheme("accentSoft"), UIBTheme("accent"), 2);
++        return;
+     }
++
++    // Boxes are only hinted at: a fine dashed outline (fainter for a window's root box).
++    [path setLineDash:[3, 3] count:2 phase:0];
++    UIBFillStroke(path, nil, UIBTheme(isRoot ? "rootLine" : "containerLine"), 1);
+ }
+ 
+ - (void)setAsDropTarget:(BOOL)isDropTarget
+diff -ruN d/public/Frontend/UIVBoxView.j e/public/Frontend/UIVBoxView.j
+--- d/public/Frontend/UIVBoxView.j	2026-10-19 17:38:44.919077290 +0000
++++ e/public/Frontend/UIVBoxView.j	2026-10-19 20:33:13.069049226 +0000
+@@ -1,5 +1,6 @@
+ 
+ @class UIElementView;
++@class UISplitViewView;
+ 
+ @implementation UIVBoxView : UIElementView
+ {
+@@ -63,16 +64,23 @@
+     return CGRectInset([self bounds], UIBStackPadding, UIBStackPadding);
+ }
+ 
++// The root box of a vertical split view lays its panes out side by side.
++- (BOOL)_uib_isHorizontalSplit
++{
++    return !![[self dataObject] valueForKey:@"isRootVBox"] && [[self superview] isKindOfClass:[UISplitViewView class]] &&
++           !![[[self superview] dataObject] valueForKey:@"vertical"];
++}
++
+ - (void)layoutSubviews
+ {
+     [super layoutSubviews];
+-    UIBLayoutStack([self subviews], [self stackRect], YES);
++    UIBLayoutStack([self subviews], [self stackRect], ![self _uib_isHorizontalSplit]);
+ }
+ 
+ // The size of the stacked content, used when this box sits in another box.
+ - (CGSize)intrinsicContentSize
+ {
+-    var size = UIBFittingStackSize([self subviews], YES);
++    var size = UIBFittingStackSize([self subviews], ![self _uib_isHorizontalSplit]);
+     return CGSizeMake(MAX(20, size.width + 2 * UIBStackPadding), MAX(20, size.height + 2 * UIBStackPadding));
+ }
+ 
+@@ -82,33 +90,47 @@
+ 
+     if ([self isSelected])
+     {
++        UIBFillStroke([CPBezierPath bezierPathWithRect:CGRectInset([self bounds], 1, 1)], nil, UIBTheme("accent"), 2);
+         [self drawHandles];
+     }
+ 
+     if (_isRubbing)
+     {
+         var rubber = CGRectUnion(CGRectMake(_rubberStart.x, _rubberStart.y, 0.1, 0.1), CGRectMake(_rubberEnd.x, _rubberEnd.y, 0.1, 0.1));
+-        [[[[CPColor alternateSelectedControlColor] colorWithAlphaComponent:0.2] setFill]];
+-        [CPBezierPath fillRect:rubber];
+-        [[CPColor alternateSelectedControlColor] setStroke];
+-        [CPBezierPath setDefaultLineWidth:1.0];
+-        [CPBezierPath strokeRect:rubber];
++        UIBFillStroke([CPBezierPath bezierPathWithRect:rubber], UIBTheme("accentSoft"), UIBTheme("accent"), 1);
+     }
+ }
+ 
+ - (void)drawSkeleton:(CGRect)rect
+ {
+-    var bounds = [self bounds];
+-    var path = [CPBezierPath bezierPathWithRect:CGRectInset(bounds, 0.5, 0.5)];
+-    [[[CPColor grayColor] colorWithAlphaComponent:[[self dataObject] valueForKey:@"isRootVBox"] ? 0.25 : 0.6] setStroke];
+-    [path setLineWidth:[self isSelected] ? 3.0 : 1.0];
+-    [path setLineDash:[2,2] count:2 phase:0];
+-    [path stroke];
++    var bounds = [self bounds],
++        data = [self dataObject],
++        isRoot = !![data valueForKey:@"isRootVBox"],
++        path = [CPBezierPath bezierPathWithRect:CGRectInset(bounds, 0.5, 0.5)];
+ 
+     if (_isDropTarget)
+     {
+-        [[[CPColor yellowColor] colorWithAlphaComponent:0.5] setFill];
+-        [CPBezierPath fillRect:bounds];
++        UIBFillStroke(path, UIBTheme("accentSoft"), UIBTheme("accent"), 2);
++        return;
++    }
++
++    // Boxes are only hinted at: a fine dashed outline (fainter for a window's root box).
++    [path setLineDash:[3, 3] count:2 phase:0];
++    UIBFillStroke(path, nil, UIBTheme(isRoot ? "rootLine" : "containerLine"), 1);
++
++    // In a split view the panes sit side by side (vertical) or stacked: draw the dividers.
++    if (isRoot && [[self superview] isKindOfClass:[UISplitViewView class]])
++    {
++        var panes = UIBLayoutViews([self subviews]),
++            sideBySide = !![[[self superview] dataObject] valueForKey:@"vertical"];
++
++        for (var i = 1; i < panes.length; i++)
++        {
++            var frame = [panes[i] frame],
++                divider = sideBySide ? CGRectMake(frame.origin.x - 1, 0, 2, bounds.size.height) : CGRectMake(0, frame.origin.y - 1, bounds.size.width, 2);
++            [UIBTheme("controlBorder") setFill];
++            [CPBezierPath fillRect:divider];
++        }
+     }
+ }
+ 

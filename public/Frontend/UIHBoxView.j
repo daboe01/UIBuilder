@@ -73,24 +73,27 @@
 
     if ([self isSelected])
     {
+        UIBFillStroke([CPBezierPath bezierPathWithRect:CGRectInset([self bounds], 1, 1)], nil, UIBTheme("accent"), 2);
         [self drawHandles];
     }
 }
 
 - (void)drawSkeleton:(CGRect)rect
 {
-    var bounds = [self bounds];
-    var path = [CPBezierPath bezierPathWithRect:CGRectInset(bounds, 0.5, 0.5)];
-    [[[CPColor grayColor] colorWithAlphaComponent:0.6] setStroke];
-    [path setLineWidth:[self isSelected] ? 3.0 : 1.0];
-    [path setLineDash:[2,2] count:2 phase:0];
-    [path stroke];
+    var bounds = [self bounds],
+        data = [self dataObject],
+        isRoot = !!NO,
+        path = [CPBezierPath bezierPathWithRect:CGRectInset(bounds, 0.5, 0.5)];
 
     if (_isDropTarget)
     {
-        [[[CPColor yellowColor] colorWithAlphaComponent:0.5] setFill];
-        [CPBezierPath fillRect:bounds];
+        UIBFillStroke(path, UIBTheme("accentSoft"), UIBTheme("accent"), 2);
+        return;
     }
+
+    // Boxes are only hinted at: a fine dashed outline (fainter for a window's root box).
+    [path setLineDash:[3, 3] count:2 phase:0];
+    UIBFillStroke(path, nil, UIBTheme(isRoot ? "rootLine" : "containerLine"), 1);
 }
 
 - (void)setAsDropTarget:(BOOL)isDropTarget

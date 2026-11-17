@@ -1,9 +1,10 @@
-<img width="1328" height="834" alt="EspressoUI Builder: canvas, inspector and element library" src="https://github.com/user-attachments/assets/77daa818-e19e-44cd-a819-c36125ab49c9" />
 
 # EspressoUI Builder ☕️
 
 **A visual interface builder for Cappuccino, written in Cappuccino.**
 Design windows with Cappusance's box layout, wire up outlets and actions, define your data model, try the result with real Cappuccino views, and get clean Cappusance markup (`.gsmarkup`) plus the matching Objective-J controller class out of it.
+
+<img width="1171" height="838" alt="Bildschirmfoto 2026-11-17 um 19 51 34" src="https://github.com/user-attachments/assets/88613bce-7f35-4c55-a840-9b0e929aeeaa" />
 
 ---
 

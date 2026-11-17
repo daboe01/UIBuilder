@@ -132,10 +132,10 @@ EspressoUI is a regular Cappuccino application in `public/Frontend`.
 
 ### 🔜 Next
 - [ ] Save to and open from project files on a server
-- [ ] Generate Objective-J outlet and action stubs for the File's Owner class
-- [ ] Native counterparts for all elements in **Run**
+- [x] Generate Objective-J outlet and action stubs for the File's Owner class
+- [x] Native counterparts for all elements in **Run**
 - [ ] German translation of the builder UI
 
 ## License
 
-© 2025 Daniel Boehringer. All rights reserved.
+© 2025-2026 Daniel Boehringer. All rights reserved.

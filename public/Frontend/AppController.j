@@ -781,7 +781,7 @@ var UIBAutosaveKey = "UIBuilder.autosave.v1",
 - (void)createInspector
 {
     var inspectorPanel = [[CPPanel alloc] initWithContentRect:CGRectMake(20, 40, 330, 580)
-                                                  styleMask:CPTitledWindowMask | CPClosableWindowMask];
+                                                  styleMask:CPHUDBackgroundWindowMask | CPTitledWindowMask | CPClosableWindowMask];
     [inspectorPanel setTitle:UIBLocalized(@"Inspector")];
     [inspectorPanel setFloatingPanel:YES];
     [inspectorPanel setDelegate:self];

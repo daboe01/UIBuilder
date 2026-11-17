@@ -111,6 +111,24 @@
 @end
 
 
+// HUD colors
+var UIBHUDLabelColor = nil,
+    UIBHUDSecondaryColor = nil;
+
+function UIBHUDLabel()
+{
+    if (!UIBHUDLabelColor)
+        UIBHUDLabelColor = [CPColor colorWithCalibratedWhite:0.82 alpha:1.0];
+    return UIBHUDLabelColor;
+}
+
+function UIBHUDSecondary()
+{
+    if (!UIBHUDSecondaryColor)
+        UIBHUDSecondaryColor = [CPColor colorWithCalibratedWhite:0.6 alpha:1.0];
+    return UIBHUDSecondaryColor;
+}
+
 var UIBInspectorWidth = 330,
     UIBInspectorHeight = 580,
     UIBInspectorLabelWidth = 112,
@@ -150,7 +168,9 @@ var UIBKeyLabels = {
     UIBuilderController _builderController @accessors(property=builderController);
     CPPanel             _panel @accessors(property=panel);
 
-    CPTabView           _tabView;
+    CPSegmentedControl  _tabControl;
+    CPView              _tabContainer;
+    CPArray             _tabViews;
     CPView              _propertiesView;
     CPScrollView        _propertiesScrollView;
     CPView              _layoutView;
@@ -193,7 +213,7 @@ var UIBKeyLabels = {
     [label setDrawsBackground:NO];
     [label setEditable:NO];
     [label setSelectable:NO];
-    [label setTextColor:[CPColor colorWithCalibratedWhite:0.35 alpha:1.0]];
+    [label setTextColor:UIBHUDLabel()];
     [label setFont:[CPFont systemFontOfSize:12]];
     [label setAlignment:CPRightTextAlignment];
     return label;
@@ -225,9 +245,30 @@ var UIBKeyLabels = {
     [_builderController addObserver:self forKeyPath:@"elementsController.selectionIndexes" options:CPKeyValueObservingOptionNew context:nil];
     [_builderController addObserver:self forKeyPath:@"connectionsController.arrangedObjects" options:CPKeyValueObservingOptionNew context:nil];
 
-    _tabView = [[CPTabView alloc] initWithFrame:[[_panel contentView] bounds]];
-    [_tabView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
-    [_tabView setDelegate:self];
+    // A HUD: tabs are a segmented control over a transparent content area
+    // (the standard tab view draws a light box that does not fit a HUD).
+    var contentBounds = [[_panel contentView] bounds],
+        tabTitles = ["Properties", "Layout", "Attributes", "Connections"];
+
+    _tabControl = [[CPSegmentedControl alloc] initWithFrame:CGRectMake(0, 8, 300, 24)];
+    [_tabControl setSegmentCount:tabTitles.length];
+    for (var i = 0; i < tabTitles.length; i++)
+    {
+        [_tabControl setLabel:UIBLocalized(tabTitles[i]) forSegment:i];
+        [_tabControl setWidth:(i === 3 ? 84 : 72) forSegment:i];
+    }
+    [_tabControl setSelectedSegment:0];
+    [_tabControl setTarget:self];
+    [_tabControl setAction:@selector(selectInspectorTab:)];
+    // (CPSegmentedControl has no -sizeToFit: the width is the sum of the segments.)
+    [_tabControl setFrameSize:CGSizeMake(3 * 72 + 84 + 2, 24)];
+    [_tabControl setFrameOrigin:CGPointMake(MAX(4, (contentBounds.size.width - [_tabControl frame].size.width) / 2), 8)];
+    [_tabControl setAutoresizingMask:CPViewMinXMargin | CPViewMaxXMargin];
+    [[_panel contentView] addSubview:_tabControl];
+
+    _tabContainer = [[CPView alloc] initWithFrame:CGRectMake(0, 40, contentBounds.size.width, contentBounds.size.height - 40)];
+    [_tabContainer setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
+    [[_panel contentView] addSubview:_tabContainer];
 
     // Properties (scrollable: some elements have many)
     var propertiesContainer = [self _tabContentView];
@@ -235,6 +276,9 @@ var UIBKeyLabels = {
     [_propertiesScrollView setAutoresizingMask:CPViewWidthSizable | CPViewHeightSizable];
     [_propertiesScrollView setHasHorizontalScroller:NO];
     [_propertiesScrollView setAutohidesScrollers:YES];
+    if ([_propertiesScrollView respondsToSelector:@selector(setDrawsBackground:)])
+        [_propertiesScrollView setDrawsBackground:NO];
+    [[_propertiesScrollView contentView] setBackgroundColor:[CPColor clearColor]];
     _propertiesView = [[CPView alloc] initWithFrame:CGRectMake(0, 0, [propertiesContainer bounds].size.width - 16, 400)];
     [_propertiesView setAutoresizingMask:CPViewWidthSizable];
     [_propertiesScrollView setDocumentView:_propertiesView];
@@ -244,21 +288,17 @@ var UIBKeyLabels = {
     _attributesView = [self _tabContentView];
     _connectionsView = [self _tabContentView];
 
-    var tabs = [["properties", "Properties", propertiesContainer], ["layout", "Layout", _layoutView],
-                ["attributes", "Attributes", _attributesView], ["connections", "Connections", _connectionsView]];
+    _tabViews = [propertiesContainer, _layoutView, _attributesView, _connectionsView];
 
-    for (var i = 0; i < tabs.length; i++)
+    for (var i = 0; i < _tabViews.length; i++)
     {
-        var item = [[CPTabViewItem alloc] initWithIdentifier:tabs[i][0]];
-        [item setLabel:UIBLocalized(tabs[i][1])];
-        [item setView:tabs[i][2]];
-        [_tabView addTabViewItem:item];
+        [_tabViews[i] setFrame:[_tabContainer bounds]];
+        [_tabViews[i] setHidden:(i !== 0)];
+        [_tabContainer addSubview:_tabViews[i]];
     }
 
     [self _buildAttributesTab];
     [self _buildConnectionsTab];
-
-    [_panel setContentView:_tabView];
 
     [self updateInspector];
 }
@@ -552,7 +592,7 @@ var UIBKeyLabels = {
     var label = [self _labelWithString:aTitle frame:CGRectMake(8, y, [aView bounds].size.width - 16, 18)];
     [label setAlignment:CPLeftTextAlignment];
     [label setFont:[CPFont boldSystemFontOfSize:11]];
-    [label setTextColor:[CPColor grayColor]];
+    [label setTextColor:UIBHUDSecondary()];
     [label setAutoresizingMask:CPViewWidthSizable];
     [aView addSubview:label];
 }
@@ -718,6 +758,7 @@ var UIBKeyLabels = {
         y += 22;
 
         _fixedWidthBox = [CPCheckBox checkBoxWithTitle:UIBLocalized(@"Fixed")];
+        [_fixedWidthBox setTextColor:UIBHUDLabel()];
         [_fixedWidthBox setFrameOrigin:CGPointMake(8, y + 4)];
         [_fixedWidthBox setTarget:self];
         [_fixedWidthBox setAction:@selector(toggleFixedSize:)];
@@ -727,6 +768,7 @@ var UIBKeyLabels = {
         y += UIBInspectorRowHeight;
 
         _fixedHeightBox = [CPCheckBox checkBoxWithTitle:UIBLocalized(@"Fixed")];
+        [_fixedHeightBox setTextColor:UIBHUDLabel()];
         [_fixedHeightBox setFrameOrigin:CGPointMake(8, y + 4)];
         [_fixedHeightBox setTarget:self];
         [_fixedHeightBox setAction:@selector(toggleFixedSize:)];
@@ -753,7 +795,7 @@ var UIBKeyLabels = {
     var label = [[CPTextField alloc] initWithFrame:CGRectMake(10, 30, MAX(100, [aView bounds].size.width - 20), 24)];
     [label setStringValue:aString];
     [label setAlignment:CPCenterTextAlignment];
-    [label setTextColor:[CPColor grayColor]];
+    [label setTextColor:UIBHUDSecondary()];
     [label setFont:[CPFont systemFontOfSize:13]];
     [label setBezeled:NO];
     [label setDrawsBackground:NO];
@@ -1045,9 +1087,15 @@ var UIBKeyLabels = {
     [[_builderController canvasView] setNeedsDisplay:YES];
 }
 
-- (void)tabView:(CPTabView)aTabView didSelectTabViewItem:(CPTabViewItem)aTabViewItem
+- (void)selectInspectorTab:(id)sender
 {
-    [self _reloadConnections];
+    var selected = [_tabControl selectedSegment];
+
+    for (var i = 0; i < _tabViews.length; i++)
+        [_tabViews[i] setHidden:(i !== selected)];
+
+    if (selected === 3)
+        [self _reloadConnections];
 }
 
 - (CPUndoManager)undoManager

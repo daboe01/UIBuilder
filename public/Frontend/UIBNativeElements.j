@@ -558,17 +558,22 @@ function UIBNativeColor(aString)
     if (lowerTag === "segmentedcontrol" && UIBClassNamed("CPSegmentedControl"))
     {
         var segmented = [[CPSegmentedControl alloc] initWithFrame:frame],
-            titles = UIBRawItemTitles(data, "segmentedControlItem");
+            titles = UIBRawItemTitles(data, "segmentedControlItem"),
+            totalWidth = 0;
 
         [segmented setSegmentCount:titles.length];
         for (var i = 0; i < titles.length; i++)
         {
+            var segmentWidth = MAX(40, [titles[i] sizeWithFont:[CPFont systemFontOfSize:12]].width + 20);
             [segmented setLabel:titles[i] forSegment:i];
-            [segmented setWidth:MAX(40, [titles[i] sizeWithFont:[CPFont systemFontOfSize:12]].width + 20) forSegment:i];
+            [segmented setWidth:segmentWidth forSegment:i];
+            totalWidth += segmentWidth;
         }
         if (titles.length)
             [segmented setSelectedSegment:0];
-        [segmented sizeToFit];
+
+        // (no -sizeToFit on CPSegmentedControl)
+        [segmented setFrameSize:CGSizeMake(MAX(frame.size.width, totalWidth + 2), MAX(frame.size.height, 24))];
         return segmented;
     }
 
